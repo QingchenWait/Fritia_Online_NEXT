@@ -9,6 +9,7 @@ const IDLE_MIN = 3;
 const IDLE_MAX = 8;
 const SIT_MIN = 8;
 const SIT_MAX = 20;
+const SIT_COOLDOWN = 5.0;
 
 const STATES = {
     LOADING: 'loading',
@@ -279,12 +280,17 @@ function applySittingPose(cd) {
     if (!cd.hasAnimation) return;
     resetAllBones(cd);
 
+    const centerBone = cd.boneRef.center;
+    if (centerBone && cd.initialPositions.center) {
+        centerBone.position.y = cd.initialPositions.center.y + 0.7;
+    }
+
     addRot(cd.boneRef.spine, 0.15, 0, 0);
     addRot(cd.boneRef.spine2, 0.1, 0, 0);
     addRot(cd.boneRef.leftLeg, -1.1, 0, 0);
     addRot(cd.boneRef.rightLeg, -1.1, 0, 0);
-    addRot(cd.boneRef.leftKnee, 1.8, 0, 0);
-    addRot(cd.boneRef.rightKnee, 1.8, 0, 0);
+    addRot(cd.boneRef.leftKnee, 1.5, 0, 0);
+    addRot(cd.boneRef.rightKnee, 1.5, 0, 0);
 
     const lc = cd.boneRef.leftShoulderC;
     const rc = cd.boneRef.rightShoulderC;
@@ -409,6 +415,15 @@ function finishWalking(cd) {
     const t = cd.targetWaypoint;
     cd.currentWaypoint = t;
     if (t.isFurniture) {
+        const now = performance.now() * 0.001;
+        const timeSinceStand = cd.standUpTime ? now - cd.standUpTime : Infinity;
+        if (timeSinceStand < SIT_COOLDOWN) {
+            cd.state = STATES.IDLE;
+            cd.idleDuration = randomRange(IDLE_MIN, IDLE_MAX);
+            cd.stateTimer = 0;
+            applyIdlePose(cd);
+            return;
+        }
         cd.turnTarget = cd.faceDirection + Math.PI;
         cd.turnStart = cd.faceDirection;
         cd.state = STATES.TURNING_TO_SIT;
@@ -424,6 +439,7 @@ function finishWalking(cd) {
 }
 
 const SIT_DROP = 0.35;
+const BED_SIT_RAISE = 0.08;
 
 function updateTurningToSit(cd, delta) {
     const TURN_DURATION = 0.8;
@@ -431,8 +447,16 @@ function updateTurningToSit(cd, delta) {
     if (cd.transitionProgress >= 1) {
         cd.faceDirection = cd.turnTarget;
         cd.root.rotation.y = cd.faceDirection;
+        
+        const BACK_OFFSET = 0.4;
+        const isBed = cd.currentWaypoint?.furnitureType === 'bed';
+        cd.sitStartX = cd.root.position.x;
+        cd.sitStartZ = cd.root.position.z;
+        cd.sitEndX = cd.root.position.x - Math.sin(cd.faceDirection) * BACK_OFFSET;
+        cd.sitEndZ = cd.root.position.z - Math.cos(cd.faceDirection) * BACK_OFFSET;
+        
         cd.sitStartY = cd.root.position.y;
-        cd.sitEndY = cd.baseY - SIT_DROP;
+        cd.sitEndY = cd.baseY - SIT_DROP + (isBed ? BED_SIT_RAISE : 0);
         cd.sitStart = capturePose(cd);
         applySittingPose(cd);
         cd.sitEnd = capturePose(cd);
@@ -452,7 +476,9 @@ function updateSitTransition(cd, delta) {
     cd.transitionProgress += delta / cd.transitionDuration;
     if (cd.transitionProgress >= 1) {
         applySnapshot(cd, cd.sitEnd);
+        cd.root.position.x = cd.sitEndX;
         cd.root.position.y = cd.sitEndY;
+        cd.root.position.z = cd.sitEndZ;
         cd.state = STATES.SITTING;
         cd.stateTimer = 0;
         cd.sitDuration = randomRange(SIT_MIN, SIT_MAX);
@@ -460,15 +486,23 @@ function updateSitTransition(cd, delta) {
     }
     const t = easeInOutCubic(cd.transitionProgress);
     lerpPose(cd, cd.sitStart, cd.sitEnd, t);
+    cd.root.position.x = cd.sitStartX + (cd.sitEndX - cd.sitStartX) * t;
     cd.root.position.y = cd.sitStartY + (cd.sitEndY - cd.sitStartY) * t;
+    cd.root.position.z = cd.sitStartZ + (cd.sitEndZ - cd.sitStartZ) * t;
 }
 
 function updateSitting(cd, delta) {
     updateBreathing(cd);
+    cd.root.position.x = cd.sitEndX;
     cd.root.position.y = cd.sitEndY;
+    cd.root.position.z = cd.sitEndZ;
     if (cd.stateTimer > cd.sitDuration) {
         cd.sitStart = capturePose(cd);
+        cd.sitStandStartX = cd.root.position.x;
         cd.sitStandStartY = cd.root.position.y;
+        cd.sitStandStartZ = cd.root.position.z;
+        cd.sitStandEndX = cd.sitStartX;
+        cd.sitStandEndZ = cd.sitStartZ;
         applyIdlePose(cd);
         cd.sitEnd = capturePose(cd);
         applySnapshot(cd, cd.sitStart);
@@ -482,16 +516,21 @@ function updateStandTransition(cd, delta) {
     cd.transitionProgress += delta / cd.transitionDuration;
     if (cd.transitionProgress >= 1) {
         applySnapshot(cd, cd.sitEnd);
+        cd.root.position.x = cd.sitStandEndX;
         cd.root.position.y = cd.baseY;
+        cd.root.position.z = cd.sitStandEndZ;
         cd.state = STATES.IDLE;
         cd.stateTimer = 0;
         cd.idleDuration = randomRange(IDLE_MIN, IDLE_MAX);
         cd.currentWaypoint = null;
+        cd.standUpTime = performance.now() * 0.001;
         return;
     }
     const t = easeInOutCubic(cd.transitionProgress);
     lerpPose(cd, cd.sitStart, cd.sitEnd, t);
+    cd.root.position.x = cd.sitStandStartX + (cd.sitStandEndX - cd.sitStandStartX) * t;
     cd.root.position.y = cd.sitStandStartY + (cd.baseY - cd.sitStandStartY) * t;
+    cd.root.position.z = cd.sitStandStartZ + (cd.sitStandEndZ - cd.sitStandStartZ) * t;
 }
 
 export function getCharacterPosition(cd) {
