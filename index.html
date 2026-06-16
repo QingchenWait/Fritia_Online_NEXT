@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>芙提雅的房间</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+        }
+    }
+    </script>
+</head>
+<body>
+    <div id="loading-screen">
+        <div class="loading-content">
+            <h2>芙提雅的房间</h2>
+            <p class="loading-sub">正在准备中...</p>
+            <div class="loading-bar">
+                <div class="loading-bar-fill" id="loading-progress"></div>
+            </div>
+            <p id="loading-text">初始化场景...</p>
+        </div>
+    </div>
+
+    <canvas id="game-canvas"></canvas>
+
+    <div id="hud">
+        <div id="crosshair">+</div>
+        <div id="interaction-prompt" class="hidden">
+            按 <kbd>F</kbd> 与芙提雅对话
+        </div>
+        <div id="click-to-play" class="hidden">
+            点击屏幕进入操作模式
+        </div>
+    </div>
+
+    <div id="dialogue-ui" class="hidden">
+        <div id="dialogue-box">
+            <div id="dialogue-name-plate">
+                <span id="dialogue-name">芙提雅</span>
+            </div>
+            <div id="dialogue-text-area">
+                <p id="dialogue-text"></p>
+            </div>
+            <div id="dialogue-input-area">
+                <input type="text" id="dialogue-input" placeholder="说点什么..." autocomplete="off">
+                <button id="dialogue-send">
+                    <span>发送</span>
+                </button>
+            </div>
+            <button id="dialogue-close" title="关闭对话">×</button>
+        </div>
+    </div>
+
+    <div id="settings-toggle" title="设置">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"></path>
+        </svg>
+    </div>
+
+    <div id="settings-panel" class="hidden">
+        <div class="settings-inner">
+            <h3>设置</h3>
+            <div class="setting-item">
+                <label for="api-key">API Key</label>
+                <input type="password" id="api-key" placeholder="sk-...">
+            </div>
+            <div class="setting-item">
+                <label for="base-url">Base URL</label>
+                <input type="text" id="base-url" placeholder="https://api.openai.com/v1">
+            </div>
+            <div class="setting-item">
+                <label for="model-name">模型名称</label>
+                <input type="text" id="model-name" placeholder="gpt-4o-mini">
+            </div>
+            <div class="settings-actions">
+                <button id="settings-save">保存</button>
+                <button id="settings-close">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>

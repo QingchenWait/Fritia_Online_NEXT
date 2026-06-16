@@ -1,0 +1,10 @@
+{
+  "name": "fritia-online-v2",
+  "version": "1.0.0",
+  "description": "3D dating sim game with Fritia",
+  "scripts": {
+    "dev": "npx serve . -p 3000 --cors",
+    "start": "npx serve . -p 3000 --cors"
+  },
+  "private": true
+}
