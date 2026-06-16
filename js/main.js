@@ -9,6 +9,8 @@ import { initSettings } from './settings.js';
 let scene, camera, renderer;
 let controlsModule, charData;
 let isInteracting = false;
+let paintingMesh;
+const raycaster = new THREE.Raycaster();
 
 const clock = new THREE.Clock();
 
@@ -35,6 +37,7 @@ async function init() {
     await setLoadingText('构建房间...');
     setLoadingProgress(25);
     const room = createRoom(scene);
+    paintingMesh = room.painting;
 
     await new Promise(r => setTimeout(r, 100));
 
@@ -95,6 +98,7 @@ async function init() {
     setLoadingProgress(95);
     initDialogue();
     initSettings();
+    initPainting();
 
     document.addEventListener('keydown', onKeyDown);
 
@@ -135,6 +139,13 @@ function onKeyDown(e) {
         const charPos = getCharacterPosition(charData);
         if (controlsModule.isNearCharacter(charPos)) {
             startInteractionMode(charPos);
+        }
+    }
+
+    if (e.code === 'KeyE') {
+        if (isInteracting || isDialogueVisible()) return;
+        if (controlsModule && controlsModule.state.isLocked && isLookingAtPainting()) {
+            document.getElementById('painting-upload').click();
         }
     }
 
@@ -188,17 +199,77 @@ function animate() {
 
 function updateInteractionPrompt() {
     const prompt = document.getElementById('interaction-prompt');
+    const paintingPrompt = document.getElementById('painting-prompt');
     if (isInteracting || isDialogueVisible()) {
         prompt.classList.add('hidden');
+        if (paintingPrompt) paintingPrompt.classList.add('hidden');
+        return;
+    }
+
+    if (!controlsModule || !controlsModule.state.isLocked) {
+        prompt.classList.add('hidden');
+        if (paintingPrompt) paintingPrompt.classList.add('hidden');
         return;
     }
 
     const charPos = getCharacterPosition(charData);
-    if (controlsModule && controlsModule.state.isLocked && controlsModule.isNearCharacter(charPos)) {
+    const nearChar = controlsModule.isNearCharacter(charPos);
+    const nearPaint = isLookingAtPainting();
+
+    if (nearChar) {
+        prompt.innerHTML = '按 <kbd>F</kbd> 与芙提雅对话';
         prompt.classList.remove('hidden');
     } else {
         prompt.classList.add('hidden');
     }
+
+    if (nearPaint && paintingPrompt) {
+        paintingPrompt.classList.remove('hidden');
+    } else if (paintingPrompt) {
+        paintingPrompt.classList.add('hidden');
+    }
+}
+
+function initPainting() {
+    const saved = localStorage.getItem('fritia_painting');
+    if (saved && paintingMesh) {
+        applyPaintingTexture(saved);
+    }
+
+    const fileInput = document.getElementById('painting-upload');
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            const dataUrl = ev.target.result;
+            applyPaintingTexture(dataUrl);
+            localStorage.setItem('fritia_painting', dataUrl);
+        };
+        reader.readAsDataURL(file);
+        fileInput.value = '';
+    });
+}
+
+function applyPaintingTexture(src) {
+    if (!paintingMesh) return;
+    const img = new Image();
+    img.onload = () => {
+        const tex = new THREE.Texture(img);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.needsUpdate = true;
+        paintingMesh.material.map = tex;
+        paintingMesh.material.color.set(0xffffff);
+        paintingMesh.material.needsUpdate = true;
+    };
+    img.src = src;
+}
+
+function isLookingAtPainting() {
+    if (!paintingMesh || !camera) return false;
+    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+    const hits = raycaster.intersectObject(paintingMesh);
+    return hits.length > 0;
 }
 
 async function playStartupVoice() {

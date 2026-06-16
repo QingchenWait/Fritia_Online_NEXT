@@ -28,6 +28,8 @@
 
     <canvas id="game-canvas"></canvas>
 
+    <input type="file" id="painting-upload" accept="image/*" style="display:none">
+
     <div id="touch-controls">
         <div class="touch-joystick" id="joystick-move">
             <div class="joystick-knob" id="joystick-move-knob"></div>
@@ -42,6 +44,9 @@
         <div id="crosshair">+</div>
         <div id="interaction-prompt" class="hidden">
             按 <kbd>F</kbd> 与芙提雅对话
+        </div>
+        <div id="painting-prompt" class="hidden">
+            按 <kbd>E</kbd> 更换挂画
         </div>
         <div id="click-to-play" class="hidden">
             点击屏幕进入操作模式

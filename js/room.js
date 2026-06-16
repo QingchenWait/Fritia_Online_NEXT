@@ -195,6 +195,31 @@ export function createRoom(scene) {
     rug.receiveShadow = true;
     group.add(rug);
 
+    // Painting area (16:9)
+    const paintW = 1.6, paintH = 0.9;
+    const paintGeo = new THREE.PlaneGeometry(paintW, paintH);
+    const paintMat = new THREE.MeshStandardMaterial({ color: 0xf5f0e8, roughness: 0.8 });
+    const painting = new THREE.Mesh(paintGeo, paintMat);
+    painting.position.set(0, 1.6, 2.48);
+    painting.rotation.y = Math.PI;
+    group.add(painting);
+
+    const pfMat = new THREE.MeshStandardMaterial({ color: 0x3a2a1a, roughness: 0.5 });
+    const pfT = new THREE.Mesh(new THREE.BoxGeometry(paintW + 0.08, 0.04, 0.03), pfMat);
+    pfT.position.set(0, 1.6 + paintH / 2, 2.48);
+    group.add(pfT);
+    const pfB = pfT.clone();
+    pfB.position.y = 1.6 - paintH / 2;
+    group.add(pfB);
+    const pfL = new THREE.Mesh(new THREE.BoxGeometry(0.04, paintH + 0.08, 0.03), pfMat);
+    pfL.position.set(-paintW / 2, 1.6, 2.48);
+    group.add(pfL);
+    const pfR = pfL.clone();
+    pfR.position.x = paintW / 2;
+    group.add(pfR);
+
+    const paintingZone = new THREE.Vector3(0, 0, 1.8);
+
     scene.add(group);
 
     const waypoints = [
@@ -206,5 +231,5 @@ export function createRoom(scene) {
         { name: 'chair_sit', position: new THREE.Vector3(2.1, 0, -1.2), isFurniture: true, furnitureType: 'chair' },
     ];
 
-    return { colliders, waypoints };
+    return { colliders, waypoints, painting, paintingZone };
 }

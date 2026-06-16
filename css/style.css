@@ -131,16 +131,35 @@ body {
     transform: translateX(-50%);
     background: rgba(0, 0, 0, 0.6);
     backdrop-filter: blur(8px);
-    padding: 12px 28px;
+    padding: 10px 24px;
     border-radius: 30px;
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     letter-spacing: 0.05em;
     border: 1px solid rgba(255, 255, 255, 0.15);
     animation: prompt-pulse 2s ease-in-out infinite;
     white-space: nowrap;
+    z-index: 2;
 }
 
-#interaction-prompt kbd {
+#painting-prompt {
+    position: absolute;
+    bottom: 24%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
+    padding: 10px 24px;
+    border-radius: 30px;
+    font-size: 0.9rem;
+    letter-spacing: 0.05em;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    animation: prompt-pulse 2s ease-in-out infinite;
+    white-space: nowrap;
+    z-index: 1;
+}
+
+#interaction-prompt kbd,
+#painting-prompt kbd {
     display: inline-block;
     background: rgba(255, 255, 255, 0.2);
     border: 1px solid rgba(255, 255, 255, 0.3);
