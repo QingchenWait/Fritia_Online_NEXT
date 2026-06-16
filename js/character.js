@@ -62,6 +62,55 @@ function buildBoneRef(bones) {
 
 function randomRange(min, max) { return min + Math.random() * (max - min); }
 
+function setupTransparentShadows(mesh) {
+    if (!mesh.skeleton) return;
+
+    const needsAlphaShadow = mesh.material.some(m => m.transparent || m.alphaTest > 0);
+    if (!needsAlphaShadow) return;
+
+    const targetMat = mesh.material.find(m => m.alphaTest > 0) || mesh.material.find(m => m.transparent) || mesh.material[0];
+
+    const vertexShader = `
+        #define USE_SKINNING
+        #include <common>
+        #include <skinning_pars_vertex>
+        varying vec2 vUv;
+        void main() {
+            vUv = uv;
+            #include <skinbase_vertex>
+            vec3 transformed = vec3(0.0);
+            #include <skinning_vertex>
+            #include <project_vertex>
+        }
+    `;
+    const fragmentShader = `
+        #include <packing>
+        uniform sampler2D alphaMap;
+        uniform float alphaTest;
+        varying vec2 vUv;
+        void main() {
+            float alpha = texture2D(alphaMap, vUv).a;
+            if (alpha < alphaTest) discard;
+            gl_FragColor = packDepthToRGBA(gl_FragCoord.z);
+        }
+    `;
+
+    const customDepthMat = new THREE.ShaderMaterial({
+        vertexShader,
+        fragmentShader,
+        uniforms: {
+            ...THREE.UniformsLib.common,
+            alphaMap: { value: targetMat.map || null },
+            alphaTest: { value: targetMat.alphaTest > 0 ? targetMat.alphaTest : 0.5 }
+        },
+        side: targetMat.side || THREE.FrontSide
+    });
+    customDepthMat.isMeshDepthMaterial = true;
+
+    mesh.customDepthMaterial = customDepthMat;
+    mesh.castShadow = true;
+}
+
 function easeInOutCubic(t) {
     return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
@@ -120,20 +169,37 @@ export function loadCharacter(scene, waypoints, colliders, onProgress) {
                             if (oldMat.normalMap) newMat.normalMap = oldMat.normalMap;
                             newMat.side = oldMat.side !== undefined ? oldMat.side : THREE.FrontSide;
 
-                            const needsAlpha = oldMat.transparent || (oldMat.map && oldMat.alphaTest > 0);
-                            if (needsAlpha) {
+                            const isHairLike = oldMat.transparent || oldMat.alphaTest > 0
+                                || (oldMat.name && /hair|髪|头发/i.test(oldMat.name));
+
+                            console.log(`[PMX] 材质 #${i}:`, {
+                                name: oldMat.name,
+                                transparent: oldMat.transparent,
+                                opacity: oldMat.opacity,
+                                alphaTest: oldMat.alphaTest,
+                                hasMap: !!oldMat.map,
+                                isHairLike
+                            });
+
+                            if (isHairLike && oldMat.map) {
                                 newMat.alphaTest = oldMat.alphaTest > 0 ? oldMat.alphaTest : 0.5;
                                 newMat.transparent = false;
                                 newMat.depthWrite = true;
-                            } else {
-                                newMat.transparent = oldMat.transparent || false;
+                                newMat.side = THREE.DoubleSide;
+                            } else if (oldMat.transparent || (oldMat.opacity !== undefined && oldMat.opacity < 1)) {
+                                newMat.transparent = true;
                                 newMat.opacity = oldMat.opacity !== undefined ? oldMat.opacity : 1.0;
+                            } else {
+                                newMat.transparent = false;
+                                newMat.depthWrite = true;
                             }
 
                             materials[i] = newMat;
                         }
                         mesh.material = materials;
                     }
+
+                    setupTransparentShadows(mesh);
 
                     const box = new THREE.Box3().setFromObject(mesh);
                     const rawHeight = box.max.y - box.min.y;
@@ -767,20 +833,37 @@ export async function swapModel(scene, cd, modelPath) {
                             if (oldMat.normalMap) newMat.normalMap = oldMat.normalMap;
                             newMat.side = oldMat.side !== undefined ? oldMat.side : THREE.FrontSide;
 
-                            const needsAlpha = oldMat.transparent || (oldMat.map && oldMat.alphaTest > 0);
-                            if (needsAlpha) {
+                            const isHairLike = oldMat.transparent || oldMat.alphaTest > 0
+                                || (oldMat.name && /hair|髪|头发/i.test(oldMat.name));
+
+                            console.log(`[PMX] 材质 #${i}:`, {
+                                name: oldMat.name,
+                                transparent: oldMat.transparent,
+                                opacity: oldMat.opacity,
+                                alphaTest: oldMat.alphaTest,
+                                hasMap: !!oldMat.map,
+                                isHairLike
+                            });
+
+                            if (isHairLike && oldMat.map) {
                                 newMat.alphaTest = oldMat.alphaTest > 0 ? oldMat.alphaTest : 0.5;
                                 newMat.transparent = false;
                                 newMat.depthWrite = true;
-                            } else {
-                                newMat.transparent = oldMat.transparent || false;
+                                newMat.side = THREE.DoubleSide;
+                            } else if (oldMat.transparent || (oldMat.opacity !== undefined && oldMat.opacity < 1)) {
+                                newMat.transparent = true;
                                 newMat.opacity = oldMat.opacity !== undefined ? oldMat.opacity : 1.0;
+                            } else {
+                                newMat.transparent = false;
+                                newMat.depthWrite = true;
                             }
 
                             materials[i] = newMat;
                         }
                         mesh.material = materials;
                     }
+
+                    setupTransparentShadows(mesh);
 
                     const box = new THREE.Box3().setFromObject(mesh);
                     const rawHeight = box.max.y - box.min.y;
