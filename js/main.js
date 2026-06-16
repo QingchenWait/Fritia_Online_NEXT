@@ -137,7 +137,7 @@ function onKeyDown(e) {
 
 function startInteractionMode(charPos) {
     isInteracting = true;
-    startInteraction(charData, camera.position);
+    startInteraction(charData, () => camera.position);
     controlsModule.controls.unlock();
     showDialogue();
 

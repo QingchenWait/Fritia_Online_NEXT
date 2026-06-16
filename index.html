@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>芙提雅的房间</title>
+    <title>芙提雅 Online NEXT</title>
     <link rel="stylesheet" href="css/style.css">
     <script type="importmap">
     {
@@ -17,7 +17,7 @@
 <body>
     <div id="loading-screen">
         <div class="loading-content">
-            <h2>芙提雅的房间</h2>
+            <h2>芙提雅 Online NEXT</h2>
             <p class="loading-sub">正在准备中...</p>
             <div class="loading-bar">
                 <div class="loading-bar-fill" id="loading-progress"></div>
@@ -27,6 +27,16 @@
     </div>
 
     <canvas id="game-canvas"></canvas>
+
+    <div id="touch-controls">
+        <div class="touch-joystick" id="joystick-move">
+            <div class="joystick-knob" id="joystick-move-knob"></div>
+        </div>
+        <div class="touch-actions">
+            <div class="touch-btn interact-btn" id="btn-interact">F</div>
+            <div class="touch-btn" id="btn-look">视角</div>
+        </div>
+    </div>
 
     <div id="hud">
         <div id="crosshair">+</div>

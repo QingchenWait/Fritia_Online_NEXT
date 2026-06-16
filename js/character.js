@@ -184,6 +184,16 @@ export function updateCharacter(cd, delta) {
     cd.stateTimer += delta;
     updateBlink(cd, delta);
 
+    if (cd.headReturnProgress !== undefined && cd.headReturnProgress < 1 && cd.boneRef.head) {
+        cd.headReturnProgress += delta / cd.headReturnDuration;
+        const t = Math.min(1, cd.headReturnProgress);
+        const et = easeInOutCubic(t);
+        cd.boneRef.head.rotation.x = cd.headReturnFrom.x + (cd.headReturnTo.x - cd.headReturnFrom.x) * et;
+        cd.boneRef.head.rotation.y = cd.headReturnFrom.y + (cd.headReturnTo.y - cd.headReturnFrom.y) * et;
+        cd.boneRef.head.rotation.z = cd.headReturnFrom.z + (cd.headReturnTo.z - cd.headReturnFrom.z) * et;
+        forceUpdate(cd);
+    }
+
     switch (cd.state) {
         case STATES.IDLE: updateIdle(cd, delta); break;
         case STATES.WALKING: updateWalking(cd, delta); break;
@@ -191,7 +201,7 @@ export function updateCharacter(cd, delta) {
         case STATES.STAND_TO_SIT: updateSitTransition(cd, delta); break;
         case STATES.SITTING: updateSitting(cd, delta); break;
         case STATES.SIT_TO_STAND: updateStandTransition(cd, delta); break;
-        case STATES.INTERACTING: updateBreathing(cd); break;
+        case STATES.INTERACTING: updateInteracting(cd, delta); break;
     }
 }
 
@@ -521,7 +531,7 @@ function updateStandTransition(cd, delta) {
         cd.root.position.z = cd.sitStandEndZ;
         cd.state = STATES.IDLE;
         cd.stateTimer = 0;
-        cd.idleDuration = randomRange(IDLE_MIN, IDLE_MAX);
+        cd.idleDuration = 1.0;
         cd.currentWaypoint = null;
         cd.standUpTime = performance.now() * 0.001;
         return;
@@ -538,17 +548,82 @@ export function getCharacterPosition(cd) {
     return cd.root.position.clone();
 }
 
-export function startInteraction(cd, playerPos) {
+export function startInteraction(cd, getPlayerPos) {
     if (!cd) return;
     cd.prevState = cd.state;
     cd.state = STATES.INTERACTING;
+    cd.getPlayerPos = getPlayerPos;
+
+    const playerPos = getPlayerPos();
     const dir = new THREE.Vector3().subVectors(playerPos, cd.root.position);
     dir.y = 0;
-    if (dir.length() > 0.01) cd.root.rotation.y = Math.atan2(dir.x, dir.z);
+    const targetAngle = dir.length() > 0.01 ? Math.atan2(dir.x, dir.z) : cd.faceDirection;
+
+    cd.interactionTurnStart = cd.root.rotation.y;
+    cd.interactionTurnTarget = targetAngle;
+    cd.interactionTurnProgress = 0;
+    cd.interactionTurnDone = false;
+    cd.interactionTurnDuration = 0.6;
+
+    if (cd.boneRef.head) {
+        cd.interactionHeadOrigRot = cd.boneRef.head.rotation.clone();
+    }
+}
+
+function updateInteracting(cd, delta) {
+    updateBreathing(cd);
+
+    if (!cd.interactionTurnDone) {
+        cd.interactionTurnProgress += delta / cd.interactionTurnDuration;
+        if (cd.interactionTurnProgress >= 1) {
+            cd.interactionTurnProgress = 1;
+            cd.interactionTurnDone = true;
+        }
+        const t = easeInOutCubic(cd.interactionTurnProgress);
+        cd.root.rotation.y = lerpAngle(cd.interactionTurnStart, cd.interactionTurnTarget, t);
+    }
+
+    if (cd.getPlayerPos && cd.boneRef.head) {
+        const playerPos = cd.getPlayerPos();
+        const headBone = cd.boneRef.head;
+
+        const headWorldPos = new THREE.Vector3();
+        headBone.getWorldPosition(headWorldPos);
+
+        const toPlayer = new THREE.Vector3().subVectors(playerPos, headWorldPos);
+
+        if (toPlayer.length() > 0.1) {
+            const invParentQuat = new THREE.Quaternion();
+            headBone.parent.getWorldQuaternion(invParentQuat).invert();
+            const localDir = toPlayer.clone().applyQuaternion(invParentQuat).normalize();
+
+            const yaw = Math.atan2(-localDir.x, localDir.z);
+            const pitch = Math.atan2(-localDir.y, Math.sqrt(localDir.x * localDir.x + localDir.z * localDir.z));
+
+            const clampedYaw = Math.max(-0.7, Math.min(0.7, yaw));
+            const clampedPitch = Math.max(-0.6, Math.min(0.6, pitch));
+
+            const lerpSpeed = 5.0;
+            const factor = 1 - Math.exp(-lerpSpeed * delta);
+            headBone.rotation.y += (clampedYaw - headBone.rotation.y) * factor;
+            headBone.rotation.x += (clampedPitch - headBone.rotation.x) * factor;
+        }
+
+        forceUpdate(cd);
+    }
 }
 
 export function endInteraction(cd) {
     if (!cd) return;
+    if (cd.boneRef.head && cd.interactionHeadOrigRot) {
+        cd.headReturnFrom = cd.boneRef.head.rotation.clone();
+        cd.headReturnTo = cd.interactionHeadOrigRot.clone();
+        cd.headReturnProgress = 0;
+        cd.headReturnDuration = 0.4;
+    }
+    cd.getPlayerPos = null;
+    cd.interactionHeadOrigRot = null;
+
     if (cd.prevState === STATES.SITTING || cd.prevState === STATES.STAND_TO_SIT || cd.prevState === STATES.TURNING_TO_SIT) {
         cd.state = STATES.SITTING;
     } else {

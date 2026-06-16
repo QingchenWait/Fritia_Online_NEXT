@@ -1,6 +1,14 @@
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
+function isTouchDevice() {
+    return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+}
+
+function hasPhysicalKeyboard() {
+    return !('ontouchstart' in window) || window.innerWidth > 1024;
+}
+
 export function initControls(camera, domElement, colliders) {
     const controls = new PointerLockControls(camera, domElement);
 
@@ -12,7 +20,8 @@ export function initControls(camera, domElement, colliders) {
         direction: new THREE.Vector3(),
         speed: 3.0,
         colliders: colliders,
-        isLocked: false
+        isLocked: false,
+        useTouchControls: isTouchDevice() && !hasPhysicalKeyboard()
     };
 
     controls.addEventListener('lock', () => {
@@ -51,11 +60,18 @@ export function initControls(camera, domElement, colliders) {
 
     const clickToPlay = document.getElementById('click-to-play');
     clickToPlay.addEventListener('click', () => {
-        controls.lock();
+        if (!state.useTouchControls) {
+            controls.lock();
+        } else {
+            state.isLocked = true;
+            clickToPlay.classList.add('hidden');
+            document.getElementById('crosshair').classList.add('active');
+            document.getElementById('touch-controls').classList.add('active');
+        }
     });
 
     document.addEventListener('click', (e) => {
-        if (!state.isLocked) {
+        if (!state.isLocked && !state.useTouchControls) {
             const dialogueUI = document.getElementById('dialogue-ui');
             const settingsPanel = document.getElementById('settings-panel');
             const settingsToggle = document.getElementById('settings-toggle');
@@ -66,6 +82,12 @@ export function initControls(camera, domElement, colliders) {
             }
         }
     });
+
+    if (state.useTouchControls) {
+        initTouchJoystick(state);
+        initTouchLook(controls, state);
+        initTouchButtons(state);
+    }
 
     function checkCollision(pos, radius) {
         for (const box of state.colliders) {
@@ -115,4 +137,141 @@ export function initControls(camera, domElement, colliders) {
     }
 
     return { controls, state, update, isNearCharacter };
+}
+
+function initTouchJoystick(state) {
+    const joystick = document.getElementById('joystick-move');
+    const knob = document.getElementById('joystick-move-knob');
+    if (!joystick || !knob) return;
+
+    let touchId = null;
+    const maxDist = 35;
+
+    joystick.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (touchId !== null) return;
+        const touch = e.changedTouches[0];
+        touchId = touch.identifier;
+        updateJoystick(touch);
+    });
+
+    document.addEventListener('touchmove', (e) => {
+        if (touchId === null) return;
+        for (const touch of e.changedTouches) {
+            if (touch.identifier === touchId) {
+                updateJoystick(touch);
+                break;
+            }
+        }
+    });
+
+    document.addEventListener('touchend', (e) => {
+        if (touchId === null) return;
+        for (const touch of e.changedTouches) {
+            if (touch.identifier === touchId) {
+                touchId = null;
+                knob.style.transform = 'translate(-50%, -50%)';
+                state.moveForward = false;
+                state.moveBackward = false;
+                state.moveLeft = false;
+                state.moveRight = false;
+                break;
+            }
+        }
+    });
+
+    function updateJoystick(touch) {
+        const rect = joystick.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        let dx = touch.clientX - cx;
+        let dy = touch.clientY - cy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist > maxDist) {
+            dx = (dx / dist) * maxDist;
+            dy = (dy / dist) * maxDist;
+        }
+
+        knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+
+        const threshold = 10;
+        state.moveForward = dy < -threshold;
+        state.moveBackward = dy > threshold;
+        state.moveLeft = dx < -threshold;
+        state.moveRight = dx > threshold;
+    }
+}
+
+function initTouchLook(controls, state) {
+    const canvas = document.getElementById('game-canvas');
+    if (!canvas) return;
+
+    let touchId = null;
+    let lastX = 0;
+    let lastY = 0;
+    const sensitivity = 0.003;
+    let euler = new THREE.Euler(0, 0, 0, 'YXZ');
+
+    canvas.addEventListener('touchstart', (e) => {
+        if (!state.isLocked) return;
+        const joystick = document.getElementById('joystick-move');
+        const btnInteract = document.getElementById('btn-interact');
+        const btnLook = document.getElementById('btn-look');
+        
+        for (const touch of e.changedTouches) {
+            const target = touch.target;
+            if (target === joystick || target === btnInteract || target === btnLook) continue;
+            if (target.closest('#joystick-move') || target.closest('.touch-actions')) continue;
+            
+            if (touchId === null) {
+                touchId = touch.identifier;
+                lastX = touch.clientX;
+                lastY = touch.clientY;
+            }
+        }
+    });
+
+    document.addEventListener('touchmove', (e) => {
+        if (touchId === null || !state.isLocked) return;
+        for (const touch of e.changedTouches) {
+            if (touch.identifier === touchId) {
+                const dx = touch.clientX - lastX;
+                const dy = touch.clientY - lastY;
+                lastX = touch.clientX;
+                lastY = touch.clientY;
+
+                euler.setFromQuaternion(controls.object.quaternion);
+                euler.y -= dx * sensitivity;
+                euler.x -= dy * sensitivity;
+                euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x));
+                controls.object.quaternion.setFromEuler(euler);
+                break;
+            }
+        }
+    });
+
+    document.addEventListener('touchend', (e) => {
+        if (touchId === null) return;
+        for (const touch of e.changedTouches) {
+            if (touch.identifier === touchId) {
+                touchId = null;
+                break;
+            }
+        }
+    });
+}
+
+function initTouchButtons(state) {
+    const btnInteract = document.getElementById('btn-interact');
+    if (btnInteract) {
+        btnInteract.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            document.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyF' }));
+        });
+        btnInteract.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            document.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyF' }));
+        });
+    }
 }
