@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { initScene } from './scene.js';
 import { createRoom } from './room.js';
 import { initControls } from './controls.js';
-import { loadCharacter, updateCharacter, getCharacterPosition, startInteraction, endInteraction, startWaving } from './character.js';
+import { loadCharacter, updateCharacter, getCharacterPosition, startInteraction, endInteraction, startWaving, swapModel } from './character.js';
 import { initDialogue, showDialogue, hideDialogue, isDialogueVisible } from './dialogue.js';
 import { initSettings } from './settings.js';
 
@@ -10,6 +10,7 @@ let scene, camera, renderer;
 let controlsModule, charData;
 let isInteracting = false;
 let paintingMesh;
+let wardrobeMesh;
 const raycaster = new THREE.Raycaster();
 
 const clock = new THREE.Clock();
@@ -38,6 +39,7 @@ async function init() {
     setLoadingProgress(25);
     const room = createRoom(scene);
     paintingMesh = room.painting;
+    wardrobeMesh = room.wardrobeMesh;
 
     await new Promise(r => setTimeout(r, 100));
 
@@ -144,14 +146,22 @@ function onKeyDown(e) {
 
     if (e.code === 'KeyE') {
         if (isInteracting || isDialogueVisible()) return;
-        if (controlsModule && controlsModule.state.isLocked && isLookingAtPainting()) {
-            document.getElementById('painting-upload').click();
+        if (controlsModule && controlsModule.state.isLocked) {
+            if (isLookingAtPainting()) {
+                document.getElementById('painting-upload').click();
+            } else if (isLookingAtWardrobe()) {
+                openModelSelector();
+            }
         }
     }
 
     if (e.code === 'Escape') {
         if (isDialogueVisible()) {
             endInteractionMode();
+        }
+        const modelPanel = document.getElementById('model-selector');
+        if (modelPanel && !modelPanel.classList.contains('hidden')) {
+            closeModelSelector();
         }
     }
 }
@@ -214,7 +224,8 @@ function updateInteractionPrompt() {
 
     const charPos = getCharacterPosition(charData);
     const nearChar = controlsModule.isNearCharacter(charPos);
-    const nearPaint = isLookingAtPainting();
+    const lookPaint = isLookingAtPainting();
+    const lookWardrobe = isLookingAtWardrobe();
 
     if (nearChar) {
         prompt.innerHTML = '按 <kbd>F</kbd> 与芙提雅对话';
@@ -223,10 +234,16 @@ function updateInteractionPrompt() {
         prompt.classList.add('hidden');
     }
 
-    if (nearPaint && paintingPrompt) {
-        paintingPrompt.classList.remove('hidden');
-    } else if (paintingPrompt) {
-        paintingPrompt.classList.add('hidden');
+    if (paintingPrompt) {
+        if (lookPaint) {
+            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 更换挂画';
+            paintingPrompt.classList.remove('hidden');
+        } else if (lookWardrobe) {
+            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 换装';
+            paintingPrompt.classList.remove('hidden');
+        } else {
+            paintingPrompt.classList.add('hidden');
+        }
     }
 }
 
@@ -249,6 +266,59 @@ function initPainting() {
         reader.readAsDataURL(file);
         fileInput.value = '';
     });
+
+    document.getElementById('model-close').addEventListener('click', closeModelSelector);
+}
+
+const DEFAULT_MODEL = {
+    name: '默认 - 毛绒派对',
+    path: 'src/_fritia_3d_model/驰掣-毛绒派对.pmx'
+};
+
+const ALTERABLE_MODELS = [
+    { name: '草莓甜心', path: 'src/_fritia_alterable_models/sweety_straw/芙提雅-驰掣 草莓甜心物理裙a1.0.pmx' }
+];
+
+let currentModelPath = DEFAULT_MODEL.path;
+let isSwapping = false;
+
+function openModelSelector() {
+    if (controlsModule && controlsModule.state.isLocked) {
+        controlsModule.controls.unlock();
+    }
+    const panel = document.getElementById('model-selector');
+    const list = document.getElementById('model-list');
+    list.innerHTML = '';
+
+    const allModels = [DEFAULT_MODEL, ...ALTERABLE_MODELS];
+    for (const model of allModels) {
+        const item = document.createElement('div');
+        item.className = 'model-item' + (model.path === currentModelPath ? ' active' : '');
+        item.innerHTML = `<div class="model-name">${model.name}</div><div class="model-path">${model.path}</div>`;
+        item.addEventListener('click', () => selectModel(model));
+        list.appendChild(item);
+    }
+
+    panel.classList.remove('hidden');
+}
+
+function closeModelSelector() {
+    document.getElementById('model-selector').classList.add('hidden');
+}
+
+async function selectModel(model) {
+    if (model.path === currentModelPath || isSwapping) return;
+    isSwapping = true;
+    closeModelSelector();
+
+    try {
+        await swapModel(scene, charData, model.path);
+        currentModelPath = model.path;
+    } catch (err) {
+        console.error('Model swap failed:', err);
+    } finally {
+        isSwapping = false;
+    }
 }
 
 function applyPaintingTexture(src) {
@@ -269,6 +339,13 @@ function isLookingAtPainting() {
     if (!paintingMesh || !camera) return false;
     raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
     const hits = raycaster.intersectObject(paintingMesh);
+    return hits.length > 0;
+}
+
+function isLookingAtWardrobe() {
+    if (!wardrobeMesh || !camera) return false;
+    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+    const hits = raycaster.intersectObject(wardrobeMesh);
     return hits.length > 0;
 }
 

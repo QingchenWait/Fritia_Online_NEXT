@@ -702,3 +702,98 @@ export function endInteraction(cd) {
     }
     cd.stateTimer = 0;
 }
+
+export async function swapModel(scene, cd, modelPath) {
+    const loader = new MMDLoader();
+    return new Promise((resolve, reject) => {
+        loader.load(
+            modelPath,
+            (mesh) => {
+                try {
+                    mesh.name = 'FritiaPMX';
+                    mesh.castShadow = true;
+                    mesh.receiveShadow = true;
+
+                    if (mesh.material) {
+                        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+                        for (const mat of materials) {
+                            if (mat.emissive) mat.emissiveIntensity = Math.min(mat.emissiveIntensity || 0, 0.15);
+                            if (mat.color) mat.color.multiplyScalar(0.85);
+                        }
+                    }
+
+                    const box = new THREE.Box3().setFromObject(mesh);
+                    const rawHeight = box.max.y - box.min.y;
+                    const autoScale = rawHeight > 0 ? TARGET_HEIGHT / rawHeight : 1;
+                    mesh.scale.set(autoScale, autoScale, autoScale);
+                    const scaledBox = new THREE.Box3().setFromObject(mesh);
+                    const groundOffset = -scaledBox.min.y;
+
+                    const savedPos = cd.root.position.clone();
+                    const savedRot = cd.root.rotation.clone();
+                    const savedState = cd.state;
+
+                    scene.remove(cd.root);
+                    mesh.position.copy(savedPos);
+                    mesh.rotation.copy(savedRot);
+                    scene.add(mesh);
+
+                    const skeleton = mesh.skeleton;
+                    const bones = skeleton ? skeleton.bones : [];
+                    const boneRef = buildBoneRef(bones);
+                    const initialPositions = {};
+                    for (const [key, bone] of Object.entries(boneRef)) {
+                        if (bone) initialPositions[key] = bone.position.clone();
+                    }
+
+                    let blinkIndex = -1;
+                    let smileIndex = -1;
+                    if (mesh.morphTargetInfluences && mesh.morphTargetDictionary) {
+                        for (const name of ['まばたき', 'blink', '眨眼']) {
+                            if (mesh.morphTargetDictionary[name] !== undefined) {
+                                blinkIndex = mesh.morphTargetDictionary[name];
+                                break;
+                            }
+                        }
+                        for (const name of ['笑い', '微笑み', 'smile', 'にっこり']) {
+                            if (mesh.morphTargetDictionary[name] !== undefined) {
+                                smileIndex = mesh.morphTargetDictionary[name];
+                                break;
+                            }
+                        }
+                    }
+
+                    cd.mesh = mesh;
+                    cd.root = mesh;
+                    cd.skeleton = skeleton;
+                    cd.bones = bones;
+                    cd.boneRef = boneRef;
+                    cd.initialPositions = initialPositions;
+                    cd.baseY = groundOffset;
+                    cd.hasAnimation = bones.length > 0;
+                    cd.blinkIndex = blinkIndex;
+                    cd.smileIndex = smileIndex;
+
+                    if (smileIndex >= 0 && mesh.morphTargetInfluences) {
+                        mesh.morphTargetInfluences[smileIndex] = 0.3;
+                    }
+
+                    if (savedState === STATES.SITTING || savedState === STATES.STAND_TO_SIT || savedState === STATES.TURNING_TO_SIT) {
+                        applySittingPose(cd);
+                        cd.state = STATES.SITTING;
+                    } else {
+                        applyIdlePose(cd);
+                        cd.state = STATES.IDLE;
+                        cd.root.position.y = cd.baseY;
+                    }
+
+                    resolve(cd);
+                } catch (err) {
+                    reject(err);
+                }
+            },
+            undefined,
+            (err) => reject(err)
+        );
+    });
+}

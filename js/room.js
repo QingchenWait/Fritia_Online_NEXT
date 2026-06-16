@@ -218,6 +218,27 @@ export function createRoom(scene) {
     pfR.position.x = paintW / 2;
     group.add(pfR);
 
+    // Wardrobe
+    const wdBMat = new THREE.MeshStandardMaterial({ color: 0x5C4033, roughness: 0.7 });
+    const wdBody = new THREE.Mesh(new THREE.BoxGeometry(1.0, 2.0, 0.6), wdBMat);
+    wdBody.position.set(2.4, 1.0, 1.8);
+    wdBody.castShadow = true;
+    group.add(wdBody);
+    const wdDoorL = new THREE.Mesh(new THREE.BoxGeometry(0.48, 1.8, 0.05), new THREE.MeshStandardMaterial({ color: 0x6B4914, roughness: 0.6 }));
+    wdDoorL.position.set(2.16, 1.0, 2.13);
+    group.add(wdDoorL);
+    const wdDoorR = wdDoorL.clone();
+    wdDoorR.position.x = 2.64;
+    group.add(wdDoorR);
+    const wdHandle = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.12, 0.04), new THREE.MeshStandardMaterial({ color: 0xccaa44, roughness: 0.3, metalness: 0.8 }));
+    wdHandle.position.set(2.3, 1.0, 2.17);
+    group.add(wdHandle);
+    const wdHandle2 = wdHandle.clone();
+    wdHandle2.position.x = 2.5;
+    group.add(wdHandle2);
+    colliders.push(makeAABB(2.4, 0, 1.8, 0.55, 1.05, 0.35));
+    const wardrobeMesh = wdBody;
+
     const paintingZone = new THREE.Vector3(0, 0, 1.8);
 
     scene.add(group);
@@ -231,5 +252,5 @@ export function createRoom(scene) {
         { name: 'chair_sit', position: new THREE.Vector3(2.1, 0, -1.2), isFurniture: true, furnitureType: 'chair' },
     ];
 
-    return { colliders, waypoints, painting, paintingZone };
+    return { colliders, waypoints, painting, paintingZone, wardrobeMesh };
 }
