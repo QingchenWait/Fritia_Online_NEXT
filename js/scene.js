@@ -13,14 +13,14 @@ export function initScene(canvas) {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.0;
+    renderer.toneMapping = THREE.LinearToneMapping;
+    renderer.toneMappingExposure = 0.9;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-    const ambient = new THREE.AmbientLight(0xfff0e0, 0.4);
+    const ambient = new THREE.AmbientLight(0xfff0e0, 0.5);
     scene.add(ambient);
 
-    const sunLight = new THREE.DirectionalLight(0xfff5e6, 1.0);
+    const sunLight = new THREE.DirectionalLight(0xfff5e6, 0.9);
     sunLight.position.set(-2, 4, -3);
     sunLight.castShadow = true;
     sunLight.shadow.mapSize.set(2048, 2048);
@@ -33,7 +33,7 @@ export function initScene(canvas) {
     sunLight.shadow.bias = -0.001;
     scene.add(sunLight);
 
-    const lampLight = new THREE.PointLight(0xffd080, 0.6, 5);
+    const lampLight = new THREE.PointLight(0xffd080, 0.5, 5);
     lampLight.position.set(2.2, 1.5, -1.7);
     lampLight.castShadow = true;
     lampLight.shadow.mapSize.set(512, 512);

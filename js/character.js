@@ -107,7 +107,33 @@ export function loadCharacter(scene, waypoints, colliders, onProgress) {
                     mesh.name = 'FritiaPMX';
                     mesh.castShadow = true;
                     mesh.receiveShadow = true;
-                    if (onProgress) onProgress(60);
+
+                    if (mesh.material) {
+                        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+                        for (let i = 0; i < materials.length; i++) {
+                            const oldMat = materials[i];
+                            const newMat = new THREE.MeshToonMaterial();
+                            if (oldMat.color) newMat.color.copy(oldMat.color).multiplyScalar(0.85);
+                            if (oldMat.emissive) newMat.emissive.copy(oldMat.emissive).multiplyScalar(0.3);
+                            if (oldMat.map) newMat.map = oldMat.map;
+                            if (oldMat.gradientMap) newMat.gradientMap = oldMat.gradientMap;
+                            if (oldMat.normalMap) newMat.normalMap = oldMat.normalMap;
+                            newMat.side = oldMat.side !== undefined ? oldMat.side : THREE.FrontSide;
+
+                            const needsAlpha = oldMat.transparent || (oldMat.map && oldMat.alphaTest > 0);
+                            if (needsAlpha) {
+                                newMat.alphaTest = oldMat.alphaTest > 0 ? oldMat.alphaTest : 0.5;
+                                newMat.transparent = false;
+                                newMat.depthWrite = true;
+                            } else {
+                                newMat.transparent = oldMat.transparent || false;
+                                newMat.opacity = oldMat.opacity !== undefined ? oldMat.opacity : 1.0;
+                            }
+
+                            materials[i] = newMat;
+                        }
+                        mesh.material = materials;
+                    }
 
                     const box = new THREE.Box3().setFromObject(mesh);
                     const rawHeight = box.max.y - box.min.y;
@@ -598,11 +624,26 @@ function updateStandTransition(cd, delta) {
         cd.root.position.x = cd.sitStandEndX;
         cd.root.position.y = cd.baseY;
         cd.root.position.z = cd.sitStandEndZ;
-        cd.state = STATES.IDLE;
-        cd.stateTimer = 0;
-        cd.idleDuration = 1.0;
-        cd.currentWaypoint = null;
         cd.standUpTime = performance.now() * 0.001;
+
+        applyIdlePose(cd);
+        const avail = cd.waypoints.filter(w => !w.isFurniture);
+        if (avail.length > 0) {
+            const target = avail[Math.floor(Math.random() * avail.length)];
+            cd.walkEnd.copy(target.position);
+            cd.walkStart.copy(cd.root.position);
+            cd.walkStart.y = cd.baseY;
+            cd.walkProgress = 0;
+            cd.walkCycle = 0;
+            cd.targetWaypoint = target;
+            cd.state = STATES.WALKING;
+            cd.stateTimer = 0;
+        } else {
+            cd.state = STATES.IDLE;
+            cd.stateTimer = 0;
+            cd.idleDuration = randomRange(IDLE_MIN, IDLE_MAX);
+            cd.currentWaypoint = null;
+        }
         return;
     }
     const t = easeInOutCubic(cd.transitionProgress);
@@ -716,10 +757,29 @@ export async function swapModel(scene, cd, modelPath) {
 
                     if (mesh.material) {
                         const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-                        for (const mat of materials) {
-                            if (mat.emissive) mat.emissiveIntensity = Math.min(mat.emissiveIntensity || 0, 0.15);
-                            if (mat.color) mat.color.multiplyScalar(0.85);
+                        for (let i = 0; i < materials.length; i++) {
+                            const oldMat = materials[i];
+                            const newMat = new THREE.MeshToonMaterial();
+                            if (oldMat.color) newMat.color.copy(oldMat.color).multiplyScalar(0.85);
+                            if (oldMat.emissive) newMat.emissive.copy(oldMat.emissive).multiplyScalar(0.3);
+                            if (oldMat.map) newMat.map = oldMat.map;
+                            if (oldMat.gradientMap) newMat.gradientMap = oldMat.gradientMap;
+                            if (oldMat.normalMap) newMat.normalMap = oldMat.normalMap;
+                            newMat.side = oldMat.side !== undefined ? oldMat.side : THREE.FrontSide;
+
+                            const needsAlpha = oldMat.transparent || (oldMat.map && oldMat.alphaTest > 0);
+                            if (needsAlpha) {
+                                newMat.alphaTest = oldMat.alphaTest > 0 ? oldMat.alphaTest : 0.5;
+                                newMat.transparent = false;
+                                newMat.depthWrite = true;
+                            } else {
+                                newMat.transparent = oldMat.transparent || false;
+                                newMat.opacity = oldMat.opacity !== undefined ? oldMat.opacity : 1.0;
+                            }
+
+                            materials[i] = newMat;
                         }
+                        mesh.material = materials;
                     }
 
                     const box = new THREE.Box3().setFromObject(mesh);
