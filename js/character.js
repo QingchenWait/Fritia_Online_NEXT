@@ -133,10 +133,17 @@ export function loadCharacter(scene, waypoints, colliders, onProgress) {
                     }
 
                     let blinkIndex = -1;
+                    let smileIndex = -1;
                     if (mesh.morphTargetInfluences && mesh.morphTargetDictionary) {
                         for (const name of ['まばたき', 'blink', '眨眼']) {
                             if (mesh.morphTargetDictionary[name] !== undefined) {
                                 blinkIndex = mesh.morphTargetDictionary[name];
+                                break;
+                            }
+                        }
+                        for (const name of ['笑い', '微笑み', 'smile', 'にっこり']) {
+                            if (mesh.morphTargetDictionary[name] !== undefined) {
+                                smileIndex = mesh.morphTargetDictionary[name];
                                 break;
                             }
                         }
@@ -155,6 +162,7 @@ export function loadCharacter(scene, waypoints, colliders, onProgress) {
                         transitionProgress: 0, transitionDuration: 1.2,
                         blinkIndex, nextBlink: Math.random() * 3 + 2,
                         blinkTimer: 0, isBlinking: false,
+                        smileIndex,
                         waypoints, faceDirection: 0,
                         baseY: groundOffset,
                         hasAnimation: bones.length > 0,
@@ -162,6 +170,9 @@ export function loadCharacter(scene, waypoints, colliders, onProgress) {
                     };
 
                     applyIdlePose(charData);
+                    if (smileIndex >= 0 && mesh.morphTargetInfluences) {
+                        mesh.morphTargetInfluences[smileIndex] = 0.3;
+                    }
 
                     if (onProgress) onProgress(100);
                     console.log('[PMX] ✓ 角色加载完成!');
