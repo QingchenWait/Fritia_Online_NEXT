@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { initScene } from './scene.js';
 import { createRoom } from './room.js';
 import { initControls } from './controls.js';
-import { loadCharacter, updateCharacter, getCharacterPosition, startInteraction, endInteraction } from './character.js';
+import { loadCharacter, updateCharacter, getCharacterPosition, startInteraction, endInteraction, startWaving } from './character.js';
 import { initDialogue, showDialogue, hideDialogue, isDialogueVisible } from './dialogue.js';
 import { initSettings } from './settings.js';
 
@@ -111,6 +111,16 @@ async function init() {
     document.getElementById('click-to-play').classList.remove('hidden');
 
     animate();
+
+    const clickToPlay = document.getElementById('click-to-play');
+    const onFirstClick = () => {
+        clickToPlay.removeEventListener('click', onFirstClick);
+        playStartupVoice();
+        setTimeout(() => {
+            if (charData) startWaving(charData);
+        }, 300);
+    };
+    clickToPlay.addEventListener('click', onFirstClick);
 }
 
 function onKeyDown(e) {
@@ -188,6 +198,30 @@ function updateInteractionPrompt() {
         prompt.classList.remove('hidden');
     } else {
         prompt.classList.add('hidden');
+    }
+}
+
+async function playStartupVoice() {
+    const exts = ['.wav', '.mp3', '.ogg'];
+    const names = [];
+    for (let i = 1; i <= 20; i++) {
+        for (const ext of exts) {
+            names.push(`startup_${i}${ext}`);
+        }
+    }
+    names.push('startup.wav', 'startup_01.wav', 'startup_greeting.wav');
+
+    for (const name of names) {
+        const url = `src/_voices/${name}`;
+        try {
+            const head = await fetch(url, { method: 'HEAD' });
+            if (head.ok) {
+                const audio = new Audio(url);
+                audio.volume = 0.8;
+                audio.play().catch(() => {});
+                return;
+            }
+        } catch {}
     }
 }
 

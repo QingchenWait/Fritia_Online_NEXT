@@ -19,6 +19,7 @@ const STATES = {
     STAND_TO_SIT: 'stand_to_sit',
     SITTING: 'sitting',
     SIT_TO_STAND: 'sit_to_stand',
+    WAVING: 'waving',
     INTERACTING: 'interacting'
 };
 
@@ -201,6 +202,7 @@ export function updateCharacter(cd, delta) {
         case STATES.STAND_TO_SIT: updateSitTransition(cd, delta); break;
         case STATES.SITTING: updateSitting(cd, delta); break;
         case STATES.SIT_TO_STAND: updateStandTransition(cd, delta); break;
+        case STATES.WAVING: updateWaving(cd, delta); break;
         case STATES.INTERACTING: updateInteracting(cd, delta); break;
     }
 }
@@ -232,6 +234,62 @@ function updateBreathing(cd) {
     const t = performance.now() * 0.001;
     const sp = cd.boneRef.spine2 || cd.boneRef.spine;
     if (sp) sp.rotation.x = Math.sin(t * 1.5) * 0.008;
+    forceUpdate(cd);
+}
+
+export function startWaving(cd) {
+    if (!cd || !cd.hasAnimation) return;
+    cd.wavingTimer = 0;
+    cd.wavingDuration = 2.5;
+    cd.state = STATES.WAVING;
+    resetAllBones(cd);
+    applyIdlePose(cd);
+}
+
+function updateWaving(cd, delta) {
+    cd.wavingTimer += delta;
+    const t = cd.wavingTimer;
+    const returnDuration = 0.6;
+    const totalDuration = cd.wavingDuration + returnDuration;
+
+    if (t >= totalDuration) {
+        cd.state = STATES.IDLE;
+        cd.stateTimer = 0;
+        cd.idleDuration = 2.0;
+        applyIdlePose(cd);
+        forceUpdate(cd);
+        return;
+    }
+
+    let raise;
+    if (t < cd.wavingDuration) {
+        raise = 1 - Math.pow(1 - Math.min(1, t / 0.5), 2);
+    } else {
+        const returnT = (t - cd.wavingDuration) / returnDuration;
+        raise = 1 - easeInOutCubic(returnT);
+    }
+
+    resetAllBones(cd);
+
+    const lc = cd.boneRef.leftShoulderC;
+    const rc = cd.boneRef.rightShoulderC;
+    if (lc) lc.rotation.z = -0.5;
+    if (rc) rc.rotation.z = 0.5;
+
+    const rs = cd.boneRef.rightShoulder;
+    const re = cd.boneRef.rightElbow;
+    if (rs) {
+        rs.rotation.x = -0.8 * raise;
+    }
+    if (re) {
+        re.rotation.x = -1.5 * raise;
+        re.rotation.z = Math.sin(t * 7) * 0.3 * raise;
+    }
+
+    const breathe = Math.sin(performance.now() * 0.001 * 1.5) * 0.008;
+    const sp = cd.boneRef.spine2 || cd.boneRef.spine;
+    if (sp) sp.rotation.x = breathe;
+
     forceUpdate(cd);
 }
 
