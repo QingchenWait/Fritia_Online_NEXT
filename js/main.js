@@ -122,6 +122,13 @@ async function init() {
         const code = e.detail?.code;
         if (code) onKeyDown({ code });
     });
+    document.addEventListener('fritia-overlay-closed', (e) => {
+        if (e.detail?.id === 'dialogue-ui' && isInteracting) {
+            isInteracting = false;
+            endInteraction(charData);
+        }
+        controlsModule.resumeControlMode();
+    });
     document.getElementById('btn-pet').addEventListener('click', () => { if (isSleeping) petFritiaHead(); });
     document.getElementById('btn-wake').addEventListener('click', () => { if (isSleeping) exitSleepMode(); });
     document.getElementById('btn-export').addEventListener('click', exportData);
@@ -186,7 +193,7 @@ function onKeyDown(e) {
                 enterSleepMode();
             } else if (isLookingAtDesk() || isLookingAtDoor()) {
                 openDatePanel();
-                controlsModule.releaseControlMode();
+                controlsModule.releaseControlMode({ resumeOnClose: true });
             } else if (isLookingAtPainting()) {
                 document.getElementById('painting-upload').click();
             } else if (isLookingAtWardrobe()) {
@@ -221,7 +228,7 @@ function startInteractionMode(charPos) {
     isInteracting = true;
     startInteraction(charData, () => camera.position);
     showDialogue();
-    controlsModule.releaseControlMode();
+    controlsModule.releaseControlMode({ resumeOnClose: true });
     playTalkSound();
 
     const checkInterval = setInterval(() => {
@@ -421,11 +428,12 @@ function openModelSelector() {
     }
 
     panel.classList.remove('hidden');
-    controlsModule.releaseControlMode();
+    controlsModule.releaseControlMode({ resumeOnClose: true });
 }
 
 function closeModelSelector() {
     document.getElementById('model-selector').classList.add('hidden');
+    document.dispatchEvent(new CustomEvent('fritia-overlay-closed', { detail: { id: 'model-selector' } }));
 }
 
 async function selectModel(model) {

@@ -37,6 +37,8 @@ export function initControls(camera, domElement, colliders) {
     };
 
     const overlayIds = ['dialogue-ui', 'settings-panel', 'history-panel', 'model-selector', 'sleep-ui', 'date-panel'];
+    let resumeAfterOverlay = false;
+    let resumeInProgress = false;
 
     function isOverlayOpen() {
         return overlayIds.some(id => {
@@ -48,7 +50,7 @@ export function initControls(camera, domElement, colliders) {
     function syncEntryPrompt() {
         const prompt = document.getElementById('click-to-play');
         if (!prompt) return;
-        if (!state.isLocked && !isOverlayOpen()) {
+        if (!state.isLocked && !isOverlayOpen() && !resumeAfterOverlay && !resumeInProgress) {
             prompt.classList.remove('hidden');
         } else {
             prompt.classList.add('hidden');
@@ -73,6 +75,8 @@ export function initControls(camera, domElement, colliders) {
     }
 
     function enterControlMode() {
+        resumeAfterOverlay = false;
+        resumeInProgress = false;
         state.isLocked = true;
         syncEntryPrompt();
         document.getElementById('crosshair').classList.add('active');
@@ -127,7 +131,7 @@ export function initControls(camera, domElement, colliders) {
     });
 
     document.addEventListener('click', (e) => {
-        if (!state.isLocked && !state.useTouchControls) {
+        if (!state.isLocked && !state.useTouchControls && !resumeAfterOverlay && !resumeInProgress) {
             const inOverlay = overlayIds.some(id => {
                 const el = document.getElementById(id);
                 return el && !el.classList.contains('hidden') && el.contains(e.target);
@@ -193,7 +197,35 @@ export function initControls(camera, domElement, colliders) {
         return Math.sqrt(dx * dx + dz * dz) < threshold;
     }
 
-    function releaseControlMode() {
+    function blurActiveOverlayElement() {
+        const active = document.activeElement;
+        if (active && typeof active.blur === 'function' && active !== document.body) {
+            active.blur();
+        }
+    }
+
+    function requestPointerLockForResume() {
+        try {
+            const result = domElement.requestPointerLock();
+            if (result && typeof result.catch === 'function') {
+                result.catch(() => {
+                    resumeInProgress = false;
+                    syncEntryPrompt();
+                });
+            }
+            return true;
+        } catch {
+            resumeInProgress = false;
+            syncEntryPrompt();
+            return false;
+        }
+    }
+
+    function releaseControlMode(options = {}) {
+        if (options.resumeOnClose && state.isLocked) {
+            resumeAfterOverlay = true;
+        }
+
         const doc = domElement.ownerDocument;
         if (state.useTouchControls) {
             if (!state.isLocked) return false;
@@ -211,7 +243,37 @@ export function initControls(camera, domElement, colliders) {
         return true;
     }
 
-    return { controls, state, update, isNearCharacter, releaseControlMode };
+    function resumeControlMode() {
+        if (!resumeAfterOverlay || isOverlayOpen()) {
+            syncEntryPrompt();
+            return false;
+        }
+
+        blurActiveOverlayElement();
+
+        if (state.useTouchControls) {
+            enterControlMode();
+            return true;
+        }
+
+        if (!pointerLockSupported) {
+            resumeAfterOverlay = false;
+            syncEntryPrompt();
+            return false;
+        }
+
+        const doc = domElement.ownerDocument;
+        if (doc.pointerLockElement === domElement) {
+            enterControlMode();
+            return true;
+        }
+
+        resumeInProgress = true;
+        syncEntryPrompt();
+        return requestPointerLockForResume();
+    }
+
+    return { controls, state, update, isNearCharacter, releaseControlMode, resumeControlMode };
 }
 
 function initTouchJoystick(state) {

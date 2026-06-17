@@ -441,6 +441,7 @@ export function closeDatePanel() {
     }
     isDateGenerating = false;
     currentLocationId = null;
+    document.dispatchEvent(new CustomEvent('fritia-overlay-closed', { detail: { id: 'date-panel' } }));
 }
 
 export function isDatePanelVisible() {

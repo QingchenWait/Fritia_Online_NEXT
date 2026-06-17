@@ -94,6 +94,7 @@ export function importConversationHistory(data) {
 
 export async function initDialogue() {
     elements.ui = document.getElementById('dialogue-ui');
+    elements.textArea = document.getElementById('dialogue-text-area');
     elements.textEl = document.getElementById('dialogue-text');
     elements.inputEl = document.getElementById('dialogue-input');
     elements.sendBtn = document.getElementById('dialogue-send');
@@ -294,9 +295,14 @@ function appendSystemMessage(text) {
 }
 
 function scrollDialogue() {
-    const area = elements.textEl;
+    const scrollToBottom = () => {
+        if (elements.textArea) {
+            elements.textArea.scrollTop = elements.textArea.scrollHeight;
+        }
+    };
     requestAnimationFrame(() => {
-        area.scrollTop = area.scrollHeight;
+        scrollToBottom();
+        requestAnimationFrame(scrollToBottom);
     });
 }
 
@@ -335,6 +341,7 @@ export function hideDialogue() {
         abortController = null;
     }
     isGenerating = false;
+    document.dispatchEvent(new CustomEvent('fritia-overlay-closed', { detail: { id: 'dialogue-ui' } }));
 }
 
 export function isDialogueVisible() {
