@@ -4,7 +4,8 @@ import { MMDLoader } from 'three/addons/loaders/MMDLoader.js';
 const MODEL_PATH = 'src/_fritia_3d_model/驰掣-毛绒派对.pmx';
 const TARGET_HEIGHT = 1.55;
 const WALK_SPEED = 1.0;
-const WALK_CYCLE_SPEED = 6.0;
+const WALK_CYCLE_SPEED = 5.2;
+const WALK_BLEND_EDGE = 0.18;
 const IDLE_MIN = 3;
 const IDLE_MAX = 8;
 const SIT_MIN = 8;
@@ -32,11 +33,13 @@ const BONE_MAP = {
     head:      ['頭', 'Head'],
     leftShoulder: ['左肩', 'LeftShoulder'],
     leftShoulderC: ['左肩C'],
-    leftArm:   ['左腕捩', '左腕', 'LeftArm', 'LeftUpperArm'],
+    leftArm:   ['左腕', 'LeftArm', 'LeftUpperArm', '左腕捩'],
+    leftArmTwist: ['左腕捩', 'LeftArmTwist', 'LeftUpperArmTwist'],
     leftElbow: ['左ひじ', 'LeftElbow', 'LeftLowerArm'],
     rightShoulder: ['右肩', 'RightShoulder'],
     rightShoulderC: ['右肩C'],
-    rightArm:  ['右腕捩', '右腕', 'RightArm', 'RightUpperArm'],
+    rightArm:  ['右腕', 'RightArm', 'RightUpperArm', '右腕捩'],
+    rightArmTwist: ['右腕捩', 'RightArmTwist', 'RightUpperArmTwist'],
     rightElbow:['右ひじ', 'RightElbow', 'RightLowerArm'],
     leftLeg:   ['左足D', '左足', 'LeftLeg', 'LeftUpperLeg'],
     leftKnee:  ['左ひざD', '左ひざ', 'LeftKnee', 'LeftLowerLeg'],
@@ -61,6 +64,15 @@ function buildBoneRef(bones) {
 }
 
 function randomRange(min, max) { return min + Math.random() * (max - min); }
+
+function clamp01(value) {
+    return Math.max(0, Math.min(1, value));
+}
+
+function smoothstep01(value) {
+    const t = clamp01(value);
+    return t * t * (3 - 2 * t);
+}
 
 function setupTransparentShadows(mesh) {
     if (!mesh.skeleton) return;
@@ -258,7 +270,8 @@ export function loadCharacter(scene, waypoints, colliders, onProgress) {
                         waypoints, faceDirection: 0,
                         baseY: groundOffset,
                         hasAnimation: bones.length > 0,
-                        walkCycle: 0
+                        walkCycle: 0,
+                        walkBlend: 0
                     };
 
                     applyIdlePose(charData);
@@ -403,8 +416,8 @@ export function applyIdlePose(cd) {
     const rc = cd.boneRef.rightShoulderC;
     if (lc) lc.rotation.z = -0.5;
     if (rc) rc.rotation.z = 0.5;
-    addRot(cd.boneRef.leftElbow, 0.15, 0, 0);
-    addRot(cd.boneRef.rightElbow, 0.15, 0, 0);
+    addRot(cd.boneRef.leftElbow, 0, 0, -0.12);
+    addRot(cd.boneRef.rightElbow, 0, 0, 0.12);
     updateBreathing(cd);
 }
 
@@ -412,38 +425,77 @@ function applyWalkPose(cd) {
     if (!cd.hasAnimation) return;
     resetAllBones(cd);
 
-    const s = Math.sin(cd.walkCycle);
-    const cs = Math.cos(cd.walkCycle);
+    const cycle = cd.walkCycle;
+    const s = Math.sin(cycle);
+    const cs = Math.cos(cycle);
+    const doubleStep = Math.sin(cycle * 2);
+    const blend = cd.walkBlend ?? 1;
+
+    const stride = 0.32 * blend;
+    const shoulderSwing = 0.08 * blend;
+    const upperArmSwing = 0.28 * blend;
+    const bodyTwist = 0.035 * blend;
+    const bodyRoll = 0.012 * blend;
+    const bodyBob = (0.01 + Math.pow(Math.abs(cs), 0.8) * 0.018) * blend;
+    const leftPhase = cycle;
+    const rightPhase = cycle + Math.PI;
+    const leftSwing = smoothstep01(Math.max(0, Math.cos(leftPhase + Math.PI / 4)));
+    const rightSwing = smoothstep01(Math.max(0, Math.cos(rightPhase + Math.PI / 4)));
+    const leftToeOff = smoothstep01(Math.max(0, -Math.sin(leftPhase)));
+    const rightToeOff = smoothstep01(Math.max(0, -Math.sin(rightPhase)));
+    const leftHip = s * stride;
+    const rightHip = -s * stride;
+    const armPhase = Math.sin(cycle + 0.15);
 
     const cb = cd.boneRef.center;
     if (cb && cd.initialPositions.center) {
-        cb.position.y = cd.initialPositions.center.y + Math.abs(cs) * 0.04;
+        cb.position.y = cd.initialPositions.center.y + bodyBob;
+        cb.position.x = cd.initialPositions.center.x + cs * 0.01 * blend;
     }
 
-    addRot(cd.boneRef.spine, 0, -s * 0.08, 0);
-    addRot(cd.boneRef.spine2, 0, -s * 0.05, s * 0.015);
+    addRot(cd.boneRef.spine, 0.025 * blend, -s * bodyTwist, doubleStep * bodyRoll);
+    addRot(cd.boneRef.spine2, 0.012 * blend, -s * bodyTwist * 0.65, -doubleStep * bodyRoll * 0.55);
 
-    addRot(cd.boneRef.leftLeg, s * 0.5, 0, 0);
-    addRot(cd.boneRef.rightLeg, -s * 0.5, 0, 0);
-    addRot(cd.boneRef.leftKnee, Math.max(0, s) * 0.6, 0, 0);
-    addRot(cd.boneRef.rightKnee, Math.max(0, -s) * 0.6, 0, 0);
+    addRot(cd.boneRef.leftLeg, leftHip, 0, -cs * 0.018 * blend);
+    addRot(cd.boneRef.rightLeg, rightHip, 0, -cs * 0.018 * blend);
+    addRot(cd.boneRef.leftKnee, (0.05 + leftSwing * 0.32 + leftToeOff * 0.06) * blend, 0, 0);
+    addRot(cd.boneRef.rightKnee, (0.05 + rightSwing * 0.32 + rightToeOff * 0.06) * blend, 0, 0);
+    addRot(cd.boneRef.leftAnkle, (-leftHip * 0.55 - leftSwing * 0.12 + leftToeOff * 0.08) * blend, 0, 0);
+    addRot(cd.boneRef.rightAnkle, (-rightHip * 0.55 - rightSwing * 0.12 + rightToeOff * 0.08) * blend, 0, 0);
 
     const lc = cd.boneRef.leftShoulderC;
     const rc = cd.boneRef.rightShoulderC;
     if (lc) lc.rotation.z = -0.5;
     if (rc) rc.rotation.z = 0.5;
 
+    const ls = cd.boneRef.leftShoulder;
+    const rs = cd.boneRef.rightShoulder;
     const la = cd.boneRef.leftArm;
     const ra = cd.boneRef.rightArm;
-    if (la) la.rotation.x = -s * 0.4;
-    if (ra) ra.rotation.x = s * 0.4;
+    const latRelax = 0.015 * Math.cos(cycle * 2) * blend;
+    if (ls) {
+        ls.rotation.x = -armPhase * shoulderSwing;
+        ls.rotation.z = -latRelax;
+    }
+    if (rs) {
+        rs.rotation.x = armPhase * shoulderSwing;
+        rs.rotation.z = latRelax;
+    }
+    if (la) {
+        la.rotation.x = -armPhase * upperArmSwing - 0.03 * blend;
+        la.rotation.y = -0.015 * armPhase * blend;
+    }
+    if (ra) {
+        ra.rotation.x = armPhase * upperArmSwing - 0.03 * blend;
+        ra.rotation.y = -0.015 * armPhase * blend;
+    }
 
-    const elbowBendL = 0.15 + Math.max(0, -s) * 0.25;
-    const elbowBendR = 0.15 + Math.max(0, s) * 0.25;
-    addRot(cd.boneRef.leftElbow, elbowBendL * 0.5, 0, 0.15);
-    addRot(cd.boneRef.rightElbow, elbowBendR * 0.5, 0, -0.15);
+    const elbowBendL = (0.12 + Math.max(0, -armPhase) * 0.04) * blend;
+    const elbowBendR = (0.12 + Math.max(0, armPhase) * 0.04) * blend;
+    addRot(cd.boneRef.leftElbow, 0, 0, -elbowBendL);
+    addRot(cd.boneRef.rightElbow, 0, 0, elbowBendR);
 
-    addRot(cd.boneRef.head, 0, s * 0.03, 0);
+    addRot(cd.boneRef.head, 0, s * 0.012 * blend, 0);
     forceUpdate(cd);
 }
 
@@ -468,13 +520,8 @@ function applySittingPose(cd) {
     if (lc) { lc.rotation.z = -0.5; }
     if (rc) { rc.rotation.z = 0.5; }
 
-    const ls = cd.boneRef.leftShoulder;
-    const rs = cd.boneRef.rightShoulder;
-    if (ls) ls.rotation.x = -0.5;
-    if (rs) rs.rotation.x = -0.5;
-
-    addRot(cd.boneRef.leftElbow, 0.8, 0, 0);
-    addRot(cd.boneRef.rightElbow, 0.8, 0, 0);
+    addRot(cd.boneRef.leftElbow, 0, 0, -0.24);
+    addRot(cd.boneRef.rightElbow, 0, 0, 0.24);
     forceUpdate(cd);
 }
 
@@ -575,6 +622,7 @@ function updateIdle(cd, delta) {
         cd.walkStart.y = cd.baseY;
         cd.walkProgress = 0;
         cd.walkCycle = 0;
+        cd.walkBlend = 0;
         cd.targetWaypoint = target;
         cd.state = STATES.WALKING;
         cd.stateTimer = 0;
@@ -597,14 +645,16 @@ function updateWalking(cd, delta) {
     const dist = cd.walkStart.distanceTo(cd.walkEnd);
     if (dist < 0.05) { finishWalking(cd); return; }
     cd.walkProgress += (WALK_SPEED * delta) / dist;
-    cd.walkCycle += delta * WALK_CYCLE_SPEED;
+    const edge = Math.min(cd.walkProgress, 1 - cd.walkProgress) / WALK_BLEND_EDGE;
+    cd.walkBlend = smoothstep01(edge);
+    cd.walkCycle += delta * WALK_CYCLE_SPEED * (0.75 + cd.walkBlend * 0.25);
     if (cd.walkProgress >= 1) {
         cd.root.position.copy(cd.walkEnd);
         cd.root.position.y = cd.baseY;
         finishWalking(cd);
         return;
     }
-    const t = easeInOutCubic(cd.walkProgress);
+    const t = cd.walkProgress;
     const newPos = new THREE.Vector3().lerpVectors(cd.walkStart, cd.walkEnd, t);
     newPos.y = cd.baseY;
     if (checkCollision(cd, newPos)) {
@@ -622,6 +672,7 @@ function updateWalking(cd, delta) {
 }
 
 function finishWalking(cd) {
+    cd.walkBlend = 0;
     const t = cd.targetWaypoint;
     cd.currentWaypoint = t;
     if (t.isFurniture) {
@@ -740,6 +791,7 @@ function updateStandTransition(cd, delta) {
             cd.walkStart.y = cd.baseY;
             cd.walkProgress = 0;
             cd.walkCycle = 0;
+            cd.walkBlend = 0;
             cd.targetWaypoint = target;
             cd.state = STATES.WALKING;
             cd.stateTimer = 0;
