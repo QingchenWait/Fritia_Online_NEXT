@@ -14,6 +14,7 @@ let paintingMesh;
 let wardrobeMesh;
 let bedMesh;
 let deskMesh;
+let doorMesh;
 let bedBlanket;
 let isSleeping = false;
 let sleepCamPos = new THREE.Vector3();
@@ -50,6 +51,7 @@ async function init() {
     bedMesh = room.bedMesh;
     bedBlanket = room.bedBlanket;
     deskMesh = room.deskMesh;
+    doorMesh = room.doorMesh;
 
     await new Promise(r => setTimeout(r, 100));
 
@@ -173,9 +175,9 @@ function onKeyDown(e) {
         if (controlsModule && controlsModule.state.isLocked) {
             if (isSleeping) {
                 exitSleepMode();
-            } else if (isLookingAtBed()) {
+            } else if (isLookingAtBed() && !currentModelPath.includes('国主驾到')) {
                 enterSleepMode();
-            } else if (isLookingAtDesk()) {
+            } else if (isLookingAtDesk() || isLookingAtDoor()) {
                 if (controlsModule && controlsModule.state.isLocked) {
                     controlsModule.controls.unlock();
                 }
@@ -286,6 +288,7 @@ function updateInteractionPrompt() {
     if (paintingPrompt) {
         const lookBed = isLookingAtBed();
         const lookDesk = isLookingAtDesk();
+        const lookDoor = isLookingAtDoor();
         if (lookPaint) {
             paintingPrompt.innerHTML = '按 <kbd>E</kbd> 更换挂画';
             paintingPrompt.classList.remove('hidden');
@@ -293,10 +296,17 @@ function updateInteractionPrompt() {
             paintingPrompt.innerHTML = '按 <kbd>E</kbd> 换装';
             paintingPrompt.classList.remove('hidden');
         } else if (lookBed) {
-            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 休息';
+            if (currentModelPath.includes('国主驾到')) {
+                paintingPrompt.innerHTML = '<span style="opacity:0.4;cursor:not-allowed;">按 <kbd>E</kbd> 休息 <small style="font-size:0.75em;">(该装扮不可用)</small></span>';
+            } else {
+                paintingPrompt.innerHTML = '按 <kbd>E</kbd> 休息';
+            }
             paintingPrompt.classList.remove('hidden');
         } else if (lookDesk) {
-            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 查看今日约会行程';
+            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 开始今日约会行程';
+            paintingPrompt.classList.remove('hidden');
+        } else if (lookDoor) {
+            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 出门约会';
             paintingPrompt.classList.remove('hidden');
         } else {
             paintingPrompt.classList.add('hidden');
@@ -406,6 +416,13 @@ function isLookingAtDesk() {
     if (!deskMesh || !camera) return false;
     raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
     const hits = raycaster.intersectObject(deskMesh);
+    return hits.length > 0;
+}
+
+function isLookingAtDoor() {
+    if (!doorMesh || !camera) return false;
+    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+    const hits = raycaster.intersectObject(doorMesh);
     return hits.length > 0;
 }
 

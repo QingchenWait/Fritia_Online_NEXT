@@ -47,6 +47,17 @@ export function createRoom(scene) {
     leftWall.receiveShadow = true;
     group.add(leftWall);
 
+    const logoTexture = new THREE.TextureLoader().load('src/snowbreak_logo.png');
+    const logoMat = new THREE.MeshStandardMaterial({
+        map: logoTexture,
+        transparent: true,
+        roughness: 0.8
+    });
+    const logoPlane = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.2), logoMat);
+    logoPlane.position.set(-2.99, 1.8, 0);
+    logoPlane.rotation.y = Math.PI / 2;
+    group.add(logoPlane);
+
     const rightWall = new THREE.Mesh(new THREE.PlaneGeometry(5, 3), wallMat);
     rightWall.position.set(3, 1.5, 0);
     rightWall.rotation.y = -Math.PI / 2;
@@ -99,7 +110,7 @@ export function createRoom(scene) {
     bedGroup.add(bedMattress);
     const bedPillow = makeBox(0.5, 0.1, 0.35, 0xffffff, -2.1, 0.55, -2.1);
     bedGroup.add(bedPillow);
-    const bedBlanket = makeBox(1.05, 0.08, 1.3, 0xFFB6C1, -2.1, 0.53, -0.85);
+    const bedBlanket = makeBox(1.05, 0.08, 1.1, 0xFFB6C1, -2.1, 0.53, -0.95);
     bedGroup.add(bedBlanket);
     const bedHeadboard = makeBox(1.2, 0.6, 0.08, 0x4A3520, -2.1, 0.7, -2.26);
     bedGroup.add(bedHeadboard);
@@ -228,27 +239,68 @@ export function createRoom(scene) {
     group.add(pfR);
 
     // Wardrobe
+    const wardrobeGroup = new THREE.Group();
     const wdBMat = new THREE.MeshStandardMaterial({ color: 0x5C4033, roughness: 0.7 });
     const wdBody = new THREE.Mesh(new THREE.BoxGeometry(1.0, 2.0, 0.6), wdBMat);
-    wdBody.position.set(2.4, 1.0, 1.8);
+    wdBody.position.set(0, 1.0, 0);
     wdBody.castShadow = true;
-    group.add(wdBody);
+    wardrobeGroup.add(wdBody);
     const wdDoorL = new THREE.Mesh(new THREE.BoxGeometry(0.48, 1.8, 0.05), new THREE.MeshStandardMaterial({ color: 0x6B4914, roughness: 0.6 }));
-    wdDoorL.position.set(2.16, 1.0, 2.13);
-    group.add(wdDoorL);
+    wdDoorL.position.set(-0.24, 1.0, 0.33);
+    wardrobeGroup.add(wdDoorL);
     const wdDoorR = wdDoorL.clone();
-    wdDoorR.position.x = 2.64;
-    group.add(wdDoorR);
+    wdDoorR.position.x = 0.24;
+    wardrobeGroup.add(wdDoorR);
     const wdHandle = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.12, 0.04), new THREE.MeshStandardMaterial({ color: 0xccaa44, roughness: 0.3, metalness: 0.8 }));
-    wdHandle.position.set(2.3, 1.0, 2.17);
-    group.add(wdHandle);
+    wdHandle.position.set(-0.1, 1.0, 0.37);
+    wardrobeGroup.add(wdHandle);
     const wdHandle2 = wdHandle.clone();
-    wdHandle2.position.x = 2.5;
-    group.add(wdHandle2);
+    wdHandle2.position.x = 0.1;
+    wardrobeGroup.add(wdHandle2);
+    wardrobeGroup.position.set(2.4, 0, 1.8);
+    wardrobeGroup.rotation.y = Math.PI;
+    group.add(wardrobeGroup);
     colliders.push(makeAABB(2.4, 0, 1.8, 0.55, 1.05, 0.35));
     const wardrobeMesh = wdBody;
 
     const paintingZone = new THREE.Vector3(0, 0, 1.8);
+
+    // Door (decorative, left side of painting wall)
+    const doorGroup = new THREE.Group();
+    const doorWidth = 0.9;
+    const doorHeight = 2.0;
+    const doorX = -2.2;
+    const doorFrameMat = new THREE.MeshStandardMaterial({ color: 0x8B7355, roughness: 0.6 });
+    const doorFrameL = new THREE.Mesh(new THREE.BoxGeometry(0.08, doorHeight + 0.2, 0.1), doorFrameMat);
+    doorFrameL.position.set(doorX - doorWidth / 2 - 0.04, (doorHeight + 0.2) / 2, 2.47);
+    doorGroup.add(doorFrameL);
+    const doorFrameR = new THREE.Mesh(new THREE.BoxGeometry(0.08, doorHeight + 0.2, 0.1), doorFrameMat);
+    doorFrameR.position.set(doorX + doorWidth / 2 + 0.04, (doorHeight + 0.2) / 2, 2.47);
+    doorGroup.add(doorFrameR);
+    const doorFrameT = new THREE.Mesh(new THREE.BoxGeometry(doorWidth + 0.16, 0.08, 0.1), doorFrameMat);
+    doorFrameT.position.set(doorX, doorHeight + 0.1, 2.47);
+    doorGroup.add(doorFrameT);
+
+    const doorMat = new THREE.MeshStandardMaterial({ color: 0xA0522D, roughness: 0.7 });
+    const doorPanel = new THREE.Mesh(new THREE.BoxGeometry(doorWidth, doorHeight, 0.06), doorMat);
+    doorPanel.position.set(doorX, doorHeight / 2, 2.48);
+    doorGroup.add(doorPanel);
+
+    const doorDecorMat = new THREE.MeshStandardMaterial({ color: 0x8B6914, roughness: 0.5 });
+    const doorDecor1 = new THREE.Mesh(new THREE.BoxGeometry(doorWidth * 0.7, doorHeight * 0.4, 0.02), doorDecorMat);
+    doorDecor1.position.set(doorX, doorHeight * 0.6, 2.52);
+    doorGroup.add(doorDecor1);
+    const doorDecor2 = new THREE.Mesh(new THREE.BoxGeometry(doorWidth * 0.7, doorHeight * 0.3, 0.02), doorDecorMat);
+    doorDecor2.position.set(doorX, doorHeight * 0.25, 2.52);
+    doorGroup.add(doorDecor2);
+
+    const doorHandleMat = new THREE.MeshStandardMaterial({ color: 0xD4AF37, roughness: 0.3, metalness: 0.8 });
+    const doorKnob = new THREE.Mesh(new THREE.SphereGeometry(0.06, 16, 16), doorHandleMat);
+    doorKnob.position.set(doorX + doorWidth / 2 - 0.15, doorHeight * 0.5, 2.6);
+    doorGroup.add(doorKnob);
+
+    group.add(doorGroup);
+    const doorMesh = doorPanel;
 
     scene.add(group);
 
@@ -261,5 +313,5 @@ export function createRoom(scene) {
         { name: 'chair_sit', position: new THREE.Vector3(2.1, 0, -1.2), isFurniture: true, furnitureType: 'chair' },
     ];
 
-    return { colliders, playerColliders, waypoints, painting, paintingZone, wardrobeMesh, bedMesh: bedGroup, bedBlanket, deskMesh };
+    return { colliders, playerColliders, waypoints, painting, paintingZone, wardrobeMesh, bedMesh: bedGroup, bedBlanket, deskMesh, doorMesh };
 }
