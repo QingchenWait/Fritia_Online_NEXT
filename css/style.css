@@ -102,6 +102,17 @@ body {
     font-size: 0.8rem;
 }
 
+.loading-credit {
+    position: absolute;
+    bottom: 24px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.3);
+    font-size: 0.85rem;
+    letter-spacing: 0.05em;
+}
+
 /* HUD */
 #hud {
     position: fixed;
@@ -216,13 +227,18 @@ body {
 /* Dialogue UI - Galgame Style */
 #dialogue-ui {
     position: fixed;
-    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     z-index: 50;
     display: flex;
     align-items: flex-end;
     justify-content: center;
     padding: 0;
     pointer-events: none;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
 }
 
 #dialogue-ui:not(.hidden) {
@@ -481,13 +497,19 @@ body {
 
 #settings-panel {
     position: fixed;
-    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     z-index: 70;
     display: flex;
     align-items: center;
     justify-content: center;
     background: rgba(0, 0, 0, 0.5);
+    -webkit-backdrop-filter: blur(4px);
     backdrop-filter: blur(4px);
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
 }
 
 .settings-inner {
@@ -583,13 +605,19 @@ body {
 /* Model Selector */
 #model-selector {
     position: fixed;
-    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     z-index: 65;
     display: flex;
     align-items: center;
     justify-content: center;
     background: rgba(0, 0, 0, 0.5);
+    -webkit-backdrop-filter: blur(4px);
     backdrop-filter: blur(4px);
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
 }
 
 .model-selector-inner {
@@ -738,13 +766,19 @@ body {
 /* History Panel */
 #history-panel {
     position: fixed;
-    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     z-index: 75;
     display: flex;
     align-items: center;
     justify-content: center;
     background: rgba(0, 0, 0, 0.5);
+    -webkit-backdrop-filter: blur(4px);
     backdrop-filter: blur(4px);
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
 }
 
 .history-inner {
@@ -950,13 +984,19 @@ body {
 /* Date Panel */
 #date-panel {
     position: fixed;
-    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     z-index: 75;
     display: flex;
     align-items: center;
     justify-content: center;
     background: rgba(0, 0, 0, 0.5);
+    -webkit-backdrop-filter: blur(4px);
     backdrop-filter: blur(4px);
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
 }
 
 .date-inner {
