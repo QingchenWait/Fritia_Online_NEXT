@@ -108,7 +108,20 @@ async function init() {
 
     await setLoadingText('初始化控制...');
     setLoadingProgress(90);
-    controlsModule = initControls(camera, renderer.domElement, room.playerColliders);
+    controlsModule = initControls(camera, renderer.domElement, room.playerColliders, () => {
+        if (isSleeping) {
+            petFritiaHead();
+            return;
+        }
+        if (isInteracting) {
+            endInteractionMode();
+            return;
+        }
+        const charPos = getCharacterPosition(charData);
+        if (controlsModule.isNearCharacter(charPos)) {
+            startInteractionMode(charPos);
+        }
+    });
 
     await setLoadingText('准备对话系统...');
     setLoadingProgress(95);
@@ -175,21 +188,19 @@ function onKeyDown(e) {
     if (e.code === 'KeyE') {
         if (isInteracting || isDialogueVisible()) return;
         if (isDatePanelVisible()) return;
-        if (controlsModule && controlsModule.state.isLocked) {
-            if (isSleeping) {
-                exitSleepMode();
-            } else if (isLookingAtBed() && !currentModelPath.includes('国主驾到')) {
-                enterSleepMode();
-            } else if (isLookingAtDesk() || isLookingAtDoor()) {
-                if (controlsModule && controlsModule.state.isLocked) {
-                    controlsModule.controls.unlock();
-                }
-                openDatePanel();
-            } else if (isLookingAtPainting()) {
-                document.getElementById('painting-upload').click();
-            } else if (isLookingAtWardrobe()) {
-                openModelSelector();
+        if (isSleeping) {
+            exitSleepMode();
+        } else if (isLookingAtBed() && !currentModelPath.includes('国主驾到')) {
+            enterSleepMode();
+        } else if (isLookingAtDesk() || isLookingAtDoor()) {
+            if (controlsModule && controlsModule.state.isLocked) {
+                controlsModule.controls.unlock();
             }
+            openDatePanel();
+        } else if (isLookingAtPainting()) {
+            document.getElementById('painting-upload').click();
+        } else if (isLookingAtWardrobe()) {
+            openModelSelector();
         }
     }
 
@@ -341,28 +352,64 @@ function initPromptButtons() {
     const prompt = document.getElementById('interaction-prompt');
     const paintingPrompt = document.getElementById('painting-prompt');
 
-    function handlePromptTap(e, keyCode) {
+    function handlePromptTap(e, action) {
         e.preventDefault();
         e.stopPropagation();
-        onKeyDown({ code: keyCode });
+        action();
     }
 
     prompt.addEventListener('click', (e) => {
         if (prompt.classList.contains('hidden')) return;
-        handlePromptTap(e, 'KeyF');
+        handlePromptTap(e, () => {
+            const charPos = getCharacterPosition(charData);
+            if (controlsModule.isNearCharacter(charPos)) {
+                startInteractionMode(charPos);
+            }
+        });
     });
     prompt.addEventListener('touchend', (e) => {
         if (prompt.classList.contains('hidden')) return;
-        handlePromptTap(e, 'KeyF');
+        handlePromptTap(e, () => {
+            const charPos = getCharacterPosition(charData);
+            if (controlsModule.isNearCharacter(charPos)) {
+                startInteractionMode(charPos);
+            }
+        });
     }, { passive: false });
 
     paintingPrompt.addEventListener('click', (e) => {
         if (paintingPrompt.classList.contains('hidden')) return;
-        handlePromptTap(e, 'KeyE');
+        handlePromptTap(e, () => {
+            if (isLookingAtBed() && !currentModelPath.includes('国主驾到')) {
+                enterSleepMode();
+            } else if (isLookingAtDesk() || isLookingAtDoor()) {
+                if (controlsModule && controlsModule.state.isLocked) {
+                    controlsModule.controls.unlock();
+                }
+                openDatePanel();
+            } else if (isLookingAtPainting()) {
+                document.getElementById('painting-upload').click();
+            } else if (isLookingAtWardrobe()) {
+                openModelSelector();
+            }
+        });
     });
     paintingPrompt.addEventListener('touchend', (e) => {
         if (paintingPrompt.classList.contains('hidden')) return;
-        handlePromptTap(e, 'KeyE');
+        handlePromptTap(e, () => {
+            if (isLookingAtBed() && !currentModelPath.includes('国主驾到')) {
+                enterSleepMode();
+            } else if (isLookingAtDesk() || isLookingAtDoor()) {
+                if (controlsModule && controlsModule.state.isLocked) {
+                    controlsModule.controls.unlock();
+                }
+                openDatePanel();
+            } else if (isLookingAtPainting()) {
+                document.getElementById('painting-upload').click();
+            } else if (isLookingAtWardrobe()) {
+                openModelSelector();
+            }
+        });
     }, { passive: false });
 }
 

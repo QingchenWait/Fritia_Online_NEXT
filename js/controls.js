@@ -9,7 +9,7 @@ function hasPhysicalKeyboard() {
     return !('ontouchstart' in window) || window.innerWidth > 1024;
 }
 
-export function initControls(camera, domElement, colliders) {
+export function initControls(camera, domElement, colliders, onInteract) {
     const controls = new PointerLockControls(camera, domElement);
 
     const state = {
@@ -87,7 +87,7 @@ export function initControls(camera, domElement, colliders) {
     if (state.useTouchControls) {
         initTouchJoystick(state);
         initTouchLook(controls, state);
-        initTouchButtons(state);
+        initTouchButtons(state, onInteract);
     }
 
     function checkCollision(pos, radius) {
@@ -264,16 +264,12 @@ function initTouchLook(controls, state) {
     });
 }
 
-function initTouchButtons(state) {
+function initTouchButtons(state, onInteract) {
     const btnInteract = document.getElementById('btn-interact');
     if (btnInteract) {
         btnInteract.addEventListener('touchstart', (e) => {
             e.preventDefault();
-            document.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyF' }));
-        });
-        btnInteract.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            document.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyF' }));
+            if (onInteract) onInteract();
         });
     }
 }
