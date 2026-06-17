@@ -254,5 +254,5 @@ export function createRoom(scene) {
         { name: 'chair_sit', position: new THREE.Vector3(2.1, 0, -1.2), isFurniture: true, furnitureType: 'chair' },
     ];
 
-    return { colliders, waypoints, painting, paintingZone, wardrobeMesh, bedMesh: bedGroup };
+    return { colliders, waypoints, painting, paintingZone, wardrobeMesh, bedMesh: bedGroup, bedBlanket };
 }

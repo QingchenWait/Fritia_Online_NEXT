@@ -662,6 +662,52 @@ body {
     transition: opacity 0.5s ease;
 }
 
+#sleep-ui {
+    position: fixed;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 16px;
+    z-index: 50;
+}
+
+#sleep-ui.hidden {
+    display: none;
+}
+
+.sleep-btn {
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 30px;
+    padding: 12px 28px;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.9rem;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+}
+
+.sleep-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.35);
+    color: #fff;
+}
+
+.sleep-btn kbd {
+    display: inline-block;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-family: inherit;
+    font-weight: bold;
+    margin: 0 4px;
+}
+
 /* Responsive */
 @media (max-width: 600px) {
     #dialogue-box {

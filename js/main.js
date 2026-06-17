@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { initScene } from './scene.js';
 import { createRoom } from './room.js';
 import { initControls } from './controls.js';
-import { loadCharacter, updateCharacter, getCharacterPosition, startInteraction, endInteraction, startWaving, swapModel, applySleepingPose, applyIdlePose } from './character.js';
+import { loadCharacter, updateCharacter, getCharacterPosition, startInteraction, endInteraction, startWaving, swapModel, applySleepingPose, applyIdlePose, updateBlink } from './character.js';
 import { initDialogue, showDialogue, hideDialogue, isDialogueVisible } from './dialogue.js';
 import { initSettings } from './settings.js';
 
@@ -12,6 +12,7 @@ let isInteracting = false;
 let paintingMesh;
 let wardrobeMesh;
 let bedMesh;
+let bedBlanket;
 let isSleeping = false;
 let sleepCamPos = new THREE.Vector3();
 let sleepCamQuat = new THREE.Quaternion();
@@ -45,6 +46,7 @@ async function init() {
     paintingMesh = room.painting;
     wardrobeMesh = room.wardrobeMesh;
     bedMesh = room.bedMesh;
+    bedBlanket = room.bedBlanket;
 
     await new Promise(r => setTimeout(r, 100));
 
@@ -108,6 +110,8 @@ async function init() {
     initPainting();
 
     document.addEventListener('keydown', onKeyDown);
+    document.getElementById('btn-pet').addEventListener('click', () => { if (isSleeping) petFritiaHead(); });
+    document.getElementById('btn-wake').addEventListener('click', () => { if (isSleeping) exitSleepMode(); });
 
     await setLoadingText('准备就绪！');
     setLoadingProgress(100);
@@ -137,6 +141,11 @@ async function init() {
 function onKeyDown(e) {
     if (e.code === 'KeyF') {
         if (isDialogueVisible()) return;
+
+        if (isSleeping) {
+            petFritiaHead();
+            return;
+        }
 
         if (isInteracting) {
             endInteractionMode();
@@ -395,24 +404,84 @@ async function enterSleepMode() {
     charData.root.rotation.y = 0;
     applySleepingPose(charData);
 
+    if (bedBlanket) bedBlanket.visible = false;
+
     if (charData.blinkIndex >= 0 && charData.mesh.morphTargetInfluences) {
         charData.mesh.morphTargetInfluences[charData.blinkIndex] = 1.0;
     }
+    if (charData.smileIndex >= 0 && charData.mesh.morphTargetInfluences) {
+        charData.mesh.morphTargetInfluences[charData.smileIndex] = 0.6;
+    }
 
-    camera.position.set(bedCenter.x + 0.2, bedCenter.y + 0.8, bedCenter.z - 0.15);
+    camera.position.set(bedCenter.x + 0.1, bedCenter.y + 0.8, bedCenter.z - 0.6);
 
-    const lookTarget = new THREE.Vector3(bedCenter.x, bedCenter.y + 0.15, bedCenter.z + 0.4);
+    const lookTarget = new THREE.Vector3(bedCenter.x - 0.25, bedCenter.y + 0.4, bedCenter.z - 0.6);
     camera.lookAt(lookTarget);
 
     const prompt = document.getElementById('interaction-prompt');
     if (prompt) prompt.classList.add('hidden');
     const paintingPrompt = document.getElementById('painting-prompt');
     if (paintingPrompt) paintingPrompt.classList.add('hidden');
+    document.getElementById('sleep-ui').classList.remove('hidden');
 
     await fadeFromBlack();
+    playSleepBgm();
+}
+
+let isPetting = false;
+let sleepBgm = null;
+
+function playSleepBgm() {
+    stopSleepBgm();
+    const tracks = ['src/_voices/sleep_mode_1.mp3', 'src/_voices/sleep_mode_2.mp3'];
+    const src = tracks[Math.floor(Math.random() * tracks.length)];
+    sleepBgm = new Audio(src);
+    sleepBgm.loop = true;
+    sleepBgm.volume = 0.35;
+    sleepBgm.play().catch(() => {});
+}
+
+function stopSleepBgm() {
+    if (sleepBgm) {
+        sleepBgm.pause();
+        sleepBgm.currentTime = 0;
+        sleepBgm = null;
+    }
+}
+
+function playSleepWhisper() {
+    const index = Math.floor(Math.random() * 5) + 1;
+    const audio = new Audio(`src/_voices/sleep_whisper_${index}.mp3`);
+    audio.volume = 0.9;
+    audio.play().catch(() => {});
+}
+
+function petFritiaHead() {
+    if (!charData || isPetting) return;
+    isPetting = true;
+
+    const mesh = charData.mesh;
+    const inf = mesh.morphTargetInfluences;
+    const bi = charData.blinkIndex;
+    const si = charData.smileIndex;
+
+    if (inf && bi >= 0) inf[bi] = 0;
+    if (inf && si >= 0) inf[si] = 1.0;
+    renderer.render(scene, camera);
+    playSleepWhisper();
+
+    const delay = 3000 + Math.random() * 3000;
+    setTimeout(() => {
+        if (!isSleeping) { isPetting = false; return; }
+        if (inf && bi >= 0) inf[bi] = 1.0;
+        if (inf && si >= 0) inf[si] = 0.6;
+        renderer.render(scene, camera);
+        isPetting = false;
+    }, delay);
 }
 
 async function exitSleepMode() {
+    stopSleepBgm();
     await fadeToBlack();
 
     isSleeping = false;
@@ -428,8 +497,14 @@ async function exitSleepMode() {
     charData.idleDuration = 3;
     applyIdlePose(charData);
 
+    if (bedBlanket) bedBlanket.visible = true;
+    document.getElementById('sleep-ui').classList.add('hidden');
+
     if (charData.blinkIndex >= 0 && charData.mesh.morphTargetInfluences) {
         charData.mesh.morphTargetInfluences[charData.blinkIndex] = 0;
+    }
+    if (charData.smileIndex >= 0 && charData.mesh.morphTargetInfluences) {
+        charData.mesh.morphTargetInfluences[charData.smileIndex] = 0.3;
     }
 
     await fadeFromBlack();
@@ -465,7 +540,7 @@ async function playStartupVoice() {
             const head = await fetch(url, { method: 'HEAD' });
             if (head.ok) {
                 const audio = new Audio(url);
-                audio.volume = 0.8;
+                audio.volume = 0.9;
                 audio.play().catch(() => {});
                 return;
             }

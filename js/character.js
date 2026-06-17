@@ -310,7 +310,7 @@ export function updateCharacter(cd, delta) {
     }
 }
 
-function updateBlink(cd, delta) {
+export function updateBlink(cd, delta) {
     if (cd.blinkIndex < 0 || !cd.mesh.morphTargetInfluences) return;
     cd.blinkTimer += delta;
     if (!cd.isBlinking && cd.blinkTimer >= cd.nextBlink) {
@@ -486,6 +486,7 @@ export function applySleepingPose(cd) {
     if (centerBone && cd.initialPositions.center) {
         centerBone.position.y = cd.initialPositions.center.y + 0.35;
         centerBone.rotation.x = -1.5;
+        centerBone.rotation.y = 1.5;
     }
 
     addRot(cd.boneRef.spine, 0.1, 0, 0);
