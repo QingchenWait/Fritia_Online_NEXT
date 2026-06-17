@@ -199,7 +199,11 @@ async function handleSend() {
     } catch (err) {
         thinkingEl.remove();
         if (err.name !== 'AbortError') {
-            appendSystemMessage(`⚠ ${err.message}`);
+            let errMsg = err.message;
+            if (err.message === 'Failed to fetch' || err.message.includes('NetworkError')) {
+                errMsg = '网络请求失败，请检查：1) API Key 是否已配置  2) Base URL 是否正确  3) API 服务是否支持当前域名的访问（部分 API 在 GitHub Pages 上可能被 CORS 拦截，建议使用支持 CORS 的 API 服务或自建代理）';
+            }
+            appendSystemMessage(`⚠ ${errMsg}`);
             console.error('LLM error:', err);
         }
     } finally {

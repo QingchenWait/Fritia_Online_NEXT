@@ -122,6 +122,7 @@ async function init() {
     document.getElementById('btn-import').addEventListener('click', importData);
     document.getElementById('import-file').addEventListener('change', handleImportFile);
     initHistoryPanel();
+    initPromptButtons();
 
     await setLoadingText('准备就绪！');
     setLoadingProgress(100);
@@ -312,6 +313,46 @@ function updateInteractionPrompt() {
             paintingPrompt.classList.add('hidden');
         }
     }
+
+    adjustPromptOverlap(prompt, paintingPrompt);
+}
+
+function adjustPromptOverlap(prompt1, prompt2) {
+    if (!prompt1 || !prompt2) return;
+    if (prompt1.classList.contains('hidden') || prompt2.classList.contains('hidden')) {
+        prompt1.style.bottom = '';
+        prompt2.style.bottom = '';
+        return;
+    }
+    const gap = 8;
+    const r1 = prompt1.getBoundingClientRect();
+    const r2 = prompt2.getBoundingClientRect();
+    if (!(r1.left < r2.right && r1.right > r2.left && r1.top < r2.bottom && r1.bottom > r2.top)) {
+        prompt1.style.bottom = '';
+        prompt2.style.bottom = '';
+        return;
+    }
+    const overlap = r1.bottom - r2.top;
+    if (overlap > 0) {
+        prompt1.style.bottom = `calc(30% + ${overlap + gap}px)`;
+    }
+}
+
+function initPromptButtons() {
+    const prompt = document.getElementById('interaction-prompt');
+    const paintingPrompt = document.getElementById('painting-prompt');
+
+    prompt.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (prompt.classList.contains('hidden')) return;
+        onKeyDown({ code: 'KeyF' });
+    });
+
+    paintingPrompt.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (paintingPrompt.classList.contains('hidden')) return;
+        onKeyDown({ code: 'KeyE' });
+    });
 }
 
 function initPainting() {

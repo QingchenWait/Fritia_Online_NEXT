@@ -139,6 +139,13 @@ body {
     animation: prompt-pulse 2s ease-in-out infinite;
     white-space: nowrap;
     z-index: 2;
+    cursor: pointer;
+    pointer-events: auto;
+    transition: background 0.15s, bottom 0.1s ease-out;
+}
+
+#interaction-prompt:active {
+    background: rgba(255, 255, 255, 0.2);
 }
 
 #painting-prompt {
@@ -156,6 +163,13 @@ body {
     animation: prompt-pulse 2s ease-in-out infinite;
     white-space: nowrap;
     z-index: 1;
+    cursor: pointer;
+    pointer-events: auto;
+    transition: background 0.15s, bottom 0.1s ease-out;
+}
+
+#painting-prompt:active {
+    background: rgba(255, 255, 255, 0.2);
 }
 
 #interaction-prompt kbd,

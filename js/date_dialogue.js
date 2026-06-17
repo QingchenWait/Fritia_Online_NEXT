@@ -309,6 +309,11 @@ async function startDateConversation(loc) {
     } catch (err) {
         thinkingEl.remove();
         if (err.name !== 'AbortError') {
+            let errMsg = err.message;
+            if (err.message === 'Failed to fetch' || err.message.includes('NetworkError')) {
+                errMsg = '网络请求失败，请检查 API 配置（设置中确认 API Key 和 Base URL 是否正确）';
+            }
+            appendDateAssistantMessage(`⚠ ${errMsg}`);
             console.error('Date LLM error:', err);
         }
     } finally {
@@ -401,6 +406,11 @@ async function handleDateSend() {
     } catch (err) {
         thinkingEl.remove();
         if (err.name !== 'AbortError') {
+            let errMsg = err.message;
+            if (err.message === 'Failed to fetch' || err.message.includes('NetworkError')) {
+                errMsg = '网络请求失败，请检查 API 配置（设置中确认 API Key 和 Base URL 是否正确）';
+            }
+            appendDateAssistantMessage(`⚠ ${errMsg}`);
             console.error('Date LLM error:', err);
         }
     } finally {
