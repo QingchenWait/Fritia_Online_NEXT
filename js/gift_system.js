@@ -3,6 +3,7 @@ import { getConversationHistory } from './dialogue.js';
 import { getDateConversationHistory } from './date_dialogue.js';
 import {
     addGift,
+    addAffinity,
     canAfford,
     formatGameDateTime,
     formatMoney,
@@ -207,9 +208,18 @@ function handlePurchaseGift() {
     renderBalance();
     setStatus('购买成功，礼物已经归档到收藏柜。', 'ok');
     renderPurchasedResult(gift);
+    addAffinity(getGiftAffinityGain(gift.score));
     els.pending?.classList.add('hidden');
     pendingGift = null;
     document.dispatchEvent(new CustomEvent('fritia-game-state-updated'));
+}
+
+function getGiftAffinityGain(score) {
+    const hearts = Math.round(Number(score) || 0);
+    if (hearts >= 5) return 4;
+    if (hearts === 4) return 2;
+    if (hearts === 3) return 1;
+    return 0;
 }
 
 async function requestGiftEvaluation(detail, settings) {

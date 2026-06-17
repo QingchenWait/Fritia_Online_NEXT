@@ -5,11 +5,13 @@ const DISPLAY_STEP_MINUTES = 5;
 const DAY_MINUTES = 24 * 60;
 const DAILY_SALARY = 4000;
 const INITIAL_MONEY = 40000;
+const INITIAL_AFFINITY = 124;
 const MONTH_DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
 let state = {
     gameMinutes: INITIAL_GAME_MINUTES,
     money: INITIAL_MONEY,
+    affinity: INITIAL_AFFINITY,
     lastSalaryDay: 0,
     gifts: []
 };
@@ -55,6 +57,7 @@ function loadState() {
         state = {
             gameMinutes: Number.isFinite(gameMinutes) ? Math.max(0, gameMinutes) : INITIAL_GAME_MINUTES,
             money: Number.isFinite(money) ? Math.max(0, Math.round(money)) : INITIAL_MONEY,
+            affinity: Math.max(INITIAL_AFFINITY, parseAffinityValue(data.affinity, INITIAL_AFFINITY)),
             lastSalaryDay: Number.isFinite(Number(data.lastSalaryDay))
                 ? Math.max(0, Math.floor(Number(data.lastSalaryDay)))
                 : Math.floor((Number.isFinite(gameMinutes) ? gameMinutes : INITIAL_GAME_MINUTES) / DAY_MINUTES),
@@ -179,8 +182,28 @@ export function getMoney() {
     return state.money;
 }
 
+export function getAffinity() {
+    return state.affinity;
+}
+
 export function formatMoney(amount = state.money) {
     return `${Math.round(amount).toLocaleString('zh-CN')} 数据金`;
+}
+
+export function addAffinity(amount) {
+    const delta = Math.max(0, Math.round(Number(amount) || 0));
+    if (delta <= 0) return { delta: 0, value: state.affinity };
+
+    state.affinity += delta;
+    saveState();
+
+    if (typeof document !== 'undefined') {
+        document.dispatchEvent(new CustomEvent('fritia-affinity-updated', {
+            detail: { delta, value: state.affinity }
+        }));
+    }
+
+    return { delta, value: state.affinity };
 }
 
 export function canAfford(amount) {
@@ -238,7 +261,7 @@ export function mergeGifts(gifts) {
 export function exportGameState() {
     const time = getGameTimeInfo({ quantize: 1 });
     return {
-        version: 1,
+        version: 2,
         gameMinutes: state.gameMinutes,
         lastSalaryDay: state.lastSalaryDay,
         gameTime: {
@@ -248,6 +271,9 @@ export function exportGameState() {
         money: {
             currency: '数据金',
             amount: state.money
+        },
+        affinity: {
+            value: state.affinity
         },
         gifts: getGifts()
     };
@@ -268,6 +294,14 @@ export function importGameState(data) {
         state.money = Math.max(0, Math.round(moneyAmount));
     }
 
+    const importedAffinity = maxFinite([
+        parseAffinityValue(source.affinity, NaN),
+        parseAffinityValue(data.affinity, NaN)
+    ]);
+    if (Number.isFinite(importedAffinity)) {
+        state.affinity = Math.max(state.affinity, importedAffinity);
+    }
+
     const importedSalaryDay = Number(source.lastSalaryDay);
     state.lastSalaryDay = Number.isFinite(importedSalaryDay)
         ? Math.max(0, Math.floor(importedSalaryDay))
@@ -279,4 +313,19 @@ export function importGameState(data) {
     const giftsAdded = mergeGifts(gifts);
     saveState();
     return { giftsAdded };
+}
+
+function parseAffinityValue(value, fallback) {
+    const raw = value && typeof value === 'object'
+        ? value.value ?? value.amount ?? value.affinity
+        : value;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed)
+        ? Math.max(0, Math.round(parsed))
+        : fallback;
+}
+
+function maxFinite(values) {
+    const finiteValues = values.filter(Number.isFinite);
+    return finiteValues.length > 0 ? Math.max(...finiteValues) : NaN;
 }

@@ -1,5 +1,5 @@
 import { getSettings } from './settings.js';
-import { getGameTimeContext } from './game_state.js';
+import { addAffinity, getGameTimeContext } from './game_state.js';
 
 const DATE_HISTORY_KEY = 'fritia_date_history';
 const DATE_LOCATIONS = [
@@ -427,6 +427,7 @@ async function handleDateSend() {
 
         dateConversationHistory[currentLocationId].push({ role: 'assistant', content: fullText, ts: Date.now() });
         saveDateHistory();
+        if (fullText.trim()) addAffinity(1);
     } catch (err) {
         thinkingEl.remove();
         if (err.name !== 'AbortError') {

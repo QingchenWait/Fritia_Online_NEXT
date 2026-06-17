@@ -213,6 +213,7 @@ export function createRoom(scene) {
     terminalGroup.position.set(2.955, 1.55, -0.35);
     group.add(terminalGroup);
     const terminalMesh = terminalBody;
+    terminalMesh.userData.interactionCenter = new THREE.Vector3(2.955, 1.58, -0.35);
 
     // Chair
     const chairSeat = makeBox(0.45, 0.05, 0.45, 0x5C4033, 2.1, 0.45, -1.2);
@@ -232,12 +233,13 @@ export function createRoom(scene) {
     colliders.push(makeAABB(2.1, 0, -1.2, 0.28, 0.25, 0.28));
 
     // Bookshelf
+    const shelfGroup = new THREE.Group();
     const shelfBase = makeBox(0.8, 1.4, 0.35, 0x4A3520, -2.6, 0.7, 1.5);
-    group.add(shelfBase);
+    shelfGroup.add(shelfBase);
     const shelf1 = makeBox(0.72, 0.03, 0.3, 0x5C4033, -2.6, 0.45, 1.5);
-    group.add(shelf1);
+    shelfGroup.add(shelf1);
     const shelf2 = makeBox(0.72, 0.03, 0.3, 0x5C4033, -2.6, 0.9, 1.5);
-    group.add(shelf2);
+    shelfGroup.add(shelf2);
     const bookColors = [0x8B0000, 0x006400, 0x00008B, 0x8B4513, 0x4B0082, 0xB8860B];
     for (let row = 0; row < 2; row++) {
         const baseY = row === 0 ? 0.25 : 0.7;
@@ -246,7 +248,7 @@ export function createRoom(scene) {
             const book = makeBox(0.08 + Math.random() * 0.04, bookH, 0.2,
                 bookColors[i % bookColors.length],
                 -2.85 + i * 0.14, baseY + bookH / 2, 1.5, false);
-            group.add(book);
+            shelfGroup.add(book);
         }
     }
     const cabinetLabelCanvas = document.createElement('canvas');
@@ -267,7 +269,9 @@ export function createRoom(scene) {
         new THREE.MeshStandardMaterial({ map: cabinetLabelTex, transparent: true })
     );
     cabinetLabel.position.set(-2.6, 1.18, 1.715);
-    group.add(cabinetLabel);
+    shelfGroup.add(cabinetLabel);
+    shelfGroup.userData.interactionCenter = new THREE.Vector3(-2.6, 0.85, 1.5);
+    group.add(shelfGroup);
     colliders.push(makeAABB(-2.6, 0, 1.5, 0.45, 0.75, 0.22));
 
     // Wall collisions (thick enough for player radius 0.25)
@@ -415,6 +419,6 @@ export function createRoom(scene) {
         doorMesh,
         windowMesh: window1,
         terminalMesh,
-        collectionCabinetMesh: shelfBase
+        collectionCabinetMesh: shelfGroup
     };
 }

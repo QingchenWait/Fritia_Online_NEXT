@@ -6,7 +6,7 @@ import { loadCharacter, updateCharacter, getCharacterPosition, startInteraction,
 import { initDialogue, showDialogue, hideDialogue, isDialogueVisible, getConversationHistory, importConversationHistory } from './dialogue.js';
 import { initDateDialogue, openDatePanel, closeDatePanel, isDatePanelVisible, getDateConversationHistory, importDateConversationHistory, getDateLocations } from './date_dialogue.js';
 import { initSettings } from './settings.js';
-import { exportGameState, formatMoney, getGameTimeInfo, getMoney, importGameState, initGameState, updateGameTime } from './game_state.js';
+import { addAffinity, exportGameState, getAffinity, getGameTimeInfo, getMoney, importGameState, initGameState, updateGameTime } from './game_state.js';
 import { closeGiftCollection, closeGiftTerminal, initGiftSystem, isGiftOverlayVisible, openGiftCollection, openGiftTerminal, renderGiftCollection } from './gift_system.js?v=20260618-gift-stream';
 
 let scene, camera, renderer;
@@ -26,6 +26,8 @@ let isSleeping = false;
 let sleepCamPos = new THREE.Vector3();
 let sleepCamQuat = new THREE.Quaternion();
 const raycaster = new THREE.Raycaster();
+const lookDirection = new THREE.Vector3();
+const lookTarget = new THREE.Vector3();
 
 const clock = new THREE.Clock();
 
@@ -143,6 +145,10 @@ async function init() {
     document.addEventListener('fritia-game-state-updated', () => {
         updateGameHud(true);
         renderGiftCollection();
+    });
+    document.addEventListener('fritia-affinity-updated', (e) => {
+        updateGameHud(true);
+        showAffinityToast(e.detail?.delta || 0);
     });
     document.getElementById('btn-pet').addEventListener('click', () => { if (isSleeping) petFritiaHead(); });
     document.getElementById('btn-wake').addEventListener('click', () => { if (isSleeping) exitSleepMode(); });
@@ -279,18 +285,36 @@ function endInteractionMode() {
 
 function updateGameHud(force = false, salary = 0) {
     const timeEl = document.getElementById('game-time-display');
+    const affinityValueEl = document.getElementById('affinity-value');
     const moneyEl = document.getElementById('money-display');
     const info = getGameTimeInfo({ quantize: 5 });
     if (timeEl && (force || timeEl.dataset.minutes !== String(info.totalMinutes))) {
         timeEl.textContent = info.text;
         timeEl.dataset.minutes = String(info.totalMinutes);
     }
+    if (affinityValueEl) {
+        affinityValueEl.textContent = `${getAffinity()}/100`;
+    }
     if (moneyEl) {
-        moneyEl.textContent = formatMoney(getMoney());
+        moneyEl.textContent = `数据金 | 🪙 ${Math.round(getMoney()).toLocaleString('zh-CN')}`;
     }
     if (salary > 0) {
         showSalaryToast(salary);
     }
+}
+
+function showAffinityToast(amount) {
+    const row = document.getElementById('affinity-display');
+    if (!row || amount <= 0) return;
+
+    const toast = document.createElement('span');
+    toast.className = 'affinity-pop';
+    toast.textContent = `+${amount}`;
+    row.appendChild(toast);
+
+    setTimeout(() => {
+        toast.remove();
+    }, 1200);
 }
 
 function showSalaryToast(amount) {
@@ -395,17 +419,17 @@ function updateInteractionPrompt() {
         const lookDoor = isLookingAtDoor();
         const lookTerminal = isLookingAtTerminal();
         const lookCollectionCabinet = isLookingAtCollectionCabinet();
-        if (lookPaint) {
-            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 更换挂画';
-            paintingPrompt.classList.remove('hidden');
-        } else if (lookWardrobe) {
-            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 换装';
-            paintingPrompt.classList.remove('hidden');
-        } else if (lookTerminal) {
+        if (lookTerminal) {
             paintingPrompt.innerHTML = '按 <kbd>E</kbd> 打开购物终端';
             paintingPrompt.classList.remove('hidden');
         } else if (lookCollectionCabinet) {
             paintingPrompt.innerHTML = '按 <kbd>E</kbd> 打开礼物收藏';
+            paintingPrompt.classList.remove('hidden');
+        } else if (lookPaint) {
+            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 更换挂画';
+            paintingPrompt.classList.remove('hidden');
+        } else if (lookWardrobe) {
+            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 换装';
             paintingPrompt.classList.remove('hidden');
         } else if (lookBed) {
             if (currentModelPath.includes('国主驾到')) {
@@ -591,14 +615,37 @@ function isLookingAtTerminal() {
     if (!terminalMesh || !camera) return false;
     raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
     const hits = raycaster.intersectObject(terminalMesh, true);
-    return hits.length > 0;
+    if (hits.length > 0) return true;
+    return isLookingAtPoint(terminalMesh, 0.68, 5);
 }
 
 function isLookingAtCollectionCabinet() {
     if (!collectionCabinetMesh || !camera) return false;
     raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
     const hits = raycaster.intersectObject(collectionCabinetMesh, true);
-    return hits.length > 0;
+    if (hits.length > 0) return true;
+    return isLookingAtPoint(collectionCabinetMesh, 0.78, 5);
+}
+
+function isLookingAtPoint(target, radius = 0.5, maxDistance = 4) {
+    if (!target || !camera) return false;
+
+    if (target.userData?.interactionCenter) {
+        lookTarget.copy(target.userData.interactionCenter);
+    } else {
+        target.getWorldPosition(lookTarget);
+    }
+    camera.getWorldDirection(lookDirection);
+
+    const toTarget = lookTarget.sub(camera.position);
+    const distance = toTarget.length();
+    if (distance <= 0.001 || distance > maxDistance) return false;
+
+    const forwardDistance = toTarget.dot(lookDirection);
+    if (forwardDistance <= 0) return false;
+
+    const perpendicularSq = Math.max(0, distance * distance - forwardDistance * forwardDistance);
+    return Math.sqrt(perpendicularSq) <= radius;
 }
 
 function fadeToBlack() {
@@ -689,6 +736,7 @@ function playSleepWhisper() {
 function petFritiaHead() {
     if (!charData || isPetting) return;
     isPetting = true;
+    addAffinity(1);
 
     const mesh = charData.mesh;
     const inf = mesh.morphTargetInfluences;
@@ -1002,6 +1050,7 @@ function exportData() {
         exportedGameTime: gameState.gameTime,
         gameState,
         money: gameState.money,
+        affinity: gameState.affinity,
         gifts: gameState.gifts,
         settings: JSON.parse(localStorage.getItem('fritia-settings') || '{}'),
         conversations: getConversationHistory(),
@@ -1039,7 +1088,7 @@ function handleImportFile(e) {
             if (data.dateConversations && typeof data.dateConversations === 'object') {
                 importDateConversationHistory(data.dateConversations);
             }
-            const importResult = importGameState(data.gameState || data);
+            const importResult = importGameState(data);
             updateGameHud(true);
             renderGiftCollection();
             alert(`导入成功！礼物同步新增 ${importResult.giftsAdded || 0} 条。刷新页面以应用设置。`);
