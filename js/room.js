@@ -120,6 +120,22 @@ export function createRoom(scene) {
     group.add(deskLeg4);
     colliders.push(makeAABB(2.1, 0, -2.0, 0.65, 0.4, 0.35));
 
+    // Book on desk
+    const bookGeo = new THREE.BoxGeometry(0.3, 0.03, 0.4);
+    const bookMat = new THREE.MeshStandardMaterial({ color: 0xf5e6d0, roughness: 0.9 });
+    const book = new THREE.Mesh(bookGeo, bookMat);
+    book.position.set(2.0, 0.795, -1.95);
+    book.rotation.y = 0.1;
+    group.add(book);
+    const bookPage = new THREE.Mesh(
+        new THREE.BoxGeometry(0.28, 0.005, 0.38),
+        new THREE.MeshStandardMaterial({ color: 0xfffaf0, roughness: 0.95 })
+    );
+    bookPage.position.set(2.0, 0.81, -1.95);
+    bookPage.rotation.y = 0.1;
+    group.add(bookPage);
+    const deskMesh = deskTop;
+
     // Desk lamp
     const lampBase = makeBox(0.15, 0.02, 0.15, 0x333333, 2.4, 0.79, -2.15);
     group.add(lampBase);
@@ -170,23 +186,14 @@ export function createRoom(scene) {
     }
     colliders.push(makeAABB(-2.6, 0, 1.5, 0.45, 0.75, 0.22));
 
-    // Wall collisions
-    colliders.push(new THREE.Box3(
-        new THREE.Vector3(-3.1, 0, -2.55),
-        new THREE.Vector3(3.1, 3, -2.45)
-    ));
-    colliders.push(new THREE.Box3(
-        new THREE.Vector3(-3.1, 0, 2.45),
-        new THREE.Vector3(3.1, 3, 2.55)
-    ));
-    colliders.push(new THREE.Box3(
-        new THREE.Vector3(-3.05, 0, -2.5),
-        new THREE.Vector3(-2.95, 3, 2.5)
-    ));
-    colliders.push(new THREE.Box3(
-        new THREE.Vector3(2.95, 0, -2.5),
-        new THREE.Vector3(3.05, 3, 2.5)
-    ));
+    // Wall collisions (thick enough for player radius 0.25)
+    const wallColliders = [
+        new THREE.Box3(new THREE.Vector3(-3.5, 0, -3.0), new THREE.Vector3(3.5, 3, -2.4)),
+        new THREE.Box3(new THREE.Vector3(-3.5, 0, 2.4), new THREE.Vector3(3.5, 3, 3.0)),
+        new THREE.Box3(new THREE.Vector3(-3.5, 0, -3.0), new THREE.Vector3(-2.9, 3, 3.0)),
+        new THREE.Box3(new THREE.Vector3(2.9, 0, -3.0), new THREE.Vector3(3.5, 3, 3.0))
+    ];
+    const playerColliders = [...colliders, ...wallColliders];
 
     // Rug
     const rugGeo = new THREE.PlaneGeometry(2.0, 1.5);
@@ -254,5 +261,5 @@ export function createRoom(scene) {
         { name: 'chair_sit', position: new THREE.Vector3(2.1, 0, -1.2), isFurniture: true, furnitureType: 'chair' },
     ];
 
-    return { colliders, waypoints, painting, paintingZone, wardrobeMesh, bedMesh: bedGroup, bedBlanket };
+    return { colliders, playerColliders, waypoints, painting, paintingZone, wardrobeMesh, bedMesh: bedGroup, bedBlanket, deskMesh };
 }

@@ -4,6 +4,7 @@ import { createRoom } from './room.js';
 import { initControls } from './controls.js';
 import { loadCharacter, updateCharacter, getCharacterPosition, startInteraction, endInteraction, startWaving, swapModel, applySleepingPose, applyIdlePose, updateBlink } from './character.js';
 import { initDialogue, showDialogue, hideDialogue, isDialogueVisible, getConversationHistory, importConversationHistory } from './dialogue.js';
+import { initDateDialogue, openDatePanel, closeDatePanel, isDatePanelVisible, getDateConversationHistory, importDateConversationHistory, getDateLocations } from './date_dialogue.js';
 import { initSettings } from './settings.js';
 
 let scene, camera, renderer;
@@ -12,6 +13,7 @@ let isInteracting = false;
 let paintingMesh;
 let wardrobeMesh;
 let bedMesh;
+let deskMesh;
 let bedBlanket;
 let isSleeping = false;
 let sleepCamPos = new THREE.Vector3();
@@ -47,6 +49,7 @@ async function init() {
     wardrobeMesh = room.wardrobeMesh;
     bedMesh = room.bedMesh;
     bedBlanket = room.bedBlanket;
+    deskMesh = room.deskMesh;
 
     await new Promise(r => setTimeout(r, 100));
 
@@ -101,11 +104,12 @@ async function init() {
 
     await setLoadingText('初始化控制...');
     setLoadingProgress(90);
-    controlsModule = initControls(camera, renderer.domElement, room.colliders);
+    controlsModule = initControls(camera, renderer.domElement, room.playerColliders);
 
     await setLoadingText('准备对话系统...');
     setLoadingProgress(95);
     await initDialogue();
+    await initDateDialogue();
     initSettings();
     initPainting();
 
@@ -145,6 +149,7 @@ async function init() {
 function onKeyDown(e) {
     if (e.code === 'KeyF') {
         if (isDialogueVisible()) return;
+        if (isDatePanelVisible()) return;
 
         if (isSleeping) {
             petFritiaHead();
@@ -164,11 +169,17 @@ function onKeyDown(e) {
 
     if (e.code === 'KeyE') {
         if (isInteracting || isDialogueVisible()) return;
+        if (isDatePanelVisible()) return;
         if (controlsModule && controlsModule.state.isLocked) {
             if (isSleeping) {
                 exitSleepMode();
             } else if (isLookingAtBed()) {
                 enterSleepMode();
+            } else if (isLookingAtDesk()) {
+                if (controlsModule && controlsModule.state.isLocked) {
+                    controlsModule.controls.unlock();
+                }
+                openDatePanel();
             } else if (isLookingAtPainting()) {
                 document.getElementById('painting-upload').click();
             } else if (isLookingAtWardrobe()) {
@@ -178,6 +189,10 @@ function onKeyDown(e) {
     }
 
     if (e.code === 'Escape') {
+        if (isDatePanelVisible()) {
+            closeDatePanel();
+            return;
+        }
         if (isDialogueVisible()) {
             endInteractionMode();
         }
@@ -188,11 +203,19 @@ function onKeyDown(e) {
     }
 }
 
+function playTalkSound() {
+    const index = Math.floor(Math.random() * 5) + 1;
+    const audio = new Audio(`src/_voices/talk_${index}.mp3`);
+    audio.volume = 0.7;
+    audio.play().catch(() => {});
+}
+
 function startInteractionMode(charPos) {
     isInteracting = true;
     startInteraction(charData, () => camera.position);
     controlsModule.controls.unlock();
     showDialogue();
+    playTalkSound();
 
     const checkInterval = setInterval(() => {
         if (!isInteracting) {
@@ -236,7 +259,7 @@ function animate() {
 function updateInteractionPrompt() {
     const prompt = document.getElementById('interaction-prompt');
     const paintingPrompt = document.getElementById('painting-prompt');
-    if (isSleeping || isInteracting || isDialogueVisible()) {
+    if (isSleeping || isInteracting || isDialogueVisible() || isDatePanelVisible()) {
         prompt.classList.add('hidden');
         if (paintingPrompt) paintingPrompt.classList.add('hidden');
         return;
@@ -262,6 +285,7 @@ function updateInteractionPrompt() {
 
     if (paintingPrompt) {
         const lookBed = isLookingAtBed();
+        const lookDesk = isLookingAtDesk();
         if (lookPaint) {
             paintingPrompt.innerHTML = '按 <kbd>E</kbd> 更换挂画';
             paintingPrompt.classList.remove('hidden');
@@ -270,6 +294,9 @@ function updateInteractionPrompt() {
             paintingPrompt.classList.remove('hidden');
         } else if (lookBed) {
             paintingPrompt.innerHTML = '按 <kbd>E</kbd> 休息';
+            paintingPrompt.classList.remove('hidden');
+        } else if (lookDesk) {
+            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 查看今日约会行程';
             paintingPrompt.classList.remove('hidden');
         } else {
             paintingPrompt.classList.add('hidden');
@@ -372,6 +399,13 @@ function isLookingAtBed() {
     if (!bedMesh || !camera) return false;
     raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
     const hits = raycaster.intersectObject(bedMesh, true);
+    return hits.length > 0;
+}
+
+function isLookingAtDesk() {
+    if (!deskMesh || !camera) return false;
+    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+    const hits = raycaster.intersectObject(deskMesh);
     return hits.length > 0;
 }
 
@@ -555,7 +589,11 @@ async function playStartupVoice() {
 function initHistoryPanel() {
     const panel = document.getElementById('history-panel');
     const list = document.getElementById('history-list');
-    const filter = document.getElementById('history-date-filter');
+    const dateList = document.getElementById('date-history-list');
+    const selectWrapper = document.getElementById('history-date-filter');
+    const selectSelected = selectWrapper.querySelector('.select-selected');
+    const selectOptions = selectWrapper.querySelector('.select-options');
+    const tabs = document.querySelectorAll('.history-tab');
 
     document.getElementById('btn-history').addEventListener('click', () => {
         renderHistory();
@@ -563,14 +601,41 @@ function initHistoryPanel() {
     });
     document.getElementById('history-close').addEventListener('click', () => {
         panel.classList.add('hidden');
+        selectOptions.classList.add('hidden');
     });
 
-    filter.addEventListener('change', () => renderHistory(filter.value));
+    selectSelected.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectOptions.classList.toggle('hidden');
+    });
+
+    document.addEventListener('click', () => {
+        selectOptions.classList.add('hidden');
+    });
+
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            tabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            selectOptions.classList.add('hidden');
+            if (tab.dataset.tab === 'daily') {
+                list.classList.remove('hidden');
+                dateList.classList.add('hidden');
+                renderHistory();
+            } else {
+                list.classList.add('hidden');
+                dateList.classList.remove('hidden');
+                renderDateHistory();
+            }
+        });
+    });
 }
 
 function renderHistory(dateFilter = 'all') {
     const list = document.getElementById('history-list');
-    const filter = document.getElementById('history-date-filter');
+    const selectWrapper = document.getElementById('history-date-filter');
+    const selectSelected = selectWrapper.querySelector('.select-selected');
+    const selectOptions = selectWrapper.querySelector('.select-options');
     const history = getConversationHistory();
 
     const dates = [...new Set(history.map(m => {
@@ -578,15 +643,34 @@ function renderHistory(dateFilter = 'all') {
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     }))].sort().reverse();
 
-    const currentVal = filter.value;
-    filter.innerHTML = '<option value="all">全部日期</option>';
-    dates.forEach(d => {
-        const opt = document.createElement('option');
-        opt.value = d;
-        opt.textContent = d;
-        if (d === currentVal) opt.selected = true;
-        filter.appendChild(opt);
+    selectOptions.innerHTML = '';
+    const allOpt = document.createElement('div');
+    allOpt.className = 'select-option' + (dateFilter === 'all' ? ' selected' : '');
+    allOpt.textContent = '全部日期';
+    allOpt.dataset.value = 'all';
+    allOpt.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectSelected.textContent = '全部日期';
+        selectOptions.classList.add('hidden');
+        renderHistory('all');
     });
+    selectOptions.appendChild(allOpt);
+
+    dates.forEach(d => {
+        const opt = document.createElement('div');
+        opt.className = 'select-option' + (d === dateFilter ? ' selected' : '');
+        opt.textContent = d;
+        opt.dataset.value = d;
+        opt.addEventListener('click', (e) => {
+            e.stopPropagation();
+            selectSelected.textContent = d;
+            selectOptions.classList.add('hidden');
+            renderHistory(d);
+        });
+        selectOptions.appendChild(opt);
+    });
+
+    selectSelected.textContent = dateFilter === 'all' ? '全部日期' : dateFilter;
 
     let filtered = history;
     if (dateFilter !== 'all') {
@@ -619,12 +703,112 @@ function renderHistory(dateFilter = 'all') {
     list.scrollTop = list.scrollHeight;
 }
 
+function renderDateHistory(dateFilter = 'all') {
+    const list = document.getElementById('date-history-list');
+    const selectWrapper = document.getElementById('history-date-filter');
+    const selectSelected = selectWrapper.querySelector('.select-selected');
+    const selectOptions = selectWrapper.querySelector('.select-options');
+    const dateHistory = getDateConversationHistory();
+
+    const locationMap = {};
+    getDateLocations().forEach(loc => {
+        locationMap[loc.id] = loc.name;
+    });
+
+    const allSessions = [];
+    for (const [locationId, messages] of Object.entries(dateHistory)) {
+        if (!Array.isArray(messages) || messages.length === 0) continue;
+        const dateGroups = {};
+        messages.forEach(m => {
+            const d = new Date(m.ts || 0);
+            const dateStr = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+            if (!dateGroups[dateStr]) dateGroups[dateStr] = [];
+            dateGroups[dateStr].push(m);
+        });
+        for (const [dateStr, msgs] of Object.entries(dateGroups)) {
+            allSessions.push({
+                date: dateStr,
+                locationId,
+                locationName: locationMap[locationId] || locationId,
+                messages: msgs,
+                firstTs: msgs[0].ts || 0
+            });
+        }
+    }
+
+    allSessions.sort((a, b) => b.firstTs - a.firstTs);
+
+    const dates = [...new Set(allSessions.map(s => s.date))].sort().reverse();
+
+    selectOptions.innerHTML = '';
+    const allOpt = document.createElement('div');
+    allOpt.className = 'select-option' + (dateFilter === 'all' ? ' selected' : '');
+    allOpt.textContent = '全部日期';
+    allOpt.dataset.value = 'all';
+    allOpt.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectSelected.textContent = '全部日期';
+        selectOptions.classList.add('hidden');
+        renderDateHistory('all');
+    });
+    selectOptions.appendChild(allOpt);
+
+    dates.forEach(d => {
+        const opt = document.createElement('div');
+        opt.className = 'select-option' + (d === dateFilter ? ' selected' : '');
+        opt.textContent = d;
+        opt.dataset.value = d;
+        opt.addEventListener('click', (e) => {
+            e.stopPropagation();
+            selectSelected.textContent = d;
+            selectOptions.classList.add('hidden');
+            renderDateHistory(d);
+        });
+        selectOptions.appendChild(opt);
+    });
+
+    selectSelected.textContent = dateFilter === 'all' ? '全部日期' : dateFilter;
+
+    let filtered = allSessions;
+    if (dateFilter !== 'all') {
+        filtered = allSessions.filter(s => s.date === dateFilter);
+    }
+
+    list.innerHTML = '';
+    if (filtered.length === 0) {
+        list.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.4);padding:20px;">暂无约会记录</div>';
+        return;
+    }
+
+    filtered.forEach(session => {
+        const group = document.createElement('div');
+        group.className = 'date-history-group';
+
+        const title = document.createElement('div');
+        title.className = 'history-date-sep';
+        title.textContent = `${session.date}-[${session.locationName}]`;
+        group.appendChild(title);
+
+        session.messages.forEach(m => {
+            const el = document.createElement('div');
+            el.className = `history-msg ${m.role}`;
+            const d = new Date(m.ts || 0);
+            const time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+            el.innerHTML = `<div class="msg-role">${m.role === 'user' ? '你' : '芙提雅'} · ${time}</div><div>${m.content}</div>`;
+            group.appendChild(el);
+        });
+
+        list.appendChild(group);
+    });
+}
+
 function exportData() {
     const data = {
         version: 1,
         exportedAt: Date.now(),
         settings: JSON.parse(localStorage.getItem('fritia-settings') || '{}'),
-        conversations: getConversationHistory()
+        conversations: getConversationHistory(),
+        dateConversations: getDateConversationHistory()
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -654,6 +838,9 @@ function handleImportFile(e) {
             }
             if (data.conversations && Array.isArray(data.conversations)) {
                 importConversationHistory(data.conversations);
+            }
+            if (data.dateConversations && typeof data.dateConversations === 'object') {
+                importDateConversationHistory(data.dateConversations);
             }
             alert('导入成功！刷新页面以应用设置。');
         } catch (err) {

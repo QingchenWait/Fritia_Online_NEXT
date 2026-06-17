@@ -72,7 +72,7 @@ export function initControls(camera, domElement, colliders) {
 
     document.addEventListener('click', (e) => {
         if (!state.isLocked && !state.useTouchControls) {
-            const overlayIds = ['dialogue-ui', 'settings-panel', 'history-panel', 'model-selector', 'sleep-ui'];
+            const overlayIds = ['dialogue-ui', 'settings-panel', 'history-panel', 'model-selector', 'sleep-ui', 'date-panel'];
             const inOverlay = overlayIds.some(id => {
                 const el = document.getElementById(id);
                 return el && !el.classList.contains('hidden') && el.contains(e.target);
@@ -116,14 +116,15 @@ export function initControls(camera, domElement, colliders) {
         if (state.moveForward || state.moveBackward) {
             controls.moveForward(state.direction.z * speed);
             if (checkCollision(camera.position, radius)) {
-                camera.position.z = prevPos.z;
+                camera.position.copy(prevPos);
             }
         }
 
         if (state.moveLeft || state.moveRight) {
+            const beforeRight = camera.position.clone();
             controls.moveRight(state.direction.x * speed);
             if (checkCollision(camera.position, radius)) {
-                camera.position.x = prevPos.x;
+                camera.position.copy(beforeRight);
             }
         }
 

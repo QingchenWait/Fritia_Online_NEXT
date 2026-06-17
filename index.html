@@ -131,12 +131,42 @@
         <div class="history-inner">
             <div class="history-header">
                 <h3>历史对话</h3>
-                <select id="history-date-filter">
-                    <option value="all">全部日期</option>
-                </select>
+                <div class="history-tabs">
+                    <button class="history-tab active" data-tab="daily">日常对话</button>
+                    <button class="history-tab" data-tab="date">约会行程</button>
+                </div>
+                <div class="custom-select" id="history-date-filter">
+                    <div class="select-selected">全部日期</div>
+                    <div class="select-options hidden"></div>
+                </div>
                 <button id="history-close">关闭</button>
             </div>
             <div id="history-list"></div>
+            <div id="date-history-list" class="hidden"></div>
+        </div>
+    </div>
+
+    <div id="date-panel" class="hidden">
+        <div class="date-inner">
+            <div class="date-header">
+                <h3>今日约会行程</h3>
+                <button id="date-close">关闭</button>
+            </div>
+            <div class="date-body">
+                <div id="date-locations"></div>
+                <div id="date-chat" class="hidden">
+                    <div class="date-chat-header">
+                        <button id="date-back-btn">← 返回</button>
+                        <span id="date-chat-title"></span>
+                        <button id="date-new-topic-btn">换个话题</button>
+                    </div>
+                    <div id="date-chat-area"></div>
+                    <div class="date-chat-input">
+                        <input type="text" id="date-input" placeholder="说点什么..." autocomplete="off">
+                        <button id="date-send-btn">发送</button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
