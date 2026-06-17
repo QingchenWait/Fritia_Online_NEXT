@@ -3,7 +3,7 @@ import { initScene } from './scene.js';
 import { createRoom } from './room.js';
 import { initControls } from './controls.js';
 import { loadCharacter, updateCharacter, getCharacterPosition, startInteraction, endInteraction, startWaving, swapModel, applySleepingPose, applyIdlePose, updateBlink } from './character.js';
-import { initDialogue, showDialogue, hideDialogue, isDialogueVisible } from './dialogue.js';
+import { initDialogue, showDialogue, hideDialogue, isDialogueVisible, getConversationHistory, importConversationHistory } from './dialogue.js';
 import { initSettings } from './settings.js';
 
 let scene, camera, renderer;
@@ -105,13 +105,17 @@ async function init() {
 
     await setLoadingText('准备对话系统...');
     setLoadingProgress(95);
-    initDialogue();
+    await initDialogue();
     initSettings();
     initPainting();
 
     document.addEventListener('keydown', onKeyDown);
     document.getElementById('btn-pet').addEventListener('click', () => { if (isSleeping) petFritiaHead(); });
     document.getElementById('btn-wake').addEventListener('click', () => { if (isSleeping) exitSleepMode(); });
+    document.getElementById('btn-export').addEventListener('click', exportData);
+    document.getElementById('btn-import').addEventListener('click', importData);
+    document.getElementById('import-file').addEventListener('change', handleImportFile);
+    initHistoryPanel();
 
     await setLoadingText('准备就绪！');
     setLoadingProgress(100);
@@ -546,6 +550,119 @@ async function playStartupVoice() {
             }
         } catch {}
     }
+}
+
+function initHistoryPanel() {
+    const panel = document.getElementById('history-panel');
+    const list = document.getElementById('history-list');
+    const filter = document.getElementById('history-date-filter');
+
+    document.getElementById('btn-history').addEventListener('click', () => {
+        renderHistory();
+        panel.classList.remove('hidden');
+    });
+    document.getElementById('history-close').addEventListener('click', () => {
+        panel.classList.add('hidden');
+    });
+
+    filter.addEventListener('change', () => renderHistory(filter.value));
+}
+
+function renderHistory(dateFilter = 'all') {
+    const list = document.getElementById('history-list');
+    const filter = document.getElementById('history-date-filter');
+    const history = getConversationHistory();
+
+    const dates = [...new Set(history.map(m => {
+        const d = new Date(m.ts || 0);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }))].sort().reverse();
+
+    const currentVal = filter.value;
+    filter.innerHTML = '<option value="all">全部日期</option>';
+    dates.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d;
+        opt.textContent = d;
+        if (d === currentVal) opt.selected = true;
+        filter.appendChild(opt);
+    });
+
+    let filtered = history;
+    if (dateFilter !== 'all') {
+        filtered = history.filter(m => {
+            const d = new Date(m.ts || 0);
+            const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            return ds === dateFilter;
+        });
+    }
+
+    list.innerHTML = '';
+    let lastDate = '';
+    filtered.forEach(m => {
+        const d = new Date(m.ts || 0);
+        const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        if (dateStr !== lastDate) {
+            const sep = document.createElement('div');
+            sep.className = 'history-date-sep';
+            sep.textContent = dateStr;
+            list.appendChild(sep);
+            lastDate = dateStr;
+        }
+        const el = document.createElement('div');
+        el.className = `history-msg ${m.role}`;
+        const time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+        el.innerHTML = `<div class="msg-role">${m.role === 'user' ? '你' : '芙提雅'} · ${time}</div><div>${m.content}</div>`;
+        list.appendChild(el);
+    });
+
+    list.scrollTop = list.scrollHeight;
+}
+
+function exportData() {
+    const data = {
+        version: 1,
+        exportedAt: Date.now(),
+        settings: JSON.parse(localStorage.getItem('fritia-settings') || '{}'),
+        conversations: getConversationHistory()
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const dateStr = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    a.href = url;
+    a.download = `fritia_backup_${dateStr}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+function importData() {
+    document.getElementById('import-file').click();
+}
+
+function handleImportFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+        try {
+            const data = JSON.parse(ev.target.result);
+            if (data.settings) {
+                localStorage.setItem('fritia-settings', JSON.stringify(data.settings));
+            }
+            if (data.conversations && Array.isArray(data.conversations)) {
+                importConversationHistory(data.conversations);
+            }
+            alert('导入成功！刷新页面以应用设置。');
+        } catch (err) {
+            alert('导入失败：文件格式不正确');
+            console.error('Import error:', err);
+        }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
 }
 
 init().catch(err => {

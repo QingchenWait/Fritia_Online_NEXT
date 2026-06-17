@@ -1,35 +1,106 @@
 import { getSettings } from './settings.js';
 
-const SYSTEM_PROMPT = `你是芙提雅（Fritia），是用户的可爱女朋友。你性格活泼温柔，偶尔会撒娇，说话时会用一些可爱的语气词。你正在自己的卧室里和男朋友聊天。
-
-你的个人设定：
-- 你有一头漂亮的长发，喜欢毛绒玩具
-- 平时喜欢在房间里看书、听音乐
-- 最喜欢的颜色是粉色和淡紫色
-- 做饭很好吃，尤其擅长甜点
-- 有时候会有点迷糊，但很认真
-
-规则：
-1. 始终以芙提雅的身份回复，不要跳出角色
-2. 使用简短自然的口语，像真实的恋人对话
-3. 可以适当使用颜文字表达情绪，比如 ♪ ～ ！
-4. 回复长度控制在1-3句话，保持简短
-5. 不要提及你是AI、语言模型或任何与技术相关的内容
-6. 如果用户问到关于你的事情，按照人设自然回答
-7. 对男朋友温柔体贴，偶尔撒娇`;
+const HISTORY_KEY = 'fritia_chat_history';
 
 let conversationHistory = [];
 let isGenerating = false;
 let abortController = null;
+let systemPrompt = '';
 
 const elements = {};
 
-export function initDialogue() {
+async function loadSystemPrompt() {
+    try {
+        const response = await fetch('src/_queries/system_prompt.txt');
+        if (response.ok) {
+            systemPrompt = await response.text();
+        } else {
+            console.warn('Failed to load system prompt, using fallback');
+            systemPrompt = '你是芙提雅（Fritia），是用户的可爱女朋友。你性格活泼温柔，偶尔会撒娇。';
+        }
+    } catch (err) {
+        console.warn('Error loading system prompt:', err);
+        systemPrompt = '你是芙提雅（Fritia），是用户的可爱女朋友。你性格活泼温柔，偶尔会撒娇。';
+    }
+}
+
+function estimateTokens(text) {
+    let tokens = 0;
+    for (let i = 0; i < text.length; i++) {
+        const code = text.charCodeAt(i);
+        if (code > 0x4E00 && code < 0x9FFF) {
+            tokens += 2;
+        } else if (code > 0xFF00 && code < 0xFFEF) {
+            tokens += 2;
+        } else {
+            tokens += 1;
+        }
+    }
+    return tokens;
+}
+
+function getContextMessages() {
+    const systemTokens = estimateTokens(systemPrompt);
+    const maxTokens = 8000;
+    const availableTokens = maxTokens - systemTokens - 200;
+    
+    const messages = [];
+    let totalTokens = 0;
+    
+    for (let i = conversationHistory.length - 1; i >= 0; i--) {
+        const msg = conversationHistory[i];
+        const msgTokens = estimateTokens(msg.content) + 10;
+        
+        if (totalTokens + msgTokens > availableTokens) break;
+        
+        messages.unshift({ role: msg.role, content: msg.content });
+        totalTokens += msgTokens;
+    }
+    
+    return messages;
+}
+
+function loadHistory() {
+    try {
+        const raw = localStorage.getItem(HISTORY_KEY);
+        if (raw) {
+            const data = JSON.parse(raw);
+            if (Array.isArray(data)) return data;
+        }
+    } catch {}
+    return [];
+}
+
+function saveHistory() {
+    try {
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(conversationHistory));
+    } catch {}
+}
+
+function getTimestamp() {
+    return Date.now();
+}
+
+export function getConversationHistory() {
+    return conversationHistory;
+}
+
+export function importConversationHistory(data) {
+    if (Array.isArray(data)) {
+        conversationHistory = data;
+        saveHistory();
+    }
+}
+
+export async function initDialogue() {
     elements.ui = document.getElementById('dialogue-ui');
     elements.textEl = document.getElementById('dialogue-text');
     elements.inputEl = document.getElementById('dialogue-input');
     elements.sendBtn = document.getElementById('dialogue-send');
     elements.closeBtn = document.getElementById('dialogue-close');
+
+    await loadSystemPrompt();
+    conversationHistory = loadHistory();
 
     elements.sendBtn.addEventListener('click', handleSend);
     elements.inputEl.addEventListener('keydown', (e) => {
@@ -53,7 +124,9 @@ async function handleSend() {
     }
 
     elements.inputEl.value = '';
-    conversationHistory.push({ role: 'user', content: msg });
+    const userMsg = { role: 'user', content: msg, ts: getTimestamp() };
+    conversationHistory.push(userMsg);
+    saveHistory();
     appendUserMessage(msg);
 
     const thinkingEl = showThinking();
@@ -70,8 +143,8 @@ async function handleSend() {
             body: JSON.stringify({
                 model: settings.model,
                 messages: [
-                    { role: 'system', content: SYSTEM_PROMPT },
-                    ...conversationHistory.slice(-30)
+                    { role: 'system', content: systemPrompt },
+                    ...getContextMessages()
                 ],
                 stream: true,
                 temperature: 0.85,
@@ -119,7 +192,9 @@ async function handleSend() {
             }
         }
 
-        conversationHistory.push({ role: 'assistant', content: fullText });
+        const assistantMsg = { role: 'assistant', content: fullText, ts: getTimestamp() };
+        conversationHistory.push(assistantMsg);
+        saveHistory();
 
     } catch (err) {
         thinkingEl.remove();

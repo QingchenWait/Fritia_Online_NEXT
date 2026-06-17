@@ -72,12 +72,13 @@ export function initControls(camera, domElement, colliders) {
 
     document.addEventListener('click', (e) => {
         if (!state.isLocked && !state.useTouchControls) {
-            const dialogueUI = document.getElementById('dialogue-ui');
-            const settingsPanel = document.getElementById('settings-panel');
-            const settingsToggle = document.getElementById('settings-toggle');
-            if (dialogueUI.classList.contains('hidden') &&
-                settingsPanel.classList.contains('hidden') &&
-                !settingsToggle.contains(e.target)) {
+            const overlayIds = ['dialogue-ui', 'settings-panel', 'history-panel', 'model-selector', 'sleep-ui'];
+            const inOverlay = overlayIds.some(id => {
+                const el = document.getElementById(id);
+                return el && !el.classList.contains('hidden') && el.contains(e.target);
+            });
+            const inTopBar = document.getElementById('top-bar')?.contains(e.target);
+            if (!inOverlay && !inTopBar) {
                 controls.lock();
             }
         }
