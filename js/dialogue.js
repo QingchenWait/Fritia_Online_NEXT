@@ -301,7 +301,9 @@ function scrollDialogue() {
 }
 
 export function showDialogue() {
-    elements.ui.classList.remove('hidden');
+    elements.ui.style.display = 'flex';
+    elements.ui.style.visibility = 'visible';
+    elements.ui.style.pointerEvents = 'auto';
     elements.textEl.innerHTML = '';
 
     const greetings = [
@@ -329,7 +331,9 @@ export function showDialogue() {
 }
 
 export function hideDialogue() {
-    elements.ui.classList.add('hidden');
+    elements.ui.style.display = 'none';
+    elements.ui.style.visibility = 'hidden';
+    elements.ui.style.pointerEvents = 'none';
     if (abortController) {
         abortController.abort();
         abortController = null;
@@ -338,5 +342,5 @@ export function hideDialogue() {
 }
 
 export function isDialogueVisible() {
-    return elements.ui && !elements.ui.classList.contains('hidden');
+    return elements.ui && elements.ui.style.display !== 'none';
 }

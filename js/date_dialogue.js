@@ -429,12 +429,16 @@ function createDateAssistantBubble() {
 }
 
 export function openDatePanel() {
-    els.panel.classList.remove('hidden');
+    els.panel.style.display = 'flex';
+    els.panel.style.visibility = 'visible';
+    els.panel.style.pointerEvents = 'auto';
     showLocations();
 }
 
 export function closeDatePanel() {
-    els.panel.classList.add('hidden');
+    els.panel.style.display = 'none';
+    els.panel.style.visibility = 'hidden';
+    els.panel.style.pointerEvents = 'none';
     if (dateAbortController) {
         dateAbortController.abort();
         dateAbortController = null;
@@ -444,5 +448,5 @@ export function closeDatePanel() {
 }
 
 export function isDatePanelVisible() {
-    return els.panel && !els.panel.classList.contains('hidden');
+    return els.panel && els.panel.style.display !== 'none';
 }
