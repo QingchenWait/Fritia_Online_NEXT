@@ -118,6 +118,10 @@ async function init() {
     initPainting();
 
     document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('fritia-action', (e) => {
+        const code = e.detail?.code;
+        if (code) onKeyDown({ code });
+    });
     document.getElementById('btn-pet').addEventListener('click', () => { if (isSleeping) petFritiaHead(); });
     document.getElementById('btn-wake').addEventListener('click', () => { if (isSleeping) exitSleepMode(); });
     document.getElementById('btn-export').addEventListener('click', exportData);
@@ -181,10 +185,8 @@ function onKeyDown(e) {
             } else if (isLookingAtBed() && !currentModelPath.includes('国主驾到')) {
                 enterSleepMode();
             } else if (isLookingAtDesk() || isLookingAtDoor()) {
-                if (controlsModule && controlsModule.state.isLocked) {
-                    controlsModule.controls.unlock();
-                }
                 openDatePanel();
+                controlsModule.releaseControlMode();
             } else if (isLookingAtPainting()) {
                 document.getElementById('painting-upload').click();
             } else if (isLookingAtWardrobe()) {
@@ -218,8 +220,8 @@ function playTalkSound() {
 function startInteractionMode(charPos) {
     isInteracting = true;
     startInteraction(charData, () => camera.position);
-    controlsModule.controls.unlock();
     showDialogue();
+    controlsModule.releaseControlMode();
     playTalkSound();
 
     const checkInterval = setInterval(() => {
@@ -405,9 +407,6 @@ let currentModelPath = DEFAULT_MODEL.path;
 let isSwapping = false;
 
 function openModelSelector() {
-    if (controlsModule && controlsModule.state.isLocked) {
-        controlsModule.controls.unlock();
-    }
     const panel = document.getElementById('model-selector');
     const list = document.getElementById('model-list');
     list.innerHTML = '';
@@ -422,6 +421,7 @@ function openModelSelector() {
     }
 
     panel.classList.remove('hidden');
+    controlsModule.releaseControlMode();
 }
 
 function closeModelSelector() {

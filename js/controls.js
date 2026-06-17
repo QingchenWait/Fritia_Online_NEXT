@@ -5,11 +5,23 @@ function isTouchDevice() {
     return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 }
 
+function dispatchGameAction(code) {
+    document.dispatchEvent(new CustomEvent('fritia-action', { detail: { code } }));
+}
+
 function hasPhysicalKeyboard() {
     return !('ontouchstart' in window) || window.innerWidth > 1024;
 }
 
+function supportsPointerLock(domElement) {
+    const doc = domElement?.ownerDocument;
+    return !!domElement?.requestPointerLock
+        && !!doc?.exitPointerLock
+        && 'pointerLockElement' in doc;
+}
+
 export function initControls(camera, domElement, colliders) {
+    const pointerLockSupported = supportsPointerLock(domElement);
     const controls = new PointerLockControls(camera, domElement);
 
     const state = {
@@ -21,23 +33,68 @@ export function initControls(camera, domElement, colliders) {
         speed: 3.0,
         colliders: colliders,
         isLocked: false,
-        useTouchControls: isTouchDevice() && !hasPhysicalKeyboard()
+        useTouchControls: isTouchDevice() && (!hasPhysicalKeyboard() || !pointerLockSupported)
     };
 
-    controls.addEventListener('lock', () => {
+    const overlayIds = ['dialogue-ui', 'settings-panel', 'history-panel', 'model-selector', 'sleep-ui', 'date-panel'];
+
+    function isOverlayOpen() {
+        return overlayIds.some(id => {
+            const el = document.getElementById(id);
+            return el && !el.classList.contains('hidden');
+        });
+    }
+
+    function syncEntryPrompt() {
+        const prompt = document.getElementById('click-to-play');
+        if (!prompt) return;
+        if (!state.isLocked && !isOverlayOpen()) {
+            prompt.classList.remove('hidden');
+        } else {
+            prompt.classList.add('hidden');
+        }
+    }
+
+    for (const id of overlayIds) {
+        const el = document.getElementById(id);
+        if (el) {
+            new MutationObserver(syncEntryPrompt).observe(el, {
+                attributes: true,
+                attributeFilter: ['class']
+            });
+        }
+    }
+
+    function clearMovementState() {
+        state.moveForward = false;
+        state.moveBackward = false;
+        state.moveLeft = false;
+        state.moveRight = false;
+    }
+
+    function enterControlMode() {
         state.isLocked = true;
+        syncEntryPrompt();
         document.getElementById('crosshair').classList.add('active');
-        document.getElementById('click-to-play').classList.add('hidden');
+        if (state.useTouchControls) {
+            document.getElementById('touch-controls').classList.add('active');
+        }
+    }
+
+    function leaveControlMode() {
+        state.isLocked = false;
+        clearMovementState();
+        document.getElementById('crosshair').classList.remove('active');
+        document.getElementById('touch-controls').classList.remove('active');
+        syncEntryPrompt();
+    }
+
+    controls.addEventListener('lock', () => {
+        enterControlMode();
     });
 
     controls.addEventListener('unlock', () => {
-        state.isLocked = false;
-        document.getElementById('crosshair').classList.remove('active');
-        const dialogueUI = document.getElementById('dialogue-ui');
-        const settingsPanel = document.getElementById('settings-panel');
-        if (dialogueUI.classList.contains('hidden') && settingsPanel.classList.contains('hidden')) {
-            document.getElementById('click-to-play').classList.remove('hidden');
-        }
+        leaveControlMode();
     });
 
     document.addEventListener('keydown', (e) => {
@@ -61,24 +118,22 @@ export function initControls(camera, domElement, colliders) {
     const clickToPlay = document.getElementById('click-to-play');
     clickToPlay.addEventListener('click', () => {
         if (!state.useTouchControls) {
-            controls.lock();
+            if (pointerLockSupported) {
+                controls.lock();
+            }
         } else {
-            state.isLocked = true;
-            clickToPlay.classList.add('hidden');
-            document.getElementById('crosshair').classList.add('active');
-            document.getElementById('touch-controls').classList.add('active');
+            enterControlMode();
         }
     });
 
     document.addEventListener('click', (e) => {
         if (!state.isLocked && !state.useTouchControls) {
-            const overlayIds = ['dialogue-ui', 'settings-panel', 'history-panel', 'model-selector', 'sleep-ui', 'date-panel'];
             const inOverlay = overlayIds.some(id => {
                 const el = document.getElementById(id);
                 return el && !el.classList.contains('hidden') && el.contains(e.target);
             });
             const inTopBar = document.getElementById('top-bar')?.contains(e.target);
-            if (!inOverlay && !inTopBar) {
+            if (!inOverlay && !inTopBar && pointerLockSupported) {
                 controls.lock();
             }
         }
@@ -138,7 +193,25 @@ export function initControls(camera, domElement, colliders) {
         return Math.sqrt(dx * dx + dz * dz) < threshold;
     }
 
-    return { controls, state, update, isNearCharacter };
+    function releaseControlMode() {
+        const doc = domElement.ownerDocument;
+        if (state.useTouchControls) {
+            if (!state.isLocked) return false;
+            leaveControlMode();
+            return true;
+        }
+        if (!pointerLockSupported || !doc || doc.pointerLockElement !== domElement) {
+            if (state.isLocked) {
+                leaveControlMode();
+                return true;
+            }
+            return false;
+        }
+        controls.unlock();
+        return true;
+    }
+
+    return { controls, state, update, isNearCharacter, releaseControlMode };
 }
 
 function initTouchJoystick(state) {
@@ -167,7 +240,7 @@ function initTouchJoystick(state) {
         }
     });
 
-    document.addEventListener('touchend', (e) => {
+    function endJoystickTouch(e) {
         if (touchId === null) return;
         for (const touch of e.changedTouches) {
             if (touch.identifier === touchId) {
@@ -180,7 +253,10 @@ function initTouchJoystick(state) {
                 break;
             }
         }
-    });
+    }
+
+    document.addEventListener('touchend', endJoystickTouch);
+    document.addEventListener('touchcancel', endJoystickTouch);
 
     function updateJoystick(touch) {
         const rect = joystick.getBoundingClientRect();
@@ -253,7 +329,7 @@ function initTouchLook(controls, state) {
         }
     });
 
-    document.addEventListener('touchend', (e) => {
+    function endLookTouch(e) {
         if (touchId === null) return;
         for (const touch of e.changedTouches) {
             if (touch.identifier === touchId) {
@@ -261,7 +337,10 @@ function initTouchLook(controls, state) {
                 break;
             }
         }
-    });
+    }
+
+    document.addEventListener('touchend', endLookTouch);
+    document.addEventListener('touchcancel', endLookTouch);
 }
 
 function initTouchButtons(state) {
@@ -269,11 +348,7 @@ function initTouchButtons(state) {
     if (btnInteract) {
         btnInteract.addEventListener('touchstart', (e) => {
             e.preventDefault();
-            document.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyF' }));
-        });
-        btnInteract.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            document.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyF' }));
+            dispatchGameAction('KeyF');
         });
     }
 }
