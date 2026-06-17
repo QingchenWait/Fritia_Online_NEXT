@@ -92,16 +92,18 @@ export function createRoom(scene) {
     group.add(frameVMid);
 
     // Bed
+    const bedGroup = new THREE.Group();
     const bedFrame = makeBox(1.2, 0.35, 2.0, 0x5C4033, -2.1, 0.175, -1.3);
-    group.add(bedFrame);
+    bedGroup.add(bedFrame);
     const bedMattress = makeBox(1.1, 0.15, 1.9, 0xE6E6FA, -2.1, 0.425, -1.3);
-    group.add(bedMattress);
+    bedGroup.add(bedMattress);
     const bedPillow = makeBox(0.5, 0.1, 0.35, 0xffffff, -2.1, 0.55, -2.1);
-    group.add(bedPillow);
+    bedGroup.add(bedPillow);
     const bedBlanket = makeBox(1.05, 0.08, 1.3, 0xFFB6C1, -2.1, 0.53, -0.85);
-    group.add(bedBlanket);
+    bedGroup.add(bedBlanket);
     const bedHeadboard = makeBox(1.2, 0.6, 0.08, 0x4A3520, -2.1, 0.7, -2.26);
-    group.add(bedHeadboard);
+    bedGroup.add(bedHeadboard);
+    group.add(bedGroup);
     colliders.push(makeAABB(-2.1, 0, -1.3, 0.65, 0.55, 1.05));
     colliders.push(makeAABB(-2.1, 0, -2.15, 0.3, 0.55, 0.2));
 
@@ -252,5 +254,5 @@ export function createRoom(scene) {
         { name: 'chair_sit', position: new THREE.Vector3(2.1, 0, -1.2), isFurniture: true, furnitureType: 'chair' },
     ];
 
-    return { colliders, waypoints, painting, paintingZone, wardrobeMesh };
+    return { colliders, waypoints, painting, paintingZone, wardrobeMesh, bedMesh: bedGroup };
 }

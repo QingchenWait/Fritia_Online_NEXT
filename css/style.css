@@ -652,6 +652,16 @@ body {
     display: none !important;
 }
 
+#fade-overlay {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 200;
+    transition: opacity 0.5s ease;
+}
+
 /* Responsive */
 @media (max-width: 600px) {
     #dialogue-box {

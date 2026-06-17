@@ -396,7 +396,7 @@ function updateWaving(cd, delta) {
     forceUpdate(cd);
 }
 
-function applyIdlePose(cd) {
+export function applyIdlePose(cd) {
     if (!cd.hasAnimation) return;
     resetAllBones(cd);
     const lc = cd.boneRef.leftShoulderC;
@@ -453,7 +453,7 @@ function applySittingPose(cd) {
 
     const centerBone = cd.boneRef.center;
     if (centerBone && cd.initialPositions.center) {
-        centerBone.position.y = cd.initialPositions.center.y + 0.7;
+        centerBone.position.y = cd.initialPositions.center.y + 0.6;
     }
 
     addRot(cd.boneRef.spine, 0.15, 0, 0);
@@ -475,6 +475,44 @@ function applySittingPose(cd) {
 
     addRot(cd.boneRef.leftElbow, 0.8, 0, 0);
     addRot(cd.boneRef.rightElbow, 0.8, 0, 0);
+    forceUpdate(cd);
+}
+
+export function applySleepingPose(cd) {
+    if (!cd.hasAnimation) return;
+    resetAllBones(cd);
+
+    const centerBone = cd.boneRef.center;
+    if (centerBone && cd.initialPositions.center) {
+        centerBone.position.y = cd.initialPositions.center.y + 0.35;
+        centerBone.rotation.x = -1.5;
+    }
+
+    addRot(cd.boneRef.spine, 0.1, 0, 0);
+    addRot(cd.boneRef.spine2, 0.05, 0, 0);
+
+    addRot(cd.boneRef.leftLeg, -0.1, 0, 0);
+    addRot(cd.boneRef.rightLeg, -0.1, 0, 0);
+    addRot(cd.boneRef.leftKnee, 0.15, 0, 0);
+    addRot(cd.boneRef.rightKnee, 0.15, 0, 0);
+
+    const lc = cd.boneRef.leftShoulderC;
+    const rc = cd.boneRef.rightShoulderC;
+    if (lc) lc.rotation.z = -0.75;
+    if (rc) rc.rotation.z = 0.75;
+
+    const ls = cd.boneRef.leftShoulder;
+    const rs = cd.boneRef.rightShoulder;
+    if (ls) ls.rotation.x = 0.15;
+    if (rs) rs.rotation.x = 0.15;
+
+    addRot(cd.boneRef.leftElbow, 0.3, 0, 0);
+    addRot(cd.boneRef.rightElbow, 0.3, 0, 0);
+
+    if (cd.boneRef.head) {
+        cd.boneRef.head.rotation.x = -0.05;
+    }
+
     forceUpdate(cd);
 }
 

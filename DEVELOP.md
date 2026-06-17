@@ -79,6 +79,7 @@ fritia_online_v2/
   1. **AlphaTest 材质**（有 `alphaTest > 0`）：使用 `alphaTest` 硬边缘裁切，不透明
   2. **半透明材质**（`transparent = true` 或 `opacity < 1`）：启用 alpha blending，`depthWrite = false`，`DoubleSide` 渲染
   3. **不透明材质**：标准不透明渲染
+- 头发材质（名称匹配 `hair`/`髪`/`头发`）：使用 `alphaTest` 裁切渲染，双面渲染
 
 #### 骨骼系统
 
@@ -98,6 +99,14 @@ fritia_online_v2/
 | `SIT_TO_STAND` | 坐下→站立过渡（1.2s） |
 | `WAVING` | 挥手动画（首次点击时触发，2.5s） |
 | `INTERACTING` | 对话模式：头部追踪玩家位置 |
+
+#### 睡眠模式
+
+- 触发：准星对准床按 E（通过 `isLookingAtBed()` 射线检测 `bedMesh`）
+- 进入：`fadeToBlack()` → 保存相机状态 → 移动角色到床位置 → `applySleepingPose()` → 闭眼（`blinkIndex = 1.0`）→ 相机移到床边（近距离躺姿视角）→ `fadeFromBlack()`
+- 退出：`fadeToBlack()` → 恢复相机状态 → 重置角色位置和姿态 → `applyIdlePose()` → 睁眼 → `fadeFromBlack()`
+- 睡眠中：WASD 移动禁用（`controlsModule.update()` 跳过），仅允许鼠标视角旋转
+- 睡眠姿态：脊柱大幅后仰 + 侧倾，双腿弯曲，头部侧偏，模拟侧躺
 
 #### Morph Target
 

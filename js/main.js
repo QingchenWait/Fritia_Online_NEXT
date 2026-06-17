@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { initScene } from './scene.js';
 import { createRoom } from './room.js';
 import { initControls } from './controls.js';
-import { loadCharacter, updateCharacter, getCharacterPosition, startInteraction, endInteraction, startWaving, swapModel } from './character.js';
+import { loadCharacter, updateCharacter, getCharacterPosition, startInteraction, endInteraction, startWaving, swapModel, applySleepingPose, applyIdlePose } from './character.js';
 import { initDialogue, showDialogue, hideDialogue, isDialogueVisible } from './dialogue.js';
 import { initSettings } from './settings.js';
 
@@ -11,6 +11,10 @@ let controlsModule, charData;
 let isInteracting = false;
 let paintingMesh;
 let wardrobeMesh;
+let bedMesh;
+let isSleeping = false;
+let sleepCamPos = new THREE.Vector3();
+let sleepCamQuat = new THREE.Quaternion();
 const raycaster = new THREE.Raycaster();
 
 const clock = new THREE.Clock();
@@ -40,6 +44,7 @@ async function init() {
     const room = createRoom(scene);
     paintingMesh = room.painting;
     wardrobeMesh = room.wardrobeMesh;
+    bedMesh = room.bedMesh;
 
     await new Promise(r => setTimeout(r, 100));
 
@@ -147,7 +152,11 @@ function onKeyDown(e) {
     if (e.code === 'KeyE') {
         if (isInteracting || isDialogueVisible()) return;
         if (controlsModule && controlsModule.state.isLocked) {
-            if (isLookingAtPainting()) {
+            if (isSleeping) {
+                exitSleepMode();
+            } else if (isLookingAtBed()) {
+                enterSleepMode();
+            } else if (isLookingAtPainting()) {
                 document.getElementById('painting-upload').click();
             } else if (isLookingAtWardrobe()) {
                 openModelSelector();
@@ -196,11 +205,15 @@ function animate() {
     const delta = Math.min(clock.getDelta(), 0.05);
 
     if (controlsModule) {
-        controlsModule.update(delta);
+        if (!isSleeping) {
+            controlsModule.update(delta);
+        }
     }
 
     if (charData) {
-        updateCharacter(charData, delta);
+        if (!isSleeping) {
+            updateCharacter(charData, delta);
+        }
         updateInteractionPrompt();
     }
 
@@ -210,7 +223,7 @@ function animate() {
 function updateInteractionPrompt() {
     const prompt = document.getElementById('interaction-prompt');
     const paintingPrompt = document.getElementById('painting-prompt');
-    if (isInteracting || isDialogueVisible()) {
+    if (isSleeping || isInteracting || isDialogueVisible()) {
         prompt.classList.add('hidden');
         if (paintingPrompt) paintingPrompt.classList.add('hidden');
         return;
@@ -235,11 +248,15 @@ function updateInteractionPrompt() {
     }
 
     if (paintingPrompt) {
+        const lookBed = isLookingAtBed();
         if (lookPaint) {
             paintingPrompt.innerHTML = '按 <kbd>E</kbd> 更换挂画';
             paintingPrompt.classList.remove('hidden');
         } else if (lookWardrobe) {
             paintingPrompt.innerHTML = '按 <kbd>E</kbd> 换装';
+            paintingPrompt.classList.remove('hidden');
+        } else if (lookBed) {
+            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 休息';
             paintingPrompt.classList.remove('hidden');
         } else {
             paintingPrompt.classList.add('hidden');
@@ -336,6 +353,86 @@ function applyPaintingTexture(src) {
         paintingMesh.material.needsUpdate = true;
     };
     img.src = src;
+}
+
+function isLookingAtBed() {
+    if (!bedMesh || !camera) return false;
+    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+    const hits = raycaster.intersectObject(bedMesh, true);
+    return hits.length > 0;
+}
+
+function fadeToBlack() {
+    return new Promise(resolve => {
+        const overlay = document.getElementById('fade-overlay');
+        overlay.style.transition = 'opacity 0.5s ease';
+        overlay.style.opacity = '1';
+        setTimeout(resolve, 500);
+    });
+}
+
+function fadeFromBlack() {
+    return new Promise(resolve => {
+        const overlay = document.getElementById('fade-overlay');
+        overlay.style.transition = 'opacity 0.5s ease';
+        overlay.style.opacity = '0';
+        setTimeout(resolve, 500);
+    });
+}
+
+async function enterSleepMode() {
+    if (!charData || !charData.hasAnimation) return;
+
+    await fadeToBlack();
+
+    isSleeping = true;
+
+    sleepCamPos.copy(camera.position);
+    sleepCamQuat.copy(camera.quaternion);
+
+    const bedCenter = new THREE.Vector3(-2.1, 0, -1.3);
+    charData.root.position.set(bedCenter.x - 0.25, -0.05, bedCenter.z);
+    charData.root.rotation.y = 0;
+    applySleepingPose(charData);
+
+    if (charData.blinkIndex >= 0 && charData.mesh.morphTargetInfluences) {
+        charData.mesh.morphTargetInfluences[charData.blinkIndex] = 1.0;
+    }
+
+    camera.position.set(bedCenter.x + 0.2, bedCenter.y + 0.8, bedCenter.z - 0.15);
+
+    const lookTarget = new THREE.Vector3(bedCenter.x, bedCenter.y + 0.15, bedCenter.z + 0.4);
+    camera.lookAt(lookTarget);
+
+    const prompt = document.getElementById('interaction-prompt');
+    if (prompt) prompt.classList.add('hidden');
+    const paintingPrompt = document.getElementById('painting-prompt');
+    if (paintingPrompt) paintingPrompt.classList.add('hidden');
+
+    await fadeFromBlack();
+}
+
+async function exitSleepMode() {
+    await fadeToBlack();
+
+    isSleeping = false;
+
+    camera.position.copy(sleepCamPos);
+    camera.quaternion.copy(sleepCamQuat);
+
+    charData.root.position.set(0, charData.baseY, 0);
+    charData.root.rotation.set(0, 0, 0);
+    charData.state = 'idle';
+    charData.stateTimer = 0;
+    charData.currentWaypoint = null;
+    charData.idleDuration = 3;
+    applyIdlePose(charData);
+
+    if (charData.blinkIndex >= 0 && charData.mesh.morphTargetInfluences) {
+        charData.mesh.morphTargetInfluences[charData.blinkIndex] = 0;
+    }
+
+    await fadeFromBlack();
 }
 
 function isLookingAtPainting() {
