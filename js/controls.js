@@ -36,7 +36,16 @@ export function initControls(camera, domElement, colliders) {
         useTouchControls: isTouchDevice() && (!hasPhysicalKeyboard() || !pointerLockSupported)
     };
 
-    const overlayIds = ['dialogue-ui', 'settings-panel', 'history-panel', 'model-selector', 'sleep-ui', 'date-panel'];
+    const overlayIds = [
+        'dialogue-ui',
+        'settings-panel',
+        'history-panel',
+        'model-selector',
+        'sleep-ui',
+        'date-panel',
+        'gift-terminal-panel',
+        'gift-collection-panel'
+    ];
     let resumeAfterOverlay = false;
     let resumeInProgress = false;
 

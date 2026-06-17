@@ -6,6 +6,8 @@ import { loadCharacter, updateCharacter, getCharacterPosition, startInteraction,
 import { initDialogue, showDialogue, hideDialogue, isDialogueVisible, getConversationHistory, importConversationHistory } from './dialogue.js';
 import { initDateDialogue, openDatePanel, closeDatePanel, isDatePanelVisible, getDateConversationHistory, importDateConversationHistory, getDateLocations } from './date_dialogue.js';
 import { initSettings } from './settings.js';
+import { exportGameState, formatMoney, getGameTimeInfo, getMoney, importGameState, initGameState, updateGameTime } from './game_state.js';
+import { closeGiftCollection, closeGiftTerminal, initGiftSystem, isGiftOverlayVisible, openGiftCollection, openGiftTerminal, renderGiftCollection } from './gift_system.js?v=20260618-gift-stream';
 
 let scene, camera, renderer;
 let controlsModule, charData;
@@ -16,6 +18,9 @@ let wardrobeMesh;
 let bedMesh;
 let deskMesh;
 let doorMesh;
+let windowMesh;
+let terminalMesh;
+let collectionCabinetMesh;
 let bedBlanket;
 let isSleeping = false;
 let sleepCamPos = new THREE.Vector3();
@@ -36,6 +41,7 @@ function setLoadingProgress(pct) {
 
 async function init() {
     const canvas = document.getElementById('game-canvas');
+    initGameState();
 
     await setLoadingText('初始化场景...');
     setLoadingProgress(10);
@@ -54,6 +60,9 @@ async function init() {
     bedBlanket = room.bedBlanket;
     deskMesh = room.deskMesh;
     doorMesh = room.doorMesh;
+    windowMesh = room.windowMesh;
+    terminalMesh = room.terminalMesh;
+    collectionCabinetMesh = room.collectionCabinetMesh;
 
     await new Promise(r => setTimeout(r, 100));
 
@@ -115,7 +124,9 @@ async function init() {
     await initDialogue();
     await initDateDialogue();
     initSettings();
+    initGiftSystem();
     initPainting();
+    updateGameHud(true);
 
     document.addEventListener('keydown', onKeyDown);
     document.addEventListener('fritia-action', (e) => {
@@ -128,6 +139,10 @@ async function init() {
             endInteraction(charData);
         }
         controlsModule.resumeControlMode();
+    });
+    document.addEventListener('fritia-game-state-updated', () => {
+        updateGameHud(true);
+        renderGiftCollection();
     });
     document.getElementById('btn-pet').addEventListener('click', () => { if (isSleeping) petFritiaHead(); });
     document.getElementById('btn-wake').addEventListener('click', () => { if (isSleeping) exitSleepMode(); });
@@ -166,6 +181,7 @@ function onKeyDown(e) {
     if (e.code === 'KeyF') {
         if (isDialogueVisible()) return;
         if (isDatePanelVisible()) return;
+        if (isGiftOverlayVisible()) return;
 
         if (isSleeping) {
             petFritiaHead();
@@ -186,9 +202,16 @@ function onKeyDown(e) {
     if (e.code === 'KeyE') {
         if (isInteracting || isDialogueVisible()) return;
         if (isDatePanelVisible()) return;
+        if (isGiftOverlayVisible()) return;
         if (controlsModule && controlsModule.state.isLocked) {
             if (isSleeping) {
                 exitSleepMode();
+            } else if (isLookingAtTerminal()) {
+                openGiftTerminal();
+                controlsModule.releaseControlMode({ resumeOnClose: true });
+            } else if (isLookingAtCollectionCabinet()) {
+                openGiftCollection();
+                controlsModule.releaseControlMode({ resumeOnClose: true });
             } else if (isLookingAtBed() && !currentModelPath.includes('国主驾到')) {
                 enterSleepMode();
             } else if (isLookingAtDesk() || isLookingAtDoor()) {
@@ -203,6 +226,11 @@ function onKeyDown(e) {
     }
 
     if (e.code === 'Escape') {
+        if (isGiftOverlayVisible()) {
+            closeGiftTerminal();
+            closeGiftCollection();
+            return;
+        }
         if (isDatePanelVisible()) {
             closeDatePanel();
             return;
@@ -249,10 +277,74 @@ function endInteractionMode() {
     hideDialogue();
 }
 
+function updateGameHud(force = false, salary = 0) {
+    const timeEl = document.getElementById('game-time-display');
+    const moneyEl = document.getElementById('money-display');
+    const info = getGameTimeInfo({ quantize: 5 });
+    if (timeEl && (force || timeEl.dataset.minutes !== String(info.totalMinutes))) {
+        timeEl.textContent = info.text;
+        timeEl.dataset.minutes = String(info.totalMinutes);
+    }
+    if (moneyEl) {
+        moneyEl.textContent = formatMoney(getMoney());
+    }
+    if (salary > 0) {
+        showSalaryToast(salary);
+    }
+}
+
+function showSalaryToast(amount) {
+    const el = document.getElementById('salary-toast');
+    if (!el) return;
+    el.textContent = `[陶董] 发放日薪：+ ${amount}`;
+    el.classList.remove('hidden');
+    el.style.animation = 'none';
+    void el.offsetWidth;
+    el.style.animation = '';
+    clearTimeout(showSalaryToast.timer);
+    showSalaryToast.timer = setTimeout(() => {
+        el.classList.add('hidden');
+    }, 2800);
+}
+
+function updateWindowSky() {
+    if (!windowMesh || !windowMesh.material) return;
+    const info = getGameTimeInfo({ quantize: 1 });
+    const minutes = info.hour * 60 + info.minute;
+    const sunriseStart = 5 * 60;
+    const sunriseEnd = 7 * 60 + 30;
+    const sunsetStart = 17 * 60 + 30;
+    const sunsetEnd = 20 * 60;
+    let dayFactor;
+    if (minutes < sunriseStart || minutes >= sunsetEnd) {
+        dayFactor = 0;
+    } else if (minutes < sunriseEnd) {
+        dayFactor = (minutes - sunriseStart) / (sunriseEnd - sunriseStart);
+    } else if (minutes < sunsetStart) {
+        dayFactor = 1;
+    } else {
+        dayFactor = 1 - (minutes - sunsetStart) / (sunsetEnd - sunsetStart);
+    }
+    dayFactor = Math.max(0, Math.min(1, dayFactor));
+    const night = new THREE.Color(0x02040d);
+    const day = new THREE.Color(0x88bbff);
+    const color = night.clone().lerp(day, dayFactor);
+    windowMesh.material.color.copy(color);
+    if (windowMesh.material.emissive) {
+        windowMesh.material.emissive.copy(color);
+        windowMesh.material.emissiveIntensity = 0.3;
+    }
+}
+
 function animate() {
     requestAnimationFrame(animate);
 
     const delta = Math.min(clock.getDelta(), 0.05);
+    const timeUpdate = updateGameTime(delta);
+    if (timeUpdate.displayChanged || timeUpdate.salary > 0) {
+        updateGameHud(false, timeUpdate.salary);
+    }
+    updateWindowSky();
 
     if (controlsModule) {
         if (!isSleeping) {
@@ -273,7 +365,7 @@ function animate() {
 function updateInteractionPrompt() {
     const prompt = document.getElementById('interaction-prompt');
     const paintingPrompt = document.getElementById('painting-prompt');
-    if (isSleeping || isInteracting || isDialogueVisible() || isDatePanelVisible()) {
+    if (isSleeping || isInteracting || isDialogueVisible() || isDatePanelVisible() || isGiftOverlayVisible()) {
         prompt.classList.add('hidden');
         if (paintingPrompt) paintingPrompt.classList.add('hidden');
         return;
@@ -301,11 +393,19 @@ function updateInteractionPrompt() {
         const lookBed = isLookingAtBed();
         const lookDesk = isLookingAtDesk();
         const lookDoor = isLookingAtDoor();
+        const lookTerminal = isLookingAtTerminal();
+        const lookCollectionCabinet = isLookingAtCollectionCabinet();
         if (lookPaint) {
             paintingPrompt.innerHTML = '按 <kbd>E</kbd> 更换挂画';
             paintingPrompt.classList.remove('hidden');
         } else if (lookWardrobe) {
             paintingPrompt.innerHTML = '按 <kbd>E</kbd> 换装';
+            paintingPrompt.classList.remove('hidden');
+        } else if (lookTerminal) {
+            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 打开购物终端';
+            paintingPrompt.classList.remove('hidden');
+        } else if (lookCollectionCabinet) {
+            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 打开礼物收藏';
             paintingPrompt.classList.remove('hidden');
         } else if (lookBed) {
             if (currentModelPath.includes('国主驾到')) {
@@ -484,6 +584,20 @@ function isLookingAtDoor() {
     if (!doorMesh || !camera) return false;
     raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
     const hits = raycaster.intersectObject(doorMesh);
+    return hits.length > 0;
+}
+
+function isLookingAtTerminal() {
+    if (!terminalMesh || !camera) return false;
+    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+    const hits = raycaster.intersectObject(terminalMesh, true);
+    return hits.length > 0;
+}
+
+function isLookingAtCollectionCabinet() {
+    if (!collectionCabinetMesh || !camera) return false;
+    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+    const hits = raycaster.intersectObject(collectionCabinetMesh, true);
     return hits.length > 0;
 }
 
@@ -881,9 +995,14 @@ function renderDateHistory(dateFilter = 'all') {
 }
 
 function exportData() {
+    const gameState = exportGameState();
     const data = {
-        version: 1,
+        version: 2,
         exportedAt: Date.now(),
+        exportedGameTime: gameState.gameTime,
+        gameState,
+        money: gameState.money,
+        gifts: gameState.gifts,
         settings: JSON.parse(localStorage.getItem('fritia-settings') || '{}'),
         conversations: getConversationHistory(),
         dateConversations: getDateConversationHistory()
@@ -920,7 +1039,10 @@ function handleImportFile(e) {
             if (data.dateConversations && typeof data.dateConversations === 'object') {
                 importDateConversationHistory(data.dateConversations);
             }
-            alert('导入成功！刷新页面以应用设置。');
+            const importResult = importGameState(data.gameState || data);
+            updateGameHud(true);
+            renderGiftCollection();
+            alert(`导入成功！礼物同步新增 ${importResult.giftsAdded || 0} 条。刷新页面以应用设置。`);
         } catch (err) {
             alert('导入失败：文件格式不正确');
             console.error('Import error:', err);

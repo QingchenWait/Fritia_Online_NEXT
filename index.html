@@ -58,6 +58,11 @@
 
     <div id="hud">
         <div id="crosshair">+</div>
+        <div id="game-status">
+            <div id="game-time-display">1月1日 12:00</div>
+            <div id="money-display">🪙 40,000</div>
+            <div id="salary-toast" class="hidden"></div>
+        </div>
         <div id="interaction-prompt" class="hidden" role="button" tabindex="0">
             按 <kbd>F</kbd> 与芙提雅对话
         </div>
@@ -172,6 +177,65 @@
         </div>
     </div>
 
-    <script type="module" src="js/main.js"></script>
+    <div id="gift-terminal-panel" class="hidden">
+        <div class="gift-terminal-inner">
+            <div class="gift-terminal-sidebar">
+                <div class="terminal-brand">
+                    <div class="terminal-logo">📥</div>
+                    <div>
+                        <h3>购物终端</h3>
+                        <span>泰古通达物流速递</span>
+                    </div>
+                </div>
+                <button class="gift-terminal-tab active" id="gift-gift-category">
+                    <span class="terminal-tab-icon">🎁</span>
+                    <span>礼物</span>
+                </button>
+                <div class="terminal-sidebar-note">世界树公司-万能商品供应终端</div>
+            </div>
+            <div class="gift-terminal-main">
+                <div class="gift-terminal-header">
+                    <div>
+                        <h3>🛍️ 礼物定制与购买</h3>
+                        <span>自由生成送给恋人的礼物！我们会根据您的描述，进行礼物定制与估价。</span>
+                    </div>
+                    <div class="gift-terminal-header-actions">
+                        <span id="gift-balance">余额：🪙 40,000</span>
+                        <button id="gift-terminal-close">关闭</button>
+                    </div>
+                </div>
+                <div class="gift-terminal-body">
+                    <div class="gift-compose-card">
+                        <div class="gift-section-label">礼物描述</div>
+                        <textarea id="gift-description" maxlength="300" placeholder="例如：一只会发光的蓝色小熊挂件，里面藏着分析员写给芙提雅的短笺。"></textarea>
+                        <div class="gift-terminal-actions">
+                            <button id="gift-evaluate-btn">开始定制</button>
+                            <div id="gift-status"></div>
+                        </div>
+                    </div>
+                    <div id="gift-pending" class="gift-pending hidden">
+                        <div>
+                            <div class="gift-section-label">付款确认</div>
+                            <p>尊敬的分析员：您的礼物已定制完成。付款后将赠送给芙提雅女士。</p>
+                        </div>
+                        <button id="gift-pay-btn">支付</button>
+                    </div>
+                    <div id="gift-result" class="gift-result hidden"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="gift-collection-panel" class="hidden">
+        <div class="gift-collection-inner">
+            <div class="gift-collection-header">
+                <h3>🗄️ 礼物收藏柜</h3>
+                <button id="gift-collection-close">关闭</button>
+            </div>
+            <div id="gift-collection-list"></div>
+        </div>
+    </div>
+
+    <script type="module" src="js/main.js?v=20260618-gift-stream"></script>
 </body>
 </html>

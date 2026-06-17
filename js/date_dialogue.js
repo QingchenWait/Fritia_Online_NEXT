@@ -1,4 +1,5 @@
 import { getSettings } from './settings.js';
+import { getGameTimeContext } from './game_state.js';
 
 const DATE_HISTORY_KEY = 'fritia_date_history';
 const DATE_LOCATIONS = [
@@ -76,6 +77,10 @@ export function importDateConversationHistory(data) {
 
 export function getDateLocations() {
     return DATE_LOCATIONS;
+}
+
+function buildDateSystemPrompt(locationName) {
+    return `${datePromptTemplate.replace('{location}', locationName)}\n\n${getGameTimeContext()}`;
 }
 
 export async function initDateDialogue() {
@@ -268,7 +273,7 @@ async function startDateConversation(loc) {
 
     try {
         dateAbortController = new AbortController();
-        const systemPrompt = datePromptTemplate.replace('{location}', loc.name);
+        const systemPrompt = buildDateSystemPrompt(loc.name);
         const response = await fetch(`${settings.baseUrl}/chat/completions`, {
             method: 'POST',
             headers: {
@@ -363,7 +368,7 @@ async function handleDateSend() {
     try {
         dateAbortController = new AbortController();
         const loc = DATE_LOCATIONS.find(l => l.id === currentLocationId);
-        const systemPrompt = datePromptTemplate.replace('{location}', loc ? loc.name : '约会');
+        const systemPrompt = buildDateSystemPrompt(loc ? loc.name : '约会');
 
         const history = dateConversationHistory[currentLocationId];
         const contextMsgs = history.slice(-20).map(m => ({ role: m.role, content: m.content }));

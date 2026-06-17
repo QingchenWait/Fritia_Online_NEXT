@@ -160,6 +160,60 @@ export function createRoom(scene) {
     lampShade.rotation.x = Math.PI;
     group.add(lampShade);
 
+    // Shopping terminal on the wall opposite the Snowbreak logo.
+    const terminalGroup = new THREE.Group();
+    const terminalBodyMat = new THREE.MeshStandardMaterial({
+        color: 0x101725,
+        roughness: 0.35,
+        metalness: 0.55
+    });
+    const terminalBody = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.82, 0.64), terminalBodyMat);
+    terminalBody.position.set(0, 0, 0);
+    terminalBody.castShadow = true;
+    terminalGroup.add(terminalBody);
+
+    const terminalScreenCanvas = document.createElement('canvas');
+    terminalScreenCanvas.width = 512;
+    terminalScreenCanvas.height = 384;
+    const termCtx = terminalScreenCanvas.getContext('2d');
+    termCtx.fillStyle = '#07111f';
+    termCtx.fillRect(0, 0, 512, 384);
+    termCtx.strokeStyle = '#6ee7ff';
+    termCtx.lineWidth = 8;
+    termCtx.strokeRect(18, 18, 476, 348);
+    termCtx.fillStyle = '#6ee7ff';
+    termCtx.font = 'bold 54px Microsoft YaHei, sans-serif';
+    termCtx.textAlign = 'center';
+    termCtx.fillText('SHOP', 256, 150);
+    termCtx.font = '30px Microsoft YaHei, sans-serif';
+    termCtx.fillText('GIFT TERMINAL', 256, 218);
+    termCtx.fillStyle = 'rgba(110, 231, 255, 0.45)';
+    for (let i = 0; i < 5; i++) {
+        termCtx.fillRect(92 + i * 72, 280, 42, 8);
+    }
+    const terminalScreenTex = new THREE.CanvasTexture(terminalScreenCanvas);
+    const terminalScreenMat = new THREE.MeshStandardMaterial({
+        map: terminalScreenTex,
+        color: 0xffffff,
+        emissive: 0x2fc7ff,
+        emissiveIntensity: 0.45,
+        roughness: 0.2
+    });
+    const terminalScreen = new THREE.Mesh(new THREE.PlaneGeometry(0.52, 0.42), terminalScreenMat);
+    terminalScreen.position.set(-0.045, 0.06, 0);
+    terminalScreen.rotation.y = -Math.PI / 2;
+    terminalGroup.add(terminalScreen);
+
+    const terminalGlow = new THREE.Mesh(
+        new THREE.BoxGeometry(0.015, 0.05, 0.5),
+        new THREE.MeshStandardMaterial({ color: 0x66e8ff, emissive: 0x66e8ff, emissiveIntensity: 1.2 })
+    );
+    terminalGlow.position.set(-0.052, -0.32, 0);
+    terminalGroup.add(terminalGlow);
+    terminalGroup.position.set(2.955, 1.55, -0.35);
+    group.add(terminalGroup);
+    const terminalMesh = terminalBody;
+
     // Chair
     const chairSeat = makeBox(0.45, 0.05, 0.45, 0x5C4033, 2.1, 0.45, -1.2);
     group.add(chairSeat);
@@ -195,6 +249,25 @@ export function createRoom(scene) {
             group.add(book);
         }
     }
+    const cabinetLabelCanvas = document.createElement('canvas');
+    cabinetLabelCanvas.width = 256;
+    cabinetLabelCanvas.height = 64;
+    const cabinetCtx = cabinetLabelCanvas.getContext('2d');
+    cabinetCtx.fillStyle = 'rgba(20, 14, 10, 0.82)';
+    cabinetCtx.fillRect(0, 0, 256, 64);
+    cabinetCtx.strokeStyle = 'rgba(230, 190, 120, 0.8)';
+    cabinetCtx.strokeRect(6, 6, 244, 52);
+    cabinetCtx.fillStyle = '#f0d59b';
+    cabinetCtx.font = '24px Microsoft YaHei, sans-serif';
+    cabinetCtx.textAlign = 'center';
+    cabinetCtx.fillText('礼物收藏', 128, 40);
+    const cabinetLabelTex = new THREE.CanvasTexture(cabinetLabelCanvas);
+    const cabinetLabel = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.48, 0.12),
+        new THREE.MeshStandardMaterial({ map: cabinetLabelTex, transparent: true })
+    );
+    cabinetLabel.position.set(-2.6, 1.18, 1.715);
+    group.add(cabinetLabel);
     colliders.push(makeAABB(-2.6, 0, 1.5, 0.45, 0.75, 0.22));
 
     // Wall collisions (thick enough for player radius 0.25)
@@ -328,5 +401,20 @@ export function createRoom(scene) {
         { name: 'chair_sit', position: new THREE.Vector3(2.1, 0, -1.2), isFurniture: true, furnitureType: 'chair' },
     ];
 
-    return { colliders, playerColliders, waypoints, painting, paintingLabel, paintingZone, wardrobeMesh, bedMesh: bedGroup, bedBlanket, deskMesh, doorMesh };
+    return {
+        colliders,
+        playerColliders,
+        waypoints,
+        painting,
+        paintingLabel,
+        paintingZone,
+        wardrobeMesh,
+        bedMesh: bedGroup,
+        bedBlanket,
+        deskMesh,
+        doorMesh,
+        windowMesh: window1,
+        terminalMesh,
+        collectionCabinetMesh: shelfBase
+    };
 }

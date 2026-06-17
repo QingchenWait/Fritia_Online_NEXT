@@ -1,4 +1,5 @@
 import { getSettings } from './settings.js';
+import { getGameTimeContext } from './game_state.js';
 
 const HISTORY_KEY = 'fritia_chat_history';
 
@@ -58,6 +59,10 @@ function getContextMessages() {
     }
     
     return messages;
+}
+
+function buildSystemPrompt() {
+    return `${systemPrompt}\n\n${getGameTimeContext()}`;
 }
 
 function loadHistory() {
@@ -144,7 +149,7 @@ async function handleSend() {
             body: JSON.stringify({
                 model: settings.model,
                 messages: [
-                    { role: 'system', content: systemPrompt },
+                    { role: 'system', content: buildSystemPrompt() },
                     ...getContextMessages()
                 ],
                 stream: true,
