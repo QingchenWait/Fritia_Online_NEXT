@@ -212,6 +212,17 @@ function appendDateThinking() {
     return row;
 }
 
+function appendDateSystemMessage(text) {
+    const row = document.createElement('div');
+    row.className = 'chat-row system-row';
+    const div = document.createElement('div');
+    div.className = 'system-msg';
+    div.textContent = text;
+    row.appendChild(div);
+    els.chatArea.appendChild(row);
+    scrollDateChat();
+}
+
 function scrollDateChat() {
     requestAnimationFrame(() => {
         els.chatArea.scrollTop = els.chatArea.scrollHeight;
@@ -247,7 +258,10 @@ async function startDateConversation(loc) {
     }
 
     const settings = getSettings();
-    if (!settings.apiKey) return;
+    if (!settings.apiKey) {
+        appendDateSystemMessage('请先在设置中填写 API Key 后再开始约会对话');
+        return;
+    }
 
     isDateGenerating = true;
     const thinkingEl = appendDateThinking();
@@ -328,7 +342,12 @@ async function handleDateSend() {
     if (!msg) return;
 
     const settings = getSettings();
-    if (!settings.apiKey) return;
+    if (!settings.apiKey) {
+        els.input.value = '';
+        appendDateUserMessage(msg);
+        appendDateSystemMessage('请先在设置中填写 API Key 后再发送约会消息');
+        return;
+    }
 
     els.input.value = '';
     if (!dateConversationHistory[currentLocationId]) {

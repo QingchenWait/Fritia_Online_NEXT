@@ -405,7 +405,7 @@ body {
     border-radius: 4px;
     padding: 12px 18px;
     color: #fff;
-    font-size: 1rem;
+    font-size: 16px;
     font-family: inherit;
     outline: none;
     transition: border-color 0.2s;
@@ -526,9 +526,17 @@ body {
     font-size: 1.3rem;
     font-weight: 400;
     letter-spacing: 0.1em;
-    margin-bottom: 24px;
+    margin-bottom: 6px;
     text-align: center;
     color: rgba(255, 255, 255, 0.9);
+}
+
+.settings-note {
+    margin-bottom: 22px;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.42);
+    font-size: 0.78rem;
+    line-height: 1.5;
 }
 
 .setting-item {
@@ -550,7 +558,7 @@ body {
     border-radius: 8px;
     padding: 10px 14px;
     color: #fff;
-    font-size: 0.9rem;
+    font-size: 16px;
     font-family: 'Consolas', 'Monaco', monospace;
     outline: none;
     transition: border-color 0.2s;
@@ -1147,7 +1155,7 @@ body {
     border-radius: 6px;
     padding: 8px 14px;
     color: #fff;
-    font-size: 0.9rem;
+    font-size: 16px;
     font-family: inherit;
     outline: none;
 }
@@ -1186,7 +1194,7 @@ body {
 
     #dialogue-input {
         padding: 10px 14px;
-        font-size: 0.9rem;
+        font-size: 16px;
     }
 
     .settings-inner {
