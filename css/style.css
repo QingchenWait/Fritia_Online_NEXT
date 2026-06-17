@@ -16,6 +16,7 @@ body {
     display: block;
     width: 100vw;
     height: 100vh;
+    touch-action: none;
 }
 
 /* Loading Screen */
@@ -129,23 +130,25 @@ body {
     bottom: 30%;
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(8px);
-    padding: 10px 24px;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 12px 28px;
     border-radius: 30px;
     font-size: 0.9rem;
     letter-spacing: 0.05em;
     border: 1px solid rgba(255, 255, 255, 0.15);
-    animation: prompt-pulse 2s ease-in-out infinite;
     white-space: nowrap;
-    z-index: 2;
+    z-index: 100;
     cursor: pointer;
     pointer-events: auto;
-    transition: background 0.15s, bottom 0.1s ease-out;
+    touch-action: manipulation;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    transition: background 0.15s, bottom 0.15s ease-out;
 }
 
 #interaction-prompt:active {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.25);
 }
 
 #painting-prompt {
@@ -153,23 +156,25 @@ body {
     bottom: 24%;
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(8px);
-    padding: 10px 24px;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 12px 28px;
     border-radius: 30px;
     font-size: 0.9rem;
     letter-spacing: 0.05em;
     border: 1px solid rgba(255, 255, 255, 0.15);
-    animation: prompt-pulse 2s ease-in-out infinite;
     white-space: nowrap;
-    z-index: 1;
+    z-index: 99;
     cursor: pointer;
     pointer-events: auto;
-    transition: background 0.15s, bottom 0.1s ease-out;
+    touch-action: manipulation;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    transition: background 0.15s;
 }
 
 #painting-prompt:active {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.25);
 }
 
 #interaction-prompt kbd,

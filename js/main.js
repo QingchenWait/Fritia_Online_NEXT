@@ -11,6 +11,7 @@ let scene, camera, renderer;
 let controlsModule, charData;
 let isInteracting = false;
 let paintingMesh;
+let paintingLabel;
 let wardrobeMesh;
 let bedMesh;
 let deskMesh;
@@ -47,6 +48,7 @@ async function init() {
     setLoadingProgress(25);
     const room = createRoom(scene);
     paintingMesh = room.painting;
+    paintingLabel = room.paintingLabel;
     wardrobeMesh = room.wardrobeMesh;
     bedMesh = room.bedMesh;
     bedBlanket = room.bedBlanket;
@@ -321,20 +323,17 @@ function adjustPromptOverlap(prompt1, prompt2) {
     if (!prompt1 || !prompt2) return;
     if (prompt1.classList.contains('hidden') || prompt2.classList.contains('hidden')) {
         prompt1.style.bottom = '';
-        prompt2.style.bottom = '';
+        prompt1.dataset.shifted = '';
         return;
     }
-    const gap = 8;
+    if (prompt1.dataset.shifted) return;
+    const gap = 16;
     const r1 = prompt1.getBoundingClientRect();
     const r2 = prompt2.getBoundingClientRect();
-    if (!(r1.left < r2.right && r1.right > r2.left && r1.top < r2.bottom && r1.bottom > r2.top)) {
-        prompt1.style.bottom = '';
-        prompt2.style.bottom = '';
-        return;
-    }
-    const overlap = r1.bottom - r2.top;
-    if (overlap > 0) {
-        prompt1.style.bottom = `calc(30% + ${overlap + gap}px)`;
+    if (r1.right > r2.left && r1.left < r2.right && r1.bottom > r2.top) {
+        const shift = Math.ceil(r1.bottom - r2.top + gap);
+        prompt1.style.bottom = `calc(30% + ${shift}px)`;
+        prompt1.dataset.shifted = '1';
     }
 }
 
@@ -342,17 +341,29 @@ function initPromptButtons() {
     const prompt = document.getElementById('interaction-prompt');
     const paintingPrompt = document.getElementById('painting-prompt');
 
-    prompt.addEventListener('click', (e) => {
+    function handlePromptTap(e, keyCode) {
+        e.preventDefault();
         e.stopPropagation();
+        onKeyDown({ code: keyCode });
+    }
+
+    prompt.addEventListener('click', (e) => {
         if (prompt.classList.contains('hidden')) return;
-        onKeyDown({ code: 'KeyF' });
+        handlePromptTap(e, 'KeyF');
     });
+    prompt.addEventListener('touchend', (e) => {
+        if (prompt.classList.contains('hidden')) return;
+        handlePromptTap(e, 'KeyF');
+    }, { passive: false });
 
     paintingPrompt.addEventListener('click', (e) => {
-        e.stopPropagation();
         if (paintingPrompt.classList.contains('hidden')) return;
-        onKeyDown({ code: 'KeyE' });
+        handlePromptTap(e, 'KeyE');
     });
+    paintingPrompt.addEventListener('touchend', (e) => {
+        if (paintingPrompt.classList.contains('hidden')) return;
+        handlePromptTap(e, 'KeyE');
+    }, { passive: false });
 }
 
 function initPainting() {
@@ -442,6 +453,7 @@ function applyPaintingTexture(src) {
         paintingMesh.material.map = tex;
         paintingMesh.material.color.set(0xffffff);
         paintingMesh.material.needsUpdate = true;
+        if (paintingLabel) paintingLabel.visible = false;
     };
     img.src = src;
 }

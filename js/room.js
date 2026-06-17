@@ -224,6 +224,21 @@ export function createRoom(scene) {
     painting.rotation.y = Math.PI;
     group.add(painting);
 
+    const labelCanvas = document.createElement('canvas');
+    labelCanvas.width = 512;
+    labelCanvas.height = 32;
+    const labelCtx = labelCanvas.getContext('2d');
+    labelCtx.font = '18px Microsoft YaHei, sans-serif';
+    labelCtx.fillStyle = 'rgba(120, 100, 80, 0.7)';
+    labelCtx.textAlign = 'center';
+    labelCtx.fillText('青尘工作室 | CyanDust_青尘', 256, 22);
+    const labelTex = new THREE.CanvasTexture(labelCanvas);
+    const labelMat = new THREE.MeshStandardMaterial({ map: labelTex, transparent: true });
+    const paintingLabel = new THREE.Mesh(new THREE.PlaneGeometry(paintW * 0.6, 0.05), labelMat);
+    paintingLabel.position.set(0, 1.6 - paintH / 2 + 0.06, 2.49);
+    paintingLabel.rotation.y = Math.PI;
+    group.add(paintingLabel);
+
     const pfMat = new THREE.MeshStandardMaterial({ color: 0x3a2a1a, roughness: 0.5 });
     const pfT = new THREE.Mesh(new THREE.BoxGeometry(paintW + 0.08, 0.04, 0.03), pfMat);
     pfT.position.set(0, 1.6 + paintH / 2, 2.48);
@@ -313,5 +328,5 @@ export function createRoom(scene) {
         { name: 'chair_sit', position: new THREE.Vector3(2.1, 0, -1.2), isFurniture: true, furnitureType: 'chair' },
     ];
 
-    return { colliders, playerColliders, waypoints, painting, paintingZone, wardrobeMesh, bedMesh: bedGroup, bedBlanket, deskMesh, doorMesh };
+    return { colliders, playerColliders, waypoints, painting, paintingLabel, paintingZone, wardrobeMesh, bedMesh: bedGroup, bedBlanket, deskMesh, doorMesh };
 }
