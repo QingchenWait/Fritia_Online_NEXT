@@ -67,6 +67,7 @@ let dreamDoorAnimationTo = 0;
 let startupInteractionStarted = false;
 let startupWelcomePending = true;
 let startupWelcomeStarted = false;
+let dreamCinematic = null;
 let sleepCamPos = new THREE.Vector3();
 let sleepCamQuat = new THREE.Quaternion();
 const raycaster = new THREE.Raycaster();
@@ -74,6 +75,9 @@ const occlusionRay = new THREE.Ray();
 const lookDirection = new THREE.Vector3();
 const lookTarget = new THREE.Vector3();
 const occlusionPoint = new THREE.Vector3();
+const cinematicBox = new THREE.Box3();
+const cinematicSize = new THREE.Vector3();
+const cinematicCenter = new THREE.Vector3();
 
 const clock = new THREE.Clock();
 
@@ -209,7 +213,8 @@ async function init() {
             && !isDatePanelVisible()
             && !isGiftOverlayVisible()
             && !isDreamOverlayVisible(),
-        onFurnitureChanged: handleDreamFurnitureChanged
+        onFurnitureChanged: handleDreamFurnitureChanged,
+        onFurnitureCreated: startDreamFurnitureCinematic
     });
     initPainting();
     refreshCharacterRoomScope(true);
@@ -282,6 +287,11 @@ async function init() {
 }
 
 function onKeyDown(e) {
+    if (dreamCinematic) {
+        if (e.code === 'KeyE') skipDreamFurnitureCinematic();
+        return;
+    }
+
     if (isDreamRevisionPending()) {
         if (e.code === 'Digit1' || e.code === 'Numpad1') {
             confirmPendingDreamRevision();
@@ -535,6 +545,82 @@ function refreshCollisionScopesAfterDreamDoorChange() {
     }
 }
 
+function clampCameraToDreamRoom(pos, margin = 0.42) {
+    if (!dreamRoomBounds) return pos;
+    pos.x = THREE.MathUtils.clamp(pos.x, dreamRoomBounds.min.x + margin, dreamRoomBounds.max.x - margin);
+    pos.z = THREE.MathUtils.clamp(pos.z, dreamRoomBounds.min.z + margin, dreamRoomBounds.max.z - margin);
+    pos.y = THREE.MathUtils.clamp(pos.y, 0.75, dreamRoomBounds.max.y - 0.25);
+    return pos;
+}
+
+function startDreamFurnitureCinematic(record, runtimeItem) {
+    const group = runtimeItem?.group;
+    if (!group || !camera || !controlsModule) return;
+    group.updateMatrixWorld(true);
+    cinematicBox.setFromObject(group);
+    if (!Number.isFinite(cinematicBox.min.x) || !Number.isFinite(cinematicBox.max.x)) return;
+
+    cinematicBox.getCenter(cinematicCenter);
+    cinematicBox.getSize(cinematicSize);
+    const maxSize = Math.max(cinematicSize.x, cinematicSize.y, cinematicSize.z, 0.8);
+    const front = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), group.rotation.y).normalize();
+    const endDistance = THREE.MathUtils.clamp(maxSize * 1.55 + 1.15, 2.2, 5.2);
+    const startDistance = Math.max(1.15, endDistance * 0.48);
+    const target = cinematicCenter.clone();
+    target.y = Math.max(0.55, cinematicBox.min.y + cinematicSize.y * 0.55);
+
+    const start = target.clone().addScaledVector(front, startDistance).add(new THREE.Vector3(0, -0.08, 0));
+    const end = target.clone().addScaledVector(front, endDistance).add(new THREE.Vector3(0, Math.min(1.0, maxSize * 0.28 + 0.35), 0));
+    clampCameraToDreamRoom(start);
+    clampCameraToDreamRoom(end);
+
+    dreamCinematic = {
+        recordId: record?.id || '',
+        elapsed: 0,
+        duration: 3.05,
+        start,
+        end,
+        targetStart: target.clone().add(new THREE.Vector3(0, -0.05, 0)),
+        targetEnd: target.clone().add(new THREE.Vector3(0, Math.min(0.55, maxSize * 0.16), 0))
+    };
+
+    controlsModule.releaseControlMode({ resumeOnClose: false });
+    controlsModule.setMovementLocked?.(true);
+    const prompt = document.getElementById('interaction-prompt');
+    if (prompt) {
+        prompt.innerHTML = '按 <kbd>E</kbd> 跳过展示';
+        prompt.classList.remove('hidden');
+    }
+    const paintingPrompt = document.getElementById('painting-prompt');
+    if (paintingPrompt) paintingPrompt.classList.add('hidden');
+}
+
+function skipDreamFurnitureCinematic() {
+    if (!dreamCinematic) return false;
+    finishDreamFurnitureCinematic();
+    return true;
+}
+
+function finishDreamFurnitureCinematic() {
+    if (!dreamCinematic) return;
+    dreamCinematic = null;
+    controlsModule?.setMovementLocked?.(false);
+    controlsModule?.enterControlMode?.();
+    const prompt = document.getElementById('interaction-prompt');
+    if (prompt) prompt.classList.add('hidden');
+}
+
+function updateDreamFurnitureCinematic(delta) {
+    if (!dreamCinematic || !camera) return;
+    dreamCinematic.elapsed += delta;
+    const t = THREE.MathUtils.clamp(dreamCinematic.elapsed / dreamCinematic.duration, 0, 1);
+    const eased = easeInOutCubic(t);
+    camera.position.lerpVectors(dreamCinematic.start, dreamCinematic.end, eased);
+    lookTarget.lerpVectors(dreamCinematic.targetStart, dreamCinematic.targetEnd, eased);
+    camera.lookAt(lookTarget);
+    if (t >= 1) finishDreamFurnitureCinematic();
+}
+
 function getRoomIdForPosition(position) {
     if (dreamRoomBounds
         && position.x >= dreamRoomBounds.min.x - 0.05
@@ -668,16 +754,17 @@ function animate() {
     }
     updateWindowSky();
     updateDreamDoor(delta);
+    updateDreamFurnitureCinematic(delta);
 
     if (controlsModule) {
-        if (!isSleeping) {
+        if (!isSleeping && !dreamCinematic) {
             controlsModule.update(delta);
             constrainPendingRevisionPlayer();
         }
     }
 
     if (charData) {
-        if (!isSleeping) {
+        if (!isSleeping && !dreamCinematic) {
             if (!startupInteractionStarted) {
                 updateBlink(charData, delta);
             } else if (startupWelcomePending) {
@@ -690,7 +777,7 @@ function animate() {
                 updateCharacter(charData, delta);
             }
         }
-        updateInteractionPrompt();
+        if (!dreamCinematic) updateInteractionPrompt();
     }
 
     renderer.render(scene, camera);

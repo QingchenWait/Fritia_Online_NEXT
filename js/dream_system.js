@@ -63,6 +63,7 @@ let oldRoomBounds;
 let doorClearanceZone;
 let controlsModule;
 let onFurnitureChanged = () => {};
+let onFurnitureCreated = () => {};
 let getGameTimeText = () => formatGameDateTime({ includeYear: true });
 let getCharacterRoot = () => null;
 let canShowFurnitureDialogue = () => true;
@@ -502,6 +503,7 @@ export function initDreamSystem(options) {
     doorClearanceZone = options.doorClearanceZone;
     controlsModule = options.controlsModule;
     onFurnitureChanged = options.onFurnitureChanged || (() => {});
+    onFurnitureCreated = typeof options.onFurnitureCreated === 'function' ? options.onFurnitureCreated : (() => {});
     getGameTimeText = options.getGameTimeText || getGameTimeText;
     getCharacterRoot = options.getCharacterRoot || getCharacterRoot;
     canShowFurnitureDialogue = options.canShowFurnitureDialogue || canShowFurnitureDialogue;
@@ -906,7 +908,7 @@ async function handleCreateFurniture() {
         };
 
         furnitureRecords.push(record);
-        deployRecord(record);
+        const deployed = deployRecord(record);
         if (!saveFurniture()) {
             removeRuntimeFurniture(record.id);
             furnitureRecords.pop();
@@ -928,6 +930,8 @@ async function handleCreateFurniture() {
         if (els.description) els.description.value = '';
         if (els.placement) els.placement.value = '';
         onFurnitureChanged();
+        closeDreamPanel();
+        onFurnitureCreated(record, deployed);
     } catch (err) {
         console.error('[Dream] create failed:', err);
         setStatus(`未知错误：${err.message || err}`, 'warn');

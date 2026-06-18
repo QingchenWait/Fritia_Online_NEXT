@@ -370,7 +370,8 @@ export function initControls(camera, domElement, colliders) {
         setMovementLocked,
         rotateView,
         releaseControlMode,
-        resumeControlMode
+        resumeControlMode,
+        enterControlMode
     };
 }
 

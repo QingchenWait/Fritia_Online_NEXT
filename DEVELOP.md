@@ -97,6 +97,7 @@ npm run dev
 - `isSleeping`：睡眠模式状态。
 - `currentPlayerRoomId`：`bedroom` 或 `dream`。
 - `isDreamDoorOpen`, `dreamDoorAnimating`：造梦空间推拉门状态。
+- `dreamCinematic`：造梦家具生成后的特写过场状态；存在时暂停玩家普通操作，`E` 可跳过。
 - `basePlayerColliders`, `bedroomColliders`, `dreamStaticColliders`：玩家和角色使用的基础碰撞体集合。
 
 主要函数：
@@ -110,6 +111,7 @@ npm run dev
 - `isLookingAtTerminal()` / `isLookingAtDreamTerminal()` / `isLookingAtDreamDoor()` / `isLookingAtPainting()` 等：各类准星交互检测。
 - `toggleDreamDoor()`：切换造梦空间推拉门开关状态，并刷新玩家/角色碰撞作用域。
 - `updateDreamDoor(delta)`：用缓动插值滑动门板。门开启后移除门碰撞，门关闭后恢复门碰撞。
+- `startDreamFurnitureCinematic(record, runtimeItem)` / `updateDreamFurnitureCinematic(delta)` / `skipDreamFurnitureCinematic()`：新家具生成后播放约 3 秒的特写拉远镜头，镜头起终点限制在造梦空间内，避免穿墙；过场期间只允许按 `E` 跳过。
 - `refreshCharacterRoomScope(force)`：玩家进入新旧房间时，切换芙提雅导航作用域；优先让角色通过门步行进入对应房间，失败时才瞬移。
 - `getActivePlayerColliders()`：当前玩家碰撞体。门关闭时包含 `dreamDoorCollider`，门打开时移除。
 - `getActiveBedroomCharacterColliders()` / `getActiveDreamCharacterColliders()`：角色在不同房间的导航碰撞体。
@@ -204,6 +206,7 @@ npm run dev
 - `rotateView(deltaX, deltaY)`：家具快捷编辑时在非 Pointer Lock 状态下拖动视角。
 - `releaseControlMode({ resumeOnClose })`：打开 overlay 前释放控制模式。
 - `resumeControlMode()`：overlay 关闭后恢复控制模式。
+- `enterControlMode()`：直接进入操作模式；造梦家具特写过场结束后用于恢复玩家操作。
 
 overlay 管理列表：
 
@@ -390,7 +393,7 @@ localStorage key：`fritia_achievements`
 
 行为：
 
-- 成就卡片显示在最顶层，覆盖普通 overlay。
+- 成就卡片显示在最顶层，覆盖普通 overlay；`#achievement-toast-host` 使用极高 `z-index` 和独立 stacking context，避免被 overlay 的高斯模糊背景遮住。
 - 解锁时播放 `src/_voices/achievement_complete.mp3`。
 - 成就状态包含 `unlocked` 和 `notified`，导入时按时间戳合并。
 - “布置爱巢”位于“比翼双飞”后方，读取 `fritia_dream_furniture` 当前记录数，造梦空间内自制家具达到 `5` 件时解锁，图标 `src/_logos/ach_dream_love_nest.svg`。
@@ -543,6 +546,7 @@ localStorage key：`fritia_achievements`
 - `rotateTowardInterior(pos, spec, baseRotation)`：靠墙家具自动面向房间内部。
 - `deployRecord(record)`：创建家具 mesh、整体 collider、组件 collider、waypoint，并加入场景。
 - `refreshRecordRuntime(record)`：家具移动/旋转/样式修改后刷新 mesh/collider/waypoint。
+- `onFurnitureCreated(record, runtimeItem)`：家具制造成功后通知 `main.js` 播放特写过场；样式修改、导入恢复不会触发该过场。
 - `bindMoveHold(id, intent)` / `bindRotateHold(id, amount)`：快捷按钮短按与长按连续移动/旋转。
 - `getEditMoveDelta(intent, amount)`：家具编辑方向基于玩家视角动态贴近世界 X/Z 轴；坐标轴本身不变。
 - `handleStyleRevision()`：样式修改流程。LLM 返回新 spec 后，本地校验、预览部署、扣费、进入确认/回退状态。
@@ -906,6 +910,7 @@ Escape：
 3. HUD 中时间、好感度、数据金分行显示。
 4. 鼠标锁定和移动端触控基础操作可用。
 5. 未点击开局界面前，芙提雅停在初始位置不随机移动；点击进入操作模式后先完成挥手欢迎，再开始后续行动。
+6. 打开任意 overlay 时触发成就，成就卡片应显示在所有窗口和高斯模糊背景之上。
 
 共享墙和门：
 
@@ -933,17 +938,18 @@ Escape：
 4. 合法 LLM JSON 生成家具后，扣除 500 数据金、增加 5 好感度并刷新 HUD。
 5. 新生成的桌、床、柜等家具上下关系正确；桌腿不会被整体倒扣到桌面上方。
 6. 复杂家具 JSON 不应因本地 `max_tokens` 上限被截断。
-7. 家具不穿墙、不堵门、不挡窗、不与已有家具重叠。
-8. 刷新页面后家具恢复。
-9. 导出/导入后家具恢复。
-10. 看向家具按 E 显示快捷编辑按钮。
-11. 移动、旋转、重置、删除流程可用。
-12. 删除家具退回 400 数据金并在 HUD 显示 `+400`。
-13. 样式修改成功后显示 `[1] 确认` 和 `[2] 回退`。
-14. 确认样式修改后该家具 `revisionCount` 增加，连续 3 次确认可触发“完美主义”。
-15. 回退样式恢复原 spec 并退回 50 数据金。
-16. 样式修改后玩家和芙提雅碰撞体同步更新。
-17. 造梦空间内存在家具达到 5 件时触发“布置爱巢”。
+7. 家具生成成功后播放约 3 秒特写拉远镜头；镜头完整展示家具、不穿墙，过场期间玩家不能移动，按 E 可跳过。
+8. 家具不穿墙、不堵门、不挡窗、不与已有家具重叠。
+9. 刷新页面后家具恢复。
+10. 导出/导入后家具恢复。
+11. 看向家具按 E 显示快捷编辑按钮。
+12. 移动、旋转、重置、删除流程可用。
+13. 删除家具退回 400 数据金并在 HUD 显示 `+400`。
+14. 样式修改成功后显示 `[1] 确认` 和 `[2] 回退`。
+15. 确认样式修改后该家具 `revisionCount` 增加，连续 3 次确认可触发“完美主义”。
+16. 回退样式恢复原 spec 并退回 50 数据金。
+17. 样式修改后玩家和芙提雅碰撞体同步更新。
+18. 造梦空间内存在家具达到 5 件时触发“布置爱巢”。
 
 角色：
 
