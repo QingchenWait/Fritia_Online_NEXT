@@ -6,6 +6,9 @@ const TARGET_HEIGHT = 1.55;
 const WALK_SPEED = 1.0;
 const WALK_CYCLE_SPEED = 5.2;
 const WALK_BLEND_EDGE = 0.18;
+const PATH_GRID_STEP = 0.45;
+const PATH_SAMPLE_STEP = 0.18;
+const PATH_MAX_NODES = 1400;
 const IDLE_MIN = 3;
 const IDLE_MAX = 8;
 const SIT_MIN = 8;
@@ -256,6 +259,7 @@ export function loadCharacter(scene, waypoints, colliders, onProgress) {
                     const charData = {
                         root: mesh, mesh, skeleton, bones, boneRef,
                         initialPositions, colliders: colliders || [],
+                        navigationScope: { roomId: 'bedroom' },
                         state: STATES.IDLE,
                         disableSitting: false,
                         lastStoodFromFurnitureWaypointName: null,
@@ -619,15 +623,10 @@ function updateIdle(cd, delta) {
         const avail = cd.waypoints.filter(w => canChooseWaypoint(cd, w));
         if (avail.length === 0) return;
         const target = avail[Math.floor(Math.random() * avail.length)];
-        cd.walkEnd.copy(target.position);
-        cd.walkStart.copy(cd.root.position);
-        cd.walkStart.y = cd.baseY;
-        cd.walkProgress = 0;
-        cd.walkCycle = 0;
-        cd.walkBlend = 0;
-        cd.targetWaypoint = target;
-        cd.state = STATES.WALKING;
-        cd.stateTimer = 0;
+        if (!beginWalkToWaypoint(cd, target)) {
+            cd.stateTimer = 0;
+            cd.idleDuration = 1.5;
+        }
     }
 }
 
@@ -657,6 +656,230 @@ function checkCollision(cd, pos) {
     return false;
 }
 
+function getWaypointPosition(cd, waypoint) {
+    if (!waypoint?.position) return null;
+    const sitApproach = waypoint.isFurniture ? getSitApproachPosition(waypoint) : null;
+    if (sitApproach) {
+        sitApproach.y = cd.baseY;
+        return sitApproach;
+    }
+    const pos = waypoint.position.clone ? waypoint.position.clone() : new THREE.Vector3(
+        Number(waypoint.position.x) || 0,
+        Number(waypoint.position.y) || 0,
+        Number(waypoint.position.z) || 0
+    );
+    pos.y = cd.baseY;
+    return pos;
+}
+
+function getPathBounds(cd, start, target) {
+    const bounds = cd.navigationScope?.bounds;
+    const margin = 0.32;
+    if (bounds?.min && bounds?.max) {
+        return {
+            minX: bounds.min.x + margin,
+            maxX: bounds.max.x - margin,
+            minZ: bounds.min.z + margin,
+            maxZ: bounds.max.z - margin
+        };
+    }
+    return {
+        minX: Math.min(start.x, target.x) - 3,
+        maxX: Math.max(start.x, target.x) + 3,
+        minZ: Math.min(start.z, target.z) - 3,
+        maxZ: Math.max(start.z, target.z) + 3
+    };
+}
+
+function isSegmentClear(cd, start, end) {
+    const distance = start.distanceTo(end);
+    const steps = Math.max(1, Math.ceil(distance / PATH_SAMPLE_STEP));
+    const sample = new THREE.Vector3();
+    for (let i = 1; i <= steps; i++) {
+        sample.lerpVectors(start, end, i / steps);
+        sample.y = cd.baseY;
+        if (checkCollision(cd, sample)) return false;
+    }
+    return true;
+}
+
+function simplifyPath(cd, start, points) {
+    if (points.length <= 1) return points;
+    const result = [];
+    let anchor = start.clone();
+    let index = 0;
+
+    while (index < points.length) {
+        let best = index;
+        for (let i = points.length - 1; i >= index; i--) {
+            if (isSegmentClear(cd, anchor, points[i])) {
+                best = i;
+                break;
+            }
+        }
+        const next = points[best].clone();
+        result.push(next);
+        anchor = next;
+        index = best + 1;
+    }
+    return result;
+}
+
+function findNearestFreeCell(cell, isBlocked, width, depth) {
+    if (!isBlocked(cell.x, cell.z)) return cell;
+    for (let radius = 1; radius <= 4; radius++) {
+        let best = null;
+        let bestDist = Infinity;
+        for (let dz = -radius; dz <= radius; dz++) {
+            for (let dx = -radius; dx <= radius; dx++) {
+                if (Math.abs(dx) !== radius && Math.abs(dz) !== radius) continue;
+                const x = cell.x + dx;
+                const z = cell.z + dz;
+                if (x < 0 || z < 0 || x >= width || z >= depth || isBlocked(x, z)) continue;
+                const dist = dx * dx + dz * dz;
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    best = { x, z };
+                }
+            }
+        }
+        if (best) return best;
+    }
+    return null;
+}
+
+function buildPathAroundColliders(cd, start, target) {
+    if (isSegmentClear(cd, start, target)) return [target.clone()];
+
+    const bounds = getPathBounds(cd, start, target);
+    const width = Math.max(2, Math.floor((bounds.maxX - bounds.minX) / PATH_GRID_STEP) + 1);
+    const depth = Math.max(2, Math.floor((bounds.maxZ - bounds.minZ) / PATH_GRID_STEP) + 1);
+    if (width * depth > PATH_MAX_NODES) return null;
+
+    const clampIndex = (value, max) => Math.max(0, Math.min(max - 1, value));
+    const toCell = (pos) => ({
+        x: clampIndex(Math.round((pos.x - bounds.minX) / PATH_GRID_STEP), width),
+        z: clampIndex(Math.round((pos.z - bounds.minZ) / PATH_GRID_STEP), depth)
+    });
+    const toPos = (x, z) => new THREE.Vector3(
+        bounds.minX + x * PATH_GRID_STEP,
+        cd.baseY,
+        bounds.minZ + z * PATH_GRID_STEP
+    );
+    const keyOf = (x, z) => `${x},${z}`;
+    const isBlocked = (x, z) => checkCollision(cd, toPos(x, z));
+    const startCell = toCell(start);
+    const preferredGoalCell = toCell(target);
+    const goalCell = findNearestFreeCell(preferredGoalCell, isBlocked, width, depth);
+    if (!goalCell) return null;
+
+    const open = [{
+        x: startCell.x,
+        z: startCell.z,
+        key: keyOf(startCell.x, startCell.z),
+        f: 0,
+        g: 0
+    }];
+    const cameFrom = new Map();
+    const gScore = new Map([[open[0].key, 0]]);
+    const closed = new Set();
+    const dirs = [
+        [1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1],
+        [1, 1, Math.SQRT2], [1, -1, Math.SQRT2], [-1, 1, Math.SQRT2], [-1, -1, Math.SQRT2]
+    ];
+    const heuristic = (x, z) => Math.hypot(goalCell.x - x, goalCell.z - z);
+
+    while (open.length > 0) {
+        open.sort((a, b) => a.f - b.f);
+        const current = open.shift();
+        if (!current || closed.has(current.key)) continue;
+        if (current.x === goalCell.x && current.z === goalCell.z) {
+            const cells = [];
+            let key = current.key;
+            while (key) {
+                const [x, z] = key.split(',').map(Number);
+                cells.push({ x, z });
+                key = cameFrom.get(key);
+            }
+            cells.reverse();
+            const points = cells.slice(1).map(cell => toPos(cell.x, cell.z));
+            const lastPoint = points[points.length - 1];
+            if (!lastPoint || (isSegmentClear(cd, lastPoint, target) && !checkCollision(cd, target))) {
+                points.push(target.clone());
+            }
+            return simplifyPath(cd, start, points);
+        }
+
+        closed.add(current.key);
+        for (const [dx, dz, moveCost] of dirs) {
+            const nx = current.x + dx;
+            const nz = current.z + dz;
+            if (nx < 0 || nz < 0 || nx >= width || nz >= depth) continue;
+            const nextKey = keyOf(nx, nz);
+            if (closed.has(nextKey)) continue;
+            if (!(nx === startCell.x && nz === startCell.z) && isBlocked(nx, nz)) continue;
+            if (dx !== 0 && dz !== 0 && (isBlocked(current.x + dx, current.z) || isBlocked(current.x, current.z + dz))) continue;
+
+            const tentativeG = (gScore.get(current.key) ?? Infinity) + moveCost;
+            if (tentativeG >= (gScore.get(nextKey) ?? Infinity)) continue;
+            cameFrom.set(nextKey, current.key);
+            gScore.set(nextKey, tentativeG);
+            open.push({
+                x: nx,
+                z: nz,
+                key: nextKey,
+                g: tentativeG,
+                f: tentativeG + heuristic(nx, nz)
+            });
+        }
+    }
+
+    return null;
+}
+
+function startWalkSegment(cd, waypoint, end) {
+    cd.walkEnd.copy(end);
+    cd.walkStart.copy(cd.root.position);
+    cd.walkStart.y = cd.baseY;
+    cd.walkProgress = 0;
+    cd.walkCycle = 0;
+    cd.walkBlend = 0;
+    cd.walkClipping = false;
+    cd.targetWaypoint = waypoint;
+    cd.state = STATES.WALKING;
+    cd.stateTimer = 0;
+    return true;
+}
+
+function beginWalkToWaypoint(cd, waypoint) {
+    const targetPos = getWaypointPosition(cd, waypoint);
+    if (!targetPos) return false;
+    const startPos = cd.root.position.clone();
+    startPos.y = cd.baseY;
+    const targetWaypoint = {
+        ...waypoint,
+        position: targetPos.clone()
+    };
+    const path = waypoint.ignoreCollision
+        ? [targetPos]
+        : buildPathAroundColliders(cd, startPos, targetPos);
+    // If grid routing fails at a collider edge, keep the character moving.
+    // A short visual clip is preferable to getting stuck forever.
+    const safePath = path && path.length > 0 ? path : [targetPos];
+    const finalPath = safePath.map(point => point.clone ? point.clone() : point);
+    const lastPathPoint = finalPath[finalPath.length - 1];
+    if (
+        waypoint.isFurniture
+        && waypoint.sitCollider
+        && lastPathPoint
+        && lastPathPoint.distanceTo(targetPos) > 0.03
+    ) {
+        finalPath.push(targetPos.clone());
+    }
+    cd.walkPathQueue = finalPath.slice(1).map(point => point.clone());
+    return startWalkSegment(cd, targetWaypoint, finalPath[0]);
+}
+
 function updateWalking(cd, delta) {
     const dist = cd.walkStart.distanceTo(cd.walkEnd);
     if (dist < 0.05) { finishWalking(cd); return; }
@@ -673,10 +896,7 @@ function updateWalking(cd, delta) {
     const t = cd.walkProgress;
     const newPos = new THREE.Vector3().lerpVectors(cd.walkStart, cd.walkEnd, t);
     newPos.y = cd.baseY;
-    if (checkCollision(cd, newPos)) {
-        finishWalking(cd);
-        return;
-    }
+    cd.walkClipping = checkCollision(cd, newPos);
     cd.root.position.copy(newPos);
     const dir = new THREE.Vector3().subVectors(cd.walkEnd, cd.walkStart);
     dir.y = 0;
@@ -690,6 +910,14 @@ function updateWalking(cd, delta) {
 function finishWalking(cd) {
     cd.walkBlend = 0;
     const t = cd.targetWaypoint;
+    const nextPathPoint = Array.isArray(cd.walkPathQueue)
+        ? cd.walkPathQueue.shift()
+        : null;
+    if (nextPathPoint && t) {
+        startWalkSegment(cd, t, nextPathPoint);
+        return;
+    }
+    cd.walkPathQueue = null;
     if (!t) {
         cd.state = STATES.IDLE;
         cd.idleDuration = randomRange(IDLE_MIN, IDLE_MAX);
@@ -698,6 +926,24 @@ function finishWalking(cd) {
         return;
     }
     cd.currentWaypoint = t;
+    const nextTransitionWaypoint = Array.isArray(cd.roomTransitionQueue)
+        ? cd.roomTransitionQueue.shift()
+        : null;
+    if (nextTransitionWaypoint) {
+        if (beginWalkToWaypoint(cd, nextTransitionWaypoint)) return;
+        cd.roomTransitionQueue = null;
+    }
+    if (t.isDynamicDreamFurniture && typeof document !== 'undefined') {
+        document.dispatchEvent(new CustomEvent('fritia-dream-furniture-visited', {
+            detail: {
+                furnitureId: t.furnitureId,
+                name: t.furnitureName,
+                description: t.furnitureDescription,
+                category: t.category,
+                dialogueTags: t.dialogueTags || []
+            }
+        }));
+    }
     if (t.isFurniture && !cd.disableSitting) {
         if (isPostStandCooldownActive(cd)) {
             cd.state = STATES.IDLE;
@@ -706,7 +952,7 @@ function finishWalking(cd) {
             applyIdlePose(cd);
             return;
         }
-        cd.turnTarget = cd.faceDirection + Math.PI;
+        cd.turnTarget = getFurnitureSitPose(cd, t)?.faceDirection ?? cd.faceDirection + Math.PI;
         cd.turnStart = cd.faceDirection;
         cd.state = STATES.TURNING_TO_SIT;
         cd.transitionProgress = 0;
@@ -735,23 +981,97 @@ function isPostStandCooldownActive(cd) {
 
 const SIT_DROP = 0.35;
 const BED_SIT_RAISE = 0.08;
+const SIT_APPROACH_GAP = 0.15;
+
+function getSitApproachPosition(waypoint) {
+    const box = waypoint?.sitCollider;
+    if (!box?.min || !box?.max) return null;
+    const source = waypoint.position || {};
+    const x = Number(source.x) || 0;
+    const z = Number(source.z) || 0;
+    if (waypoint.furnitureType === 'bed') {
+        return new THREE.Vector3(
+            box.max.x + SIT_APPROACH_GAP,
+            0,
+            Math.max(box.min.z + 0.25, Math.min(box.max.z - 0.25, z))
+        );
+    }
+    if (waypoint.furnitureType === 'chair') {
+        return new THREE.Vector3(
+            Math.max(box.min.x + 0.12, Math.min(box.max.x - 0.12, x)),
+            0,
+            box.max.z + SIT_APPROACH_GAP
+        );
+    }
+    return null;
+}
+
+function getFurnitureSitPose(cd, waypoint) {
+    const box = waypoint?.sitCollider;
+    if (!box?.min || !box?.max || !cd?.root) return null;
+
+    const pos = cd.root.position;
+    const centerX = (box.min.x + box.max.x) * 0.5;
+    const centerZ = (box.min.z + box.max.z) * 0.5;
+    const clampedX = Math.max(box.min.x, Math.min(box.max.x, pos.x));
+    const clampedZ = Math.max(box.min.z, Math.min(box.max.z, pos.z));
+    let candidates = [
+        { edge: 'minX', distance: Math.abs(pos.x - box.min.x), x: box.min.x, z: clampedZ, normalX: -1, normalZ: 0 },
+        { edge: 'maxX', distance: Math.abs(pos.x - box.max.x), x: box.max.x, z: clampedZ, normalX: 1, normalZ: 0 },
+        { edge: 'minZ', distance: Math.abs(pos.z - box.min.z), x: clampedX, z: box.min.z, normalX: 0, normalZ: -1 },
+        { edge: 'maxZ', distance: Math.abs(pos.z - box.max.z), x: clampedX, z: box.max.z, normalX: 0, normalZ: 1 }
+    ];
+    if (waypoint.furnitureType === 'bed') {
+        candidates = candidates.filter(candidate => candidate.edge === 'maxX');
+    } else if (waypoint.furnitureType === 'chair') {
+        candidates = candidates.filter(candidate => candidate.edge === 'maxZ');
+    }
+    candidates.sort((a, b) => a.distance - b.distance);
+
+    const best = candidates[0];
+    const edgeInset = waypoint.furnitureType === 'chair' ? 0.3 : 0.26;
+    const outside = SIT_APPROACH_GAP;
+    const sitX = best.x - best.normalX * edgeInset;
+    const sitZ = best.z - best.normalZ * edgeInset;
+    const startX = best.x + best.normalX * outside;
+    const startZ = best.z + best.normalZ * outside;
+    const faceDirection = Math.atan2(best.normalX, best.normalZ);
+
+    return {
+        startX,
+        startZ,
+        sitEndX: sitX,
+        sitEndZ: sitZ,
+        sitEndY: cd.baseY - SIT_DROP + (waypoint.furnitureType === 'bed' ? BED_SIT_RAISE : 0),
+        faceDirection
+    };
+}
 
 function updateTurningToSit(cd, delta) {
     const TURN_DURATION = 0.8;
     cd.transitionProgress += delta / TURN_DURATION;
     if (cd.transitionProgress >= 1) {
-        cd.faceDirection = cd.turnTarget;
-        cd.root.rotation.y = cd.faceDirection;
-        
-        const BACK_OFFSET = 0.4;
-        const isBed = cd.currentWaypoint?.furnitureType === 'bed';
-        cd.sitStartX = cd.root.position.x;
-        cd.sitStartZ = cd.root.position.z;
-        cd.sitEndX = cd.root.position.x - Math.sin(cd.faceDirection) * BACK_OFFSET;
-        cd.sitEndZ = cd.root.position.z - Math.cos(cd.faceDirection) * BACK_OFFSET;
-        
+        const sitPose = getFurnitureSitPose(cd, cd.currentWaypoint);
+        if (sitPose) {
+            cd.faceDirection = sitPose.faceDirection;
+            cd.root.rotation.y = cd.faceDirection;
+            cd.sitStartX = cd.root.position.x;
+            cd.sitStartZ = cd.root.position.z;
+            cd.sitEndX = sitPose.sitEndX;
+            cd.sitEndZ = sitPose.sitEndZ;
+            cd.sitEndY = sitPose.sitEndY;
+        } else {
+            cd.faceDirection = cd.turnTarget;
+            cd.root.rotation.y = cd.faceDirection;
+            const BACK_OFFSET = 0.4;
+            const isBed = cd.currentWaypoint?.furnitureType === 'bed';
+            cd.sitStartX = cd.root.position.x;
+            cd.sitStartZ = cd.root.position.z;
+            cd.sitEndX = cd.root.position.x - Math.sin(cd.faceDirection) * BACK_OFFSET;
+            cd.sitEndZ = cd.root.position.z - Math.cos(cd.faceDirection) * BACK_OFFSET;
+            cd.sitEndY = cd.baseY - SIT_DROP + (isBed ? BED_SIT_RAISE : 0);
+        }
         cd.sitStartY = cd.root.position.y;
-        cd.sitEndY = cd.baseY - SIT_DROP + (isBed ? BED_SIT_RAISE : 0);
         cd.sitStart = capturePose(cd);
         applySittingPose(cd);
         cd.sitEnd = capturePose(cd);
@@ -820,15 +1140,12 @@ function updateStandTransition(cd, delta) {
         const avail = cd.waypoints.filter(w => canChooseWaypoint(cd, w));
         if (avail.length > 0) {
             const target = avail[Math.floor(Math.random() * avail.length)];
-            cd.walkEnd.copy(target.position);
-            cd.walkStart.copy(cd.root.position);
-            cd.walkStart.y = cd.baseY;
-            cd.walkProgress = 0;
-            cd.walkCycle = 0;
-            cd.walkBlend = 0;
-            cd.targetWaypoint = target;
-            cd.state = STATES.WALKING;
-            cd.stateTimer = 0;
+            if (!beginWalkToWaypoint(cd, target)) {
+                cd.state = STATES.IDLE;
+                cd.stateTimer = 0;
+                cd.idleDuration = randomRange(IDLE_MIN, IDLE_MAX);
+                cd.currentWaypoint = null;
+            }
         } else {
             cd.state = STATES.IDLE;
             cd.stateTimer = 0;
@@ -855,6 +1172,8 @@ export function forceStandUp(cd) {
     cd.prevState = STATES.IDLE;
     cd.currentWaypoint = null;
     cd.targetWaypoint = null;
+    cd.roomTransitionQueue = null;
+    cd.walkPathQueue = null;
     cd.transitionProgress = 0;
     cd.walkProgress = 0;
     cd.walkBlend = 0;
@@ -873,6 +1192,63 @@ export function setSittingEnabled(cd, enabled) {
     if (!cd) return;
     cd.disableSitting = !enabled;
     if (!enabled) forceStandUp(cd);
+}
+
+export function setCharacterNavigationScope(cd, scope = {}) {
+    if (!cd) return;
+    forceStandUp(cd);
+    cd.waypoints = Array.isArray(scope.waypoints) ? scope.waypoints : [];
+    cd.colliders = Array.isArray(scope.colliders) ? scope.colliders : [];
+    cd.navigationScope = {
+        roomId: scope.roomId || '',
+        bounds: scope.bounds || null
+    };
+    cd.lastStoodFromFurnitureWaypointName = null;
+    cd.currentWaypoint = null;
+    cd.targetWaypoint = null;
+    cd.walkPathQueue = null;
+    cd.walkProgress = 0;
+    cd.walkBlend = 0;
+    cd.stateTimer = 0;
+    cd.idleDuration = 1.0;
+    cd.state = STATES.IDLE;
+    applyIdlePose(cd);
+    forceUpdate(cd);
+}
+
+export function moveCharacterToWaypoint(cd, waypoint, options = {}) {
+    if (!cd?.root || !waypoint?.position) return false;
+    forceStandUp(cd);
+    const nextWaypoints = Array.isArray(options.nextWaypoints) ? options.nextWaypoints : [];
+    cd.roomTransitionQueue = nextWaypoints.map(item => ({
+        ...item,
+        isRoomTransition: true,
+        isDynamicDreamFurniture: false
+    }));
+    const ok = beginWalkToWaypoint(cd, {
+        ...waypoint,
+        isRoomTransition: true,
+        isDynamicDreamFurniture: false
+    });
+    if (!ok) cd.roomTransitionQueue = null;
+    return ok;
+}
+
+export function forceCharacterIntoRoom(cd, roomId, spawnPosition) {
+    if (!cd?.root || !spawnPosition) return;
+    forceStandUp(cd);
+    cd.root.position.set(spawnPosition.x, cd.baseY, spawnPosition.z);
+    cd.root.rotation.y = Number.isFinite(spawnPosition.rotationY) ? spawnPosition.rotationY : cd.root.rotation.y;
+    cd.faceDirection = cd.root.rotation.y;
+    cd.navigationScope = {
+        ...(cd.navigationScope || {}),
+        roomId: roomId || cd.navigationScope?.roomId || ''
+    };
+    cd.currentWaypoint = null;
+    cd.targetWaypoint = null;
+    cd.stateTimer = 0;
+    applyIdlePose(cd);
+    forceUpdate(cd);
 }
 
 export function getCharacterPosition(cd) {

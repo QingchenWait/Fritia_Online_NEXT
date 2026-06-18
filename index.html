@@ -71,6 +71,36 @@
             按 <kbd>E</kbd> 更换挂画
         </div>
         <div id="achievement-toast-host"></div>
+        <div id="dream-object-controls" class="hidden">
+            <button class="dream-object-btn move-up" id="dream-object-move-forward" title="向前移动">
+                <img src="src/_logos/dream_arrow_up.svg" alt="">
+            </button>
+            <button class="dream-object-btn move-left" id="dream-object-move-left" title="向左移动">
+                <img src="src/_logos/dream_arrow_left.svg" alt="">
+            </button>
+            <button class="dream-object-btn move-right" id="dream-object-move-right" title="向右移动">
+                <img src="src/_logos/dream_arrow_right.svg" alt="">
+            </button>
+            <button class="dream-object-btn move-down" id="dream-object-move-back" title="向后移动">
+                <img src="src/_logos/dream_arrow_down.svg" alt="">
+            </button>
+            <button class="dream-object-btn rotate-left" id="dream-object-rotate-left" title="左转 15 度">
+                <img src="src/_logos/dream_rotate_left.svg" alt="">
+            </button>
+            <button class="dream-object-btn rotate-right" id="dream-object-rotate-right" title="右转 15 度">
+                <img src="src/_logos/dream_rotate_right.svg" alt="">
+            </button>
+            <button class="dream-object-btn delete" id="dream-object-delete" title="删除家具">
+                <img src="src/_logos/dream_trash.svg" alt="">
+            </button>
+            <button class="dream-object-btn edit" id="dream-object-edit" title="编辑家具">
+                <img src="src/_logos/dream_edit.svg" alt="">
+            </button>
+            <button class="dream-object-btn confirm" id="dream-object-close" title="确认并退出家具管理">
+                <img src="src/_logos/dream_confirm.svg" alt="">
+            </button>
+        </div>
+        <div id="dream-screen-toast" class="hidden" aria-live="polite"></div>
         <div id="click-to-play" class="hidden">
             点击屏幕进入操作模式
         </div>
@@ -262,6 +292,116 @@
         </div>
     </div>
 
-    <script type="module" src="js/main.js?v=20260618-gift-stream"></script>
+    <div id="dream-terminal-panel" class="hidden">
+        <div class="dream-shell">
+            <div class="dream-titlebar">
+                <div class="dream-titlemark">
+                    <img src="src/_logos/dream_terminal.svg" alt="">
+                </div>
+                <div class="dream-titlecopy">
+                    <span>DREAM FABRICATOR</span>
+                    <h2>造梦-家具打造终端</h2>
+                    <p>把一句愿望构建为可触碰、可移动、可命名的房间实体。</p>
+                </div>
+                <div class="dream-title-actions">
+                    <div class="dream-balance-card" id="dream-balance">
+                        <img src="src/_logos/dream_coin.svg" alt="">
+                        <span>余额：500 数据金</span>
+                    </div>
+                    <button id="dream-terminal-close" aria-label="关闭造梦终端">
+                        <img src="src/_logos/dream_close.svg" alt="">
+                    </button>
+                </div>
+            </div>
+            <div class="dream-main">
+                <div class="dream-body">
+                    <section class="dream-wish-console">
+                        <div class="dream-panel-head">
+                            <img src="src/_logos/dream_blueprint.svg" alt="">
+                            <div>
+                                <span>WISH INPUT</span>
+                                <h3>家具愿望</h3>
+                            </div>
+                        </div>
+                        <label for="dream-furniture-description">家具描述</label>
+                        <textarea id="dream-furniture-description" maxlength="520" placeholder="例如：一张适合两个人靠坐的星光阅读沙发，带柔软靠背和淡紫色灯带。"></textarea>
+                        <div class="dream-hint-strip">
+                            <img src="src/_logos/dream_ai_core.svg" alt="">
+                            <span>只会生成安全 JSON 规格，本地用基础几何体构建。</span>
+                        </div>
+                    </section>
+                    <aside class="dream-forge-console">
+                        <div class="dream-panel-head">
+                            <img src="src/_logos/dream_wand.svg" alt="">
+                            <div>
+                                <span>FABRICATION</span>
+                                <h3>打造参数</h3>
+                            </div>
+                        </div>
+                        <div class="dream-compose compact">
+                            <label for="dream-placement-input">摆放位置</label>
+                            <input id="dream-placement-input" type="text" maxlength="120" placeholder="例如：靠窗的右侧，不要挡住门">
+                        </div>
+                        <div class="dream-forge-card">
+                            <div class="dream-forge-price">
+                                <img src="src/_logos/dream_coin.svg" alt="">
+                                <div>
+                                    <span>制造消耗</span>
+                                    <strong>500 数据金</strong>
+                                </div>
+                            </div>
+                            <button id="dream-create-button">
+                                <img src="src/_logos/dream_furniture.svg" alt="">
+                                <span>制造家具</span>
+                            </button>
+                        </div>
+                        <div class="dream-progress-wrap">
+                            <div class="dream-progress-track">
+                                <div id="dream-progress-fill"></div>
+                            </div>
+                            <div id="dream-progress">等待输入家具愿望</div>
+                        </div>
+                        <div id="dream-status" aria-live="polite"></div>
+                    </aside>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="dream-furniture-editor-panel" class="hidden">
+        <div class="dream-editor-shell">
+            <div class="dream-editor-header">
+                <div>
+                    <h3 id="dream-editor-title">梦造家具</h3>
+                    <div id="dream-editor-meta"></div>
+                </div>
+                <button id="dream-editor-close" aria-label="关闭家具编辑">
+                    <img src="src/_logos/dream_close.svg" alt="">
+                </button>
+            </div>
+            <div class="dream-editor-body">
+                <div class="dream-editor-section">
+                    <label for="dream-editor-name">家具名称</label>
+                    <div class="dream-inline-control">
+                        <input id="dream-editor-name" type="text" maxlength="24">
+                        <button id="dream-editor-save-name">保存</button>
+                    </div>
+                </div>
+                <div class="dream-editor-section">
+                    <div class="dream-editor-label">新的摆放位置</div>
+                    <div class="dream-inline-control">
+                        <input id="dream-editor-placement" type="text" maxlength="120" placeholder="输入新的摆放位置">
+                        <button id="dream-editor-auto-place">自动摆放</button>
+                    </div>
+                </div>
+                <div class="dream-editor-actions">
+                    <button id="dream-editor-reset">重置</button>
+                </div>
+                <div id="dream-editor-status" aria-live="polite"></div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="js/main.js?v=20260618-dream-system"></script>
 </body>
 </html>

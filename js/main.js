@@ -2,13 +2,30 @@ import * as THREE from 'three';
 import { initScene } from './scene.js';
 import { createRoom } from './room.js';
 import { initControls } from './controls.js';
-import { loadCharacter, updateCharacter, getCharacterPosition, startInteraction, endInteraction, startWaving, swapModel, applySleepingPose, applyIdlePose, updateBlink, setSittingEnabled } from './character.js';
+import { loadCharacter, updateCharacter, getCharacterPosition, startInteraction, endInteraction, startWaving, swapModel, applySleepingPose, applyIdlePose, updateBlink, setSittingEnabled, setCharacterNavigationScope, forceCharacterIntoRoom, moveCharacterToWaypoint } from './character.js';
 import { initDialogue, showDialogue, hideDialogue, isDialogueVisible, getConversationHistory, importConversationHistory } from './dialogue.js';
 import { initDateDialogue, openDatePanel, closeDatePanel, isDatePanelVisible, getDateConversationHistory, importDateConversationHistory, getDateLocations } from './date_dialogue.js';
 import { initSettings } from './settings.js';
-import { addAffinity, exportGameState, getAffinity, getGameTimeInfo, getMoney, importGameState, initGameState, recordHeadPat, recordModelUsed, updateGameTime } from './game_state.js';
+import { addAffinity, exportGameState, formatGameDateTime, getAffinity, getGameTimeInfo, getMoney, importGameState, initGameState, recordHeadPat, recordModelUsed, updateGameTime } from './game_state.js';
 import { closeGiftCollection, closeGiftTerminal, initGiftSystem, isGiftOverlayVisible, openGiftCollection, openGiftTerminal, renderGiftCollection } from './gift_system.js?v=20260618-gift-stream';
 import { closeAchievementsPanel, evaluateAchievements, exportAchievements, flushStartupAchievementToasts, importAchievements, initAchievements, isAchievementsPanelVisible, refreshAchievementsFromImport } from './achievements.js';
+import {
+    closeDreamFurnitureEditor,
+    closeDreamPanel,
+    exportDreamFurniture,
+    getDreamFurnitureColliders,
+    getDreamFurnitureLabel,
+    getDreamFurnitureWaypoints,
+    getLookingDreamFurniture,
+    importDreamFurniture,
+    initDreamSystem,
+    isDreamOverlayVisible,
+    isLookingAtDreamFurniture,
+    isLookingAtDreamTerminal,
+    openDreamFurnitureEditor,
+    openDreamPanel,
+    refreshDreamFurnitureAfterImport
+} from './dream_system.js';
 
 let scene, camera, renderer;
 let controlsModule, charData;
@@ -21,8 +38,16 @@ let deskMesh;
 let doorMesh;
 let windowMesh;
 let terminalMesh;
+let dreamTerminalMesh;
 let collectionCabinetMesh;
 let bedBlanket;
+let oldRoomBounds;
+let dreamRoomBounds;
+let dreamRoomWaypoints = [];
+let basePlayerColliders = [];
+let bedroomColliders = [];
+let dreamStaticColliders = [];
+let currentPlayerRoomId = 'bedroom';
 let isSleeping = false;
 let sleepCamPos = new THREE.Vector3();
 let sleepCamQuat = new THREE.Quaternion();
@@ -65,7 +90,14 @@ async function init() {
     doorMesh = room.doorMesh;
     windowMesh = room.windowMesh;
     terminalMesh = room.terminalMesh;
+    dreamTerminalMesh = room.dreamTerminalMesh;
     collectionCabinetMesh = room.collectionCabinetMesh;
+    oldRoomBounds = room.oldRoomBounds;
+    dreamRoomBounds = room.dreamRoomBounds;
+    dreamRoomWaypoints = room.dreamRoomWaypoints || [];
+    bedroomColliders = room.colliders || [];
+    dreamStaticColliders = room.dreamRoomColliders || [];
+    basePlayerColliders = room.playerColliders || [];
 
     await new Promise(r => setTimeout(r, 100));
 
@@ -96,6 +128,8 @@ async function init() {
             state: 'idle',
             stateTimer: 0,
             waypoints: room.waypoints,
+            colliders: room.colliders,
+            navigationScope: { roomId: 'bedroom' },
             skeleton: null,
             hasAnimation: false,
             baseY: 0,
@@ -117,6 +151,8 @@ async function init() {
             walkCycle: 0
         };
     }
+    charData.originalBedroomWaypoints = room.waypoints;
+    charData.originalBedroomColliders = room.colliders;
 
     await setLoadingText('初始化控制...');
     setLoadingProgress(90);
@@ -129,7 +165,27 @@ async function init() {
     initSettings();
     initGiftSystem();
     initAchievements();
+    initDreamSystem({
+        scene,
+        camera,
+        controlsModule,
+        dreamTerminalMesh,
+        oldRoomBounds,
+        dreamRoomBounds,
+        doorClearanceZone: room.doorClearanceZone,
+        getGameTimeText: () => formatGameDateTime({ includeYear: true }),
+        getCharacterRoot: () => charData?.root || null,
+        canShowFurnitureDialogue: () => controlsModule?.state?.isLocked
+            && !isSleeping
+            && !isInteracting
+            && !isDialogueVisible()
+            && !isDatePanelVisible()
+            && !isGiftOverlayVisible()
+            && !isDreamOverlayVisible(),
+        onFurnitureChanged: handleDreamFurnitureChanged
+    });
     initPainting();
+    refreshCharacterRoomScope(true);
     updateGameHud(true);
 
     document.addEventListener('keydown', onKeyDown);
@@ -144,8 +200,9 @@ async function init() {
         }
         controlsModule.resumeControlMode();
     });
-    document.addEventListener('fritia-game-state-updated', () => {
+    document.addEventListener('fritia-game-state-updated', (e) => {
         updateGameHud(true);
+        showMoneyToast(e.detail?.moneyDelta || 0);
         renderGiftCollection();
         evaluateAchievements();
     });
@@ -196,6 +253,7 @@ function onKeyDown(e) {
         if (isDialogueVisible()) return;
         if (isDatePanelVisible()) return;
         if (isGiftOverlayVisible()) return;
+        if (isDreamOverlayVisible()) return;
 
         if (isSleeping) {
             petFritiaHead();
@@ -217,9 +275,14 @@ function onKeyDown(e) {
         if (isInteracting || isDialogueVisible()) return;
         if (isDatePanelVisible()) return;
         if (isGiftOverlayVisible()) return;
+        if (isDreamOverlayVisible()) return;
         if (controlsModule && controlsModule.state.isLocked) {
             if (isSleeping) {
                 exitSleepMode();
+            } else if (isLookingAtDreamTerminal(camera)) {
+                openDreamPanel();
+            } else if (isLookingAtDreamFurniture(camera)) {
+                openDreamFurnitureEditor(getLookingDreamFurniture(camera));
             } else if (isLookingAtTerminal()) {
                 openGiftTerminal();
                 controlsModule.releaseControlMode({ resumeOnClose: true });
@@ -240,6 +303,11 @@ function onKeyDown(e) {
     }
 
     if (e.code === 'Escape') {
+        if (isDreamOverlayVisible()) {
+            closeDreamPanel();
+            closeDreamFurnitureEditor();
+            return;
+        }
         if (isGiftOverlayVisible()) {
             closeGiftTerminal();
             closeGiftCollection();
@@ -329,6 +397,20 @@ function showAffinityToast(amount) {
     }, 1200);
 }
 
+function showMoneyToast(amount) {
+    const row = document.getElementById('money-display');
+    if (!row || amount <= 0) return;
+
+    const toast = document.createElement('span');
+    toast.className = 'money-pop';
+    toast.textContent = `+${amount}`;
+    row.appendChild(toast);
+
+    setTimeout(() => {
+        toast.remove();
+    }, 1200);
+}
+
 function showSalaryToast(amount) {
     const el = document.getElementById('salary-toast');
     if (!el) return;
@@ -341,6 +423,70 @@ function showSalaryToast(amount) {
     showSalaryToast.timer = setTimeout(() => {
         el.classList.add('hidden');
     }, 2800);
+}
+
+function handleDreamFurnitureChanged() {
+    const dynamicColliders = getDreamFurnitureColliders();
+    if (controlsModule) {
+        controlsModule.setColliders([...basePlayerColliders, ...dynamicColliders]);
+    }
+    if (charData && currentPlayerRoomId === 'dream') {
+        charData.waypoints = [...dreamRoomWaypoints, ...getDreamFurnitureWaypoints()];
+        charData.colliders = [...dreamStaticColliders, ...dynamicColliders];
+    }
+}
+
+function getRoomIdForPosition(position) {
+    if (dreamRoomBounds
+        && position.x >= dreamRoomBounds.min.x - 0.05
+        && position.x <= dreamRoomBounds.max.x + 0.05
+        && position.z >= dreamRoomBounds.min.z - 0.05
+        && position.z <= dreamRoomBounds.max.z + 0.05) {
+        return 'dream';
+    }
+    return 'bedroom';
+}
+
+function refreshCharacterRoomScope(force = false) {
+    if (!charData || !oldRoomBounds || !dreamRoomBounds) return;
+    const roomId = getRoomIdForPosition(camera.position);
+    if (!force && roomId === currentPlayerRoomId) return;
+    currentPlayerRoomId = roomId;
+
+    if (roomId === 'dream') {
+        const waypoints = [...dreamRoomWaypoints, ...getDreamFurnitureWaypoints()];
+        const charPos = getCharacterPosition(charData);
+        setCharacterNavigationScope(charData, {
+            roomId: 'dream',
+            bounds: dreamRoomBounds,
+            waypoints,
+            colliders: [...dreamStaticColliders, ...getDreamFurnitureColliders()]
+        });
+        if (getRoomIdForPosition(charPos) !== 'dream') {
+            const walked = !force && moveCharacterToWaypoint(
+                charData,
+                { name: 'bedroom_to_dream_door', roomId: 'bedroom', position: new THREE.Vector3(2.35, 0, 0.65), isFurniture: false, ignoreCollision: true },
+                { nextWaypoints: [{ name: 'dream_entry_follow', roomId: 'dream', position: new THREE.Vector3(4.35, 0, 0.65), isFurniture: false, ignoreCollision: true }] }
+            );
+            if (!walked) forceCharacterIntoRoom(charData, 'dream', { x: 4.35, z: 0.65, rotationY: Math.PI / 2 });
+        }
+    } else {
+        const charPos = getCharacterPosition(charData);
+        setCharacterNavigationScope(charData, {
+            roomId: 'bedroom',
+            bounds: oldRoomBounds,
+            waypoints: charData.originalBedroomWaypoints || charData.waypoints || [],
+            colliders: bedroomColliders
+        });
+        if (getRoomIdForPosition(charPos) !== 'bedroom') {
+            const walked = !force && moveCharacterToWaypoint(
+                charData,
+                { name: 'dream_to_bedroom_door', roomId: 'dream', position: new THREE.Vector3(4.35, 0, 0.65), isFurniture: false, ignoreCollision: true },
+                { nextWaypoints: [{ name: 'bedroom_entry_follow', roomId: 'bedroom', position: new THREE.Vector3(1.6, 0, 0.35), isFurniture: false, ignoreCollision: true }] }
+            );
+            if (!walked) forceCharacterIntoRoom(charData, 'bedroom', { x: 1.6, z: 0.35, rotationY: -Math.PI / 2 });
+        }
+    }
 }
 
 function updateWindowSky() {
@@ -391,6 +537,7 @@ function animate() {
 
     if (charData) {
         if (!isSleeping) {
+            refreshCharacterRoomScope();
             updateCharacter(charData, delta);
         }
         updateInteractionPrompt();
@@ -402,7 +549,7 @@ function animate() {
 function updateInteractionPrompt() {
     const prompt = document.getElementById('interaction-prompt');
     const paintingPrompt = document.getElementById('painting-prompt');
-    if (isSleeping || isInteracting || isDialogueVisible() || isDatePanelVisible() || isGiftOverlayVisible()) {
+    if (isSleeping || isInteracting || isDialogueVisible() || isDatePanelVisible() || isGiftOverlayVisible() || isDreamOverlayVisible()) {
         prompt.classList.add('hidden');
         if (paintingPrompt) paintingPrompt.classList.add('hidden');
         return;
@@ -430,9 +577,18 @@ function updateInteractionPrompt() {
         const lookBed = isLookingAtBed();
         const lookDesk = isLookingAtDesk();
         const lookDoor = isLookingAtDoor();
+        const lookDreamTerminal = isLookingAtDreamTerminal(camera);
+        const lookDreamFurniture = isLookingAtDreamFurniture(camera);
         const lookTerminal = isLookingAtTerminal();
         const lookCollectionCabinet = isLookingAtCollectionCabinet();
-        if (lookTerminal) {
+        if (lookDreamTerminal) {
+            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 打开造梦终端';
+            paintingPrompt.classList.remove('hidden');
+        } else if (lookDreamFurniture) {
+            const furnitureName = getDreamFurnitureLabel(getLookingDreamFurniture(camera));
+            paintingPrompt.innerHTML = `按 <kbd>E</kbd> 管理 [${furnitureName}]`;
+            paintingPrompt.classList.remove('hidden');
+        } else if (lookTerminal) {
             paintingPrompt.innerHTML = '按 <kbd>E</kbd> 打开购物终端';
             paintingPrompt.classList.remove('hidden');
         } else if (lookCollectionCabinet) {
@@ -1077,6 +1233,7 @@ function exportData() {
         stats: gameState.stats,
         achievements: exportAchievements(),
         gifts: gameState.gifts,
+        dreamFurniture: exportDreamFurniture(),
         settings: JSON.parse(localStorage.getItem('fritia-settings') || '{}'),
         conversations: getConversationHistory(),
         dateConversations: getDateConversationHistory()
@@ -1114,11 +1271,13 @@ function handleImportFile(e) {
                 importDateConversationHistory(data.dateConversations);
             }
             const importResult = importGameState(data, { suppressEvent: true });
+            const dreamImport = importDreamFurniture(data.dreamFurniture || data.gameState?.dreamFurniture || []);
             importAchievements(data.achievements);
             refreshAchievementsFromImport();
+            refreshDreamFurnitureAfterImport();
             updateGameHud(true);
             renderGiftCollection();
-            alert(`导入成功！礼物同步新增 ${importResult.giftsAdded || 0} 条。刷新页面以应用设置。`);
+            alert(`导入成功！礼物同步新增 ${importResult.giftsAdded || 0} 条，造梦家具新增 ${dreamImport.added || 0} 件，跳过 ${dreamImport.skipped || 0} 件。刷新页面以应用设置。`);
         } catch (err) {
             alert('导入失败：文件格式不正确');
             console.error('Import error:', err);

@@ -326,6 +326,19 @@ export function spendMoney(amount) {
     return true;
 }
 
+export function addMoney(amount, reason = '') {
+    const value = Math.max(0, Math.round(amount));
+    if (value <= 0) return false;
+    state.money += value;
+    saveState();
+    if (typeof document !== 'undefined') {
+        document.dispatchEvent(new CustomEvent('fritia-game-state-updated', {
+            detail: { moneyDelta: value, reason }
+        }));
+    }
+    return true;
+}
+
 export function addGift(gift) {
     const normalized = normalizeGift(gift);
     if (!normalized) return null;
@@ -388,6 +401,7 @@ export function exportGameState() {
             value: state.affinity
         },
         stats: getStats(),
+        dreamFurniture: readDreamFurnitureSnapshot(),
         gifts: getGifts()
     };
 }
@@ -453,6 +467,15 @@ function deriveStatsFromCurrentData() {
     state.stats.usedModelPaths = [...new Set([...state.stats.usedModelPaths, DEFAULT_MODELS[0]])];
     const fiveStarCount = state.gifts.filter(gift => Number(gift.score) >= 5).length;
     state.stats.fiveStarGiftCount = Math.max(state.stats.fiveStarGiftCount, fiveStarCount);
+}
+
+function readDreamFurnitureSnapshot() {
+    try {
+        const data = JSON.parse(localStorage.getItem('fritia_dream_furniture') || '[]');
+        return Array.isArray(data) ? data : [];
+    } catch {
+        return [];
+    }
 }
 
 function parseAffinityValue(value, fallback) {

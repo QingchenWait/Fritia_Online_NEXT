@@ -157,6 +157,11 @@ body {
 }
 
 #money-display {
+    position: relative;
+    display: flex;
+    width: fit-content;
+    align-items: center;
+    gap: 6px;
     margin-top: 4px;
     font-size: 0.82rem;
     color: rgba(210, 235, 255, 0.86);
@@ -164,7 +169,8 @@ body {
 
 #affinity-display {
     position: relative;
-    display: inline-flex;
+    display: flex;
+    width: fit-content;
     align-items: center;
     gap: 6px;
     margin-top: 4px;
@@ -180,6 +186,18 @@ body {
     font-weight: 700;
     white-space: nowrap;
     text-shadow: 0 0 8px rgba(255, 95, 143, 0.55);
+    pointer-events: none;
+    animation: affinity-pop 1.15s ease-out forwards;
+}
+
+.money-pop {
+    position: absolute;
+    left: calc(100% + 10px);
+    top: 0;
+    color: #ffd66b;
+    font-weight: 700;
+    white-space: nowrap;
+    text-shadow: 0 0 8px rgba(255, 214, 107, 0.5);
     pointer-events: none;
     animation: affinity-pop 1.15s ease-out forwards;
 }
@@ -1698,6 +1716,640 @@ body {
     line-height: 1.6;
 }
 
+/* Dream system */
+#dream-terminal-panel,
+#dream-furniture-editor-panel {
+    position: fixed;
+    inset: 0;
+    z-index: 76;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 18px;
+    background: rgba(0, 0, 0, 0.56);
+    -webkit-backdrop-filter: blur(5px);
+    backdrop-filter: blur(5px);
+}
+
+.dream-shell {
+    width: min(1040px, 94vw);
+    height: min(650px, 88vh);
+    display: grid;
+    grid-template-rows: auto 1fr;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 8px;
+    background: linear-gradient(135deg, rgba(30, 30, 58, 0.98), rgba(17, 20, 34, 0.98));
+    box-shadow: 0 28px 90px rgba(0, 0, 0, 0.52), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.dream-titlebar {
+    display: grid;
+    grid-template-columns: 58px 1fr auto;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 22px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+    background: rgba(255, 255, 255, 0.045);
+}
+
+.dream-titlemark {
+    width: 58px;
+    height: 58px;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.075);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.dream-titlemark img {
+    width: 36px;
+    height: 36px;
+}
+
+.dream-titlecopy h2,
+.dream-panel-head h3,
+.dream-editor-header h3 {
+    margin: 0;
+    letter-spacing: 0.02em;
+    font-weight: 600;
+}
+
+.dream-titlecopy span,
+.dream-panel-head span,
+#dream-editor-meta {
+    margin-top: 4px;
+    color: rgba(255, 255, 255, 0.54);
+    font-size: 0.78rem;
+    line-height: 1.5;
+}
+
+.dream-titlecopy p {
+    margin: 4px 0 0;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.84rem;
+}
+
+.dream-title-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.dream-balance-card {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    padding: 10px 14px;
+    border: 1px solid rgba(253, 230, 138, 0.28);
+    border-radius: 6px;
+    background: rgba(253, 230, 138, 0.09);
+    color: rgba(255, 236, 179, 0.94);
+    font-size: 0.86rem;
+    white-space: nowrap;
+}
+
+.dream-balance-card img {
+    width: 22px;
+    height: 22px;
+}
+
+.dream-main {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.dream-editor-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 20px 26px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+#dream-terminal-close,
+#dream-editor-close,
+.dream-inline-control button,
+.dream-editor-grid button,
+.dream-move-pad button,
+.dream-editor-actions button {
+    min-height: 36px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.82);
+    padding: 8px 14px;
+    font: inherit;
+    cursor: pointer;
+}
+
+#dream-terminal-close,
+#dream-editor-close {
+    width: 40px;
+    height: 40px;
+    min-height: 40px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+}
+
+#dream-terminal-close img,
+#dream-editor-close img {
+    width: 22px;
+    height: 22px;
+    display: block;
+}
+
+#dream-terminal-close:hover,
+#dream-editor-close:hover,
+.dream-inline-control button:hover,
+.dream-editor-grid button:hover,
+.dream-move-pad button:hover,
+.dream-editor-actions button:hover {
+    border-color: rgba(148, 163, 184, 0.58);
+    background: rgba(255, 255, 255, 0.13);
+    color: #fff;
+}
+
+.dream-body {
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 330px;
+    gap: 16px;
+    padding: 18px;
+    overflow-y: auto;
+}
+
+.dream-compose {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.dream-compose label,
+.dream-editor-section label,
+.dream-editor-label {
+    color: rgba(226, 232, 240, 0.86);
+    font-size: 0.78rem;
+    letter-spacing: 0.1em;
+}
+
+.dream-panel-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.dream-panel-head img {
+    width: 38px;
+    height: 38px;
+    border-radius: 6px;
+}
+
+.dream-panel-head h3 {
+    font-size: 1rem;
+}
+
+.dream-wish-console,
+.dream-forge-console {
+    min-width: 0;
+    padding: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.052);
+}
+
+.dream-wish-console {
+    display: flex;
+    flex-direction: column;
+}
+
+.dream-forge-console {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+#dream-furniture-description,
+#dream-placement-input,
+#dream-editor-name,
+#dream-editor-placement {
+    width: 100%;
+    border: 1px solid rgba(255, 255, 255, 0.13);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.075);
+    color: #fff;
+    padding: 13px 14px;
+    font-family: inherit;
+    font-size: 16px;
+    line-height: 1.55;
+    outline: none;
+}
+
+#dream-furniture-description {
+    flex: 1;
+    min-height: 310px;
+    resize: vertical;
+}
+
+#dream-furniture-description:focus,
+#dream-placement-input:focus,
+#dream-editor-name:focus,
+#dream-editor-placement:focus {
+    border-color: rgba(125, 211, 252, 0.58);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.dream-hint-strip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.052);
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.8rem;
+    line-height: 1.45;
+}
+
+.dream-hint-strip img {
+    width: 22px;
+    height: 22px;
+    flex: 0 0 auto;
+}
+
+.dream-forge-card {
+    display: grid;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.16);
+}
+
+.dream-forge-price {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.dream-forge-price img {
+    width: 32px;
+    height: 32px;
+}
+
+.dream-forge-price span {
+    display: block;
+    color: rgba(255, 255, 255, 0.46);
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+}
+
+.dream-forge-price strong {
+    display: block;
+    margin-top: 2px;
+    color: rgba(255, 236, 179, 0.94);
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+#dream-create-button {
+    width: 100%;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    border: none;
+    border-radius: 6px;
+    background: #f8fafc;
+    color: #111827;
+    padding: 11px 18px;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 12px 30px rgba(255, 255, 255, 0.12);
+}
+
+#dream-create-button img {
+    width: 22px;
+    height: 22px;
+}
+
+#dream-create-button:disabled {
+    opacity: 0.58;
+    cursor: wait;
+}
+
+.dream-progress-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.dream-progress-track {
+    height: 6px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+#dream-progress-fill {
+    width: 0;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #7dd3fc, #f8fafc, #fde68a);
+    transition: width 0.24s ease;
+}
+
+#dream-progress,
+#dream-status,
+#dream-editor-status {
+    min-height: 22px;
+    color: rgba(255, 255, 255, 0.62);
+    font-size: 0.86rem;
+    line-height: 1.5;
+}
+
+#dream-status[data-kind="warn"],
+#dream-editor-status[data-kind="warn"] { color: #ffd66b; }
+#dream-status[data-kind="ok"],
+#dream-editor-status[data-kind="ok"] { color: #9be7b3; }
+
+.dream-editor-shell {
+    width: min(700px, 94vw);
+    max-height: 88vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    background: linear-gradient(145deg, rgba(14, 18, 28, 0.98), rgba(26, 26, 38, 0.98));
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.46);
+}
+
+.dream-editor-body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 20px 24px;
+    overflow-y: auto;
+}
+
+#dream-editor-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+}
+
+.dream-editor-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.dream-inline-control {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+}
+
+.dream-editor-grid.two {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.dream-move-pad {
+    width: min(280px, 100%);
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+}
+
+.dream-move-pad button:first-child {
+    grid-column: 2;
+}
+
+.dream-move-pad button:nth-child(2) {
+    grid-column: 1;
+}
+
+.dream-move-pad button:nth-child(3) {
+    grid-column: 3;
+}
+
+.dream-move-pad button:nth-child(4) {
+    grid-column: 2;
+}
+
+.dream-editor-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.dream-editor-actions .danger {
+    border-color: rgba(255, 112, 112, 0.3);
+    background: rgba(255, 112, 112, 0.12);
+    color: #ffb4b4;
+}
+
+#dream-object-controls {
+    position: fixed;
+    inset: 0;
+    z-index: 120;
+    pointer-events: auto;
+    opacity: 1;
+    transition: opacity 0.18s ease;
+    cursor: grab;
+}
+
+#dream-object-controls[data-offscreen="1"] {
+    opacity: 0.22;
+}
+
+.dream-object-btn {
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 50%;
+    background: rgba(248, 250, 252, 0.42);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.42);
+    pointer-events: auto;
+    cursor: pointer;
+    transform: translate(calc(var(--dream-controls-x, 50vw) - 50%), calc(var(--dream-controls-y, 50vh) - 50%));
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.12s ease, box-shadow 0.12s ease;
+}
+
+.dream-object-btn:hover,
+.dream-object-btn:active {
+    background: rgba(248, 250, 252, 0.64);
+    transform: translate(calc(var(--dream-controls-x, 50vw) - 50%), calc(var(--dream-controls-y, 50vh) - 50%)) scale(1.04);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.32), 0 0 0 4px rgba(125, 211, 252, 0.14);
+}
+
+.dream-object-btn img {
+    width: 23px;
+    height: 23px;
+    display: block;
+}
+
+.dream-object-btn.confirm {
+    background: rgba(22, 163, 74, 0.72);
+    border-color: rgba(187, 247, 208, 0.45);
+}
+
+.dream-object-btn.confirm:hover,
+.dream-object-btn.confirm:active {
+    background: rgba(34, 197, 94, 0.86);
+    box-shadow: 0 12px 30px rgba(20, 83, 45, 0.42), 0 0 0 4px rgba(74, 222, 128, 0.16);
+}
+
+.dream-object-btn.delete {
+    background: rgba(220, 38, 38, 0.58);
+    border-color: rgba(254, 202, 202, 0.38);
+}
+
+.dream-object-btn.delete:hover,
+.dream-object-btn.delete:active {
+    background: rgba(239, 68, 68, 0.78);
+    box-shadow: 0 12px 30px rgba(127, 29, 29, 0.42), 0 0 0 4px rgba(248, 113, 113, 0.16);
+}
+
+.dream-object-btn.move-up { left: 0; top: -50px; }
+.dream-object-btn.move-left { left: -50px; top: 0; }
+.dream-object-btn.move-right { left: 50px; top: 0; }
+.dream-object-btn.move-down { left: 0; top: 50px; }
+.dream-object-btn.rotate-left { left: -104px; top: 0; }
+.dream-object-btn.rotate-right { left: 104px; top: 0; }
+.dream-object-btn.delete { left: 184px; top: 0; }
+.dream-object-btn.edit { left: 0; top: 104px; }
+.dream-object-btn.confirm { left: 0; top: 0; }
+
+#dream-screen-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 24%;
+    z-index: 121;
+    max-width: min(560px, calc(100vw - 34px));
+    padding: 11px 18px;
+    border: 1px solid rgba(255, 214, 107, 0.32);
+    border-radius: 999px;
+    background: rgba(18, 18, 22, 0.88);
+    color: rgba(255, 235, 185, 0.96);
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.38);
+    pointer-events: none;
+    text-align: center;
+    font-size: 0.9rem;
+    line-height: 1.45;
+    opacity: 0;
+    transform: translate(-50%, 16px);
+    transition: opacity 0.24s ease, transform 0.24s ease;
+}
+
+#dream-screen-toast.show {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}
+
+.dream-character-bubble {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    z-index: 122;
+    max-width: min(360px, calc(100vw - 32px));
+    padding: 10px 14px;
+    border: 1px solid rgba(138, 247, 255, 0.26);
+    border-radius: 8px;
+    background: rgba(14, 18, 28, 0.88);
+    color: rgba(255, 255, 255, 0.94);
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.36);
+    pointer-events: none;
+    text-align: center;
+    font-size: 0.92rem;
+    line-height: 1.45;
+    opacity: 0;
+    transform: translate(-50%, -100%) translateY(-12px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.dream-character-bubble::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: -7px;
+    width: 12px;
+    height: 12px;
+    transform: translateX(-50%) rotate(45deg);
+    border-right: 1px solid rgba(138, 247, 255, 0.22);
+    border-bottom: 1px solid rgba(138, 247, 255, 0.22);
+    background: rgba(14, 18, 28, 0.88);
+}
+
+.dream-character-bubble.show {
+    opacity: 1;
+    transform: translate(-50%, -100%) translateY(-18px);
+}
+
+.dream-line-toast {
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: min(340px, calc(100vw - 28px));
+    margin-top: 10px;
+    padding: 12px 14px;
+    border: 1px solid rgba(138, 247, 255, 0.22);
+    border-radius: 8px;
+    background: rgba(14, 18, 28, 0.9);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.35);
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.dream-line-toast.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.dream-line-toast img {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid rgba(138, 247, 255, 0.38);
+}
+
+.dream-line-toast strong,
+.dream-line-toast span {
+    display: block;
+}
+
+.dream-line-toast strong {
+    color: rgba(138, 247, 255, 0.9);
+    font-size: 0.76rem;
+    margin-bottom: 3px;
+}
+
+.dream-line-toast span {
+    color: rgba(255, 255, 255, 0.92);
+    line-height: 1.5;
+}
+
 .gift-record-comment {
     margin: 10px 0 0;
     padding: 8px 12px;
@@ -2059,6 +2711,123 @@ body {
     #gift-pay-btn {
         width: 100%;
     }
+
+    .dream-shell {
+        width: 94vw;
+        height: 88vh;
+        grid-template-rows: auto 1fr;
+    }
+
+    .dream-titlebar {
+        grid-template-columns: 42px 1fr 40px;
+        gap: 12px;
+        padding: 14px;
+    }
+
+    .dream-titlemark {
+        width: 42px;
+        height: 42px;
+    }
+
+    .dream-titlemark img {
+        width: 28px;
+        height: 28px;
+    }
+
+    .dream-titlecopy h2 {
+        font-size: 1.05rem;
+    }
+
+    .dream-titlecopy p {
+        display: none;
+    }
+
+    .dream-title-actions {
+        grid-column: 1 / -1;
+        width: 100%;
+        display: grid;
+        grid-template-columns: 1fr 40px;
+        gap: 10px;
+    }
+
+    .dream-balance-card {
+        justify-content: center;
+        padding: 9px 10px;
+        font-size: 0.78rem;
+    }
+
+    .dream-editor-header {
+        flex-direction: row;
+        align-items: flex-start;
+        padding: 16px;
+    }
+
+    .dream-body,
+    .dream-editor-body {
+        padding: 16px;
+    }
+
+    .dream-body {
+        grid-template-columns: 1fr;
+        gap: 12px;
+        overflow-y: auto;
+    }
+
+    #dream-furniture-description {
+        min-height: 190px;
+    }
+
+    .dream-inline-control,
+    .dream-editor-grid.two,
+    .dream-editor-actions {
+        grid-template-columns: 1fr;
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    #dream-create-button,
+    .dream-inline-control button,
+    .dream-editor-grid button,
+    .dream-editor-actions button {
+        width: 100%;
+    }
+
+    #dream-terminal-close {
+        width: 40px;
+    }
+
+    #dream-editor-close { width: 40px; }
+
+    .dream-move-pad {
+        width: 100%;
+    }
+
+    #dream-furniture-description,
+    #dream-placement-input,
+    #dream-editor-name,
+    #dream-editor-placement {
+        font-size: 16px;
+    }
+
+    .dream-object-btn {
+        width: 38px;
+        height: 38px;
+    }
+
+    .dream-object-btn img {
+        width: 22px;
+        height: 22px;
+    }
+
+    .dream-object-btn.move-up { left: 0; top: -46px; }
+    .dream-object-btn.move-left { left: -46px; top: 0; }
+    .dream-object-btn.move-right { left: 46px; top: 0; }
+    .dream-object-btn.move-down { left: 0; top: 46px; }
+    .dream-object-btn.rotate-left { left: -94px; top: 0; }
+    .dream-object-btn.rotate-right { left: 94px; top: 0; }
+    .dream-object-btn.delete { left: 170px; top: 0; }
+    .dream-object-btn.edit { left: 0; top: 94px; }
+    .dream-object-btn.confirm { left: 0; top: 0; }
 }
 
 /* Touch Controls */

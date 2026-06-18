@@ -23,6 +23,7 @@ function supportsPointerLock(domElement) {
 export function initControls(camera, domElement, colliders) {
     const pointerLockSupported = supportsPointerLock(domElement);
     const controls = new PointerLockControls(camera, domElement);
+    const lookEuler = new THREE.Euler(0, 0, 0, 'YXZ');
 
     const state = {
         moveForward: false,
@@ -33,6 +34,7 @@ export function initControls(camera, domElement, colliders) {
         speed: 3.0,
         colliders: colliders,
         isLocked: false,
+        movementLocked: false,
         useTouchControls: isTouchDevice() && (!hasPhysicalKeyboard() || !pointerLockSupported)
     };
 
@@ -45,7 +47,10 @@ export function initControls(camera, domElement, colliders) {
         'date-panel',
         'gift-terminal-panel',
         'gift-collection-panel',
-        'achievements-panel'
+        'achievements-panel',
+        'dream-terminal-panel',
+        'dream-furniture-editor-panel',
+        'dream-object-controls'
     ];
     let resumeAfterOverlay = false;
     let resumeInProgress = false;
@@ -170,8 +175,45 @@ export function initControls(camera, domElement, colliders) {
         return false;
     }
 
+    function resolveCameraCollisions(radius = 0.25) {
+        const camera = controls.object;
+        let moved = false;
+
+        for (let i = 0; i < 8; i++) {
+            let resolvedThisPass = false;
+            for (const box of state.colliders) {
+                if (!(camera.position.x + radius > box.min.x && camera.position.x - radius < box.max.x &&
+                    camera.position.z + radius > box.min.z && camera.position.z - radius < box.max.z &&
+                    1.6 > box.min.y && 0 < box.max.y)) {
+                    continue;
+                }
+
+                const shifts = [
+                    { axis: 'x', value: box.min.x - (camera.position.x + radius) },
+                    { axis: 'x', value: box.max.x - (camera.position.x - radius) },
+                    { axis: 'z', value: box.min.z - (camera.position.z + radius) },
+                    { axis: 'z', value: box.max.z - (camera.position.z - radius) }
+                ].sort((a, b) => Math.abs(a.value) - Math.abs(b.value));
+
+                const shift = shifts[0];
+                camera.position[shift.axis] += shift.value;
+                resolvedThisPass = true;
+                moved = true;
+            }
+            if (!resolvedThisPass) break;
+        }
+
+        camera.position.y = 1.6;
+        return moved;
+    }
+
     function update(delta) {
         if (!state.isLocked) return;
+        if (state.movementLocked) {
+            clearMovementState();
+            controls.object.position.y = 1.6;
+            return;
+        }
 
         state.direction.z = Number(state.moveForward) - Number(state.moveBackward);
         state.direction.x = Number(state.moveRight) - Number(state.moveLeft);
@@ -205,6 +247,38 @@ export function initControls(camera, domElement, colliders) {
         const dx = camPos.x - charPos.x;
         const dz = camPos.z - charPos.z;
         return Math.sqrt(dx * dx + dz * dz) < threshold;
+    }
+
+    function addColliders(colliders) {
+        if (!Array.isArray(colliders)) return;
+        for (const collider of colliders) {
+            if (collider && !state.colliders.includes(collider)) {
+                state.colliders.push(collider);
+            }
+        }
+    }
+
+    function removeColliders(colliders) {
+        if (!Array.isArray(colliders)) return;
+        state.colliders = state.colliders.filter(collider => !colliders.includes(collider));
+    }
+
+    function setColliders(colliders) {
+        state.colliders = Array.isArray(colliders) ? colliders : [];
+    }
+
+    function setMovementLocked(locked) {
+        state.movementLocked = Boolean(locked);
+        clearMovementState();
+    }
+
+    function rotateView(deltaX, deltaY) {
+        const sensitivity = 0.002;
+        lookEuler.setFromQuaternion(controls.object.quaternion);
+        lookEuler.y -= deltaX * sensitivity;
+        lookEuler.x -= deltaY * sensitivity;
+        lookEuler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, lookEuler.x));
+        controls.object.quaternion.setFromEuler(lookEuler);
     }
 
     function blurActiveOverlayElement() {
@@ -283,7 +357,20 @@ export function initControls(camera, domElement, colliders) {
         return requestPointerLockForResume();
     }
 
-    return { controls, state, update, isNearCharacter, releaseControlMode, resumeControlMode };
+    return {
+        controls,
+        state,
+        update,
+        isNearCharacter,
+        addColliders,
+        removeColliders,
+        setColliders,
+        resolveCameraCollisions,
+        setMovementLocked,
+        rotateView,
+        releaseControlMode,
+        resumeControlMode
+    };
 }
 
 function initTouchJoystick(state) {

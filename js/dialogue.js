@@ -1,5 +1,6 @@
 import { getSettings } from './settings.js';
 import { addAffinity, getGameTimeContext, recordDialogueInteraction } from './game_state.js';
+import { getDreamFurnitureDialogueContext } from './dream_system.js';
 
 const HISTORY_KEY = 'fritia_chat_history';
 
@@ -62,7 +63,8 @@ function getContextMessages() {
 }
 
 function buildSystemPrompt() {
-    return `${systemPrompt}\n\n${getGameTimeContext()}`;
+    const furnitureContext = getDreamFurnitureDialogueContext();
+    return `${systemPrompt}\n\n${getGameTimeContext()}${furnitureContext ? `\n\n${furnitureContext}` : ''}`;
 }
 
 function loadHistory() {
