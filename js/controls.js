@@ -302,10 +302,12 @@ export function initControls(camera, domElement, colliders) {
 
         const speed = state.speed * delta;
         const camera = controls.object;
-        const prevPos = camera.position.clone();
+        camera.updateMatrixWorld(true);
+        const prevQuat = camera.quaternion.clone();
         const radius = 0.25;
 
         if (state.moveForward || state.moveBackward) {
+            const prevPos = camera.position.clone();
             controls.moveForward(state.direction.z * speed);
             if (checkCollision(camera.position, radius)) {
                 camera.position.copy(prevPos);
@@ -321,6 +323,7 @@ export function initControls(camera, domElement, colliders) {
         }
 
         camera.position.y = 1.6;
+        camera.quaternion.copy(prevQuat);
     }
 
     function isNearCharacter(charPos, threshold = 2.5) {
@@ -359,6 +362,7 @@ export function initControls(camera, domElement, colliders) {
         lookEuler.x -= deltaY * sensitivity;
         lookEuler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, lookEuler.x));
         controls.object.quaternion.setFromEuler(lookEuler);
+        controls.object.updateMatrixWorld(true);
     }
 
     function rotateView(deltaX, deltaY) {
