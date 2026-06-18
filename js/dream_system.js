@@ -505,10 +505,10 @@ export function initDreamSystem(options) {
     document.getElementById('dream-editor-save-name')?.addEventListener('click', handleRename);
     document.getElementById('dream-editor-auto-place')?.addEventListener('click', handleAutoPlaceEdit);
     document.getElementById('dream-editor-reset')?.addEventListener('click', resetEditingFurniture);
-    bindMoveHold('dream-object-move-forward', 0, -MOVE_STEP);
-    bindMoveHold('dream-object-move-back', 0, MOVE_STEP);
-    bindMoveHold('dream-object-move-left', -MOVE_STEP, 0);
-    bindMoveHold('dream-object-move-right', MOVE_STEP, 0);
+    bindMoveHold('dream-object-move-forward', 'forward');
+    bindMoveHold('dream-object-move-back', 'back');
+    bindMoveHold('dream-object-move-left', 'left');
+    bindMoveHold('dream-object-move-right', 'right');
     document.getElementById('dream-object-edit')?.addEventListener('click', openFurnitureEditPanel);
     document.getElementById('dream-object-close')?.addEventListener('click', closeDreamFurnitureEditor);
     document.getElementById('dream-object-delete')?.addEventListener('click', handleDeleteFurniture);
@@ -549,7 +549,7 @@ function bindObjectLookDrag() {
     els.objectControls.addEventListener('pointercancel', endDrag);
 }
 
-function bindMoveHold(id, dx, dz) {
+function bindMoveHold(id, intent) {
     const btn = document.getElementById(id);
     if (!btn) return;
     let isPressed = false;
@@ -562,10 +562,9 @@ function bindMoveHold(id, dx, dz) {
         btn.dataset.longPress = '';
         moveHoldDelayTimer = setTimeout(() => {
             btn.dataset.longPress = '1';
-            const smoothDx = dx / 5;
-            const smoothDz = dz / 5;
-            moveEditingFurniture(smoothDx, smoothDz);
-            moveHoldTimer = setInterval(() => moveEditingFurniture(smoothDx, smoothDz), 40);
+            const smoothStep = MOVE_STEP / 5;
+            moveEditingFurnitureByIntent(intent, smoothStep);
+            moveHoldTimer = setInterval(() => moveEditingFurnitureByIntent(intent, smoothStep), 40);
         }, 500);
     };
     const stop = (event) => {
@@ -580,7 +579,7 @@ function bindMoveHold(id, dx, dz) {
             btn.dataset.longPress = '';
             return;
         }
-        moveEditingFurniture(dx, dz);
+        moveEditingFurnitureByIntent(intent, MOVE_STEP);
     };
     const cancel = (event) => {
         event?.preventDefault?.();
@@ -959,6 +958,45 @@ function tryPoseEdit(record, nextPose, successText) {
     if (successText) setEditorStatus(successText, 'ok');
     positionObjectControls();
     return true;
+}
+
+function getEditMoveDelta(intent, amount) {
+    let forwardX = 0;
+    let forwardZ = -1;
+    if (camera) {
+        camera.getWorldDirection(lookDirection);
+        lookDirection.y = 0;
+        if (lookDirection.lengthSq() > 0.0001) {
+            lookDirection.normalize();
+            if (Math.abs(lookDirection.x) >= Math.abs(lookDirection.z)) {
+                forwardX = Math.sign(lookDirection.x) || 1;
+                forwardZ = 0;
+            } else {
+                forwardX = 0;
+                forwardZ = Math.sign(lookDirection.z) || 1;
+            }
+        }
+    }
+
+    let axisX = forwardX;
+    let axisZ = forwardZ;
+    if (intent === 'back') {
+        axisX = -forwardX;
+        axisZ = -forwardZ;
+    } else if (intent === 'left') {
+        axisX = forwardZ;
+        axisZ = -forwardX;
+    } else if (intent === 'right') {
+        axisX = -forwardZ;
+        axisZ = forwardX;
+    }
+
+    return { dx: axisX * amount, dz: axisZ * amount };
+}
+
+function moveEditingFurnitureByIntent(intent, amount) {
+    const delta = getEditMoveDelta(intent, amount);
+    moveEditingFurniture(delta.dx, delta.dz);
 }
 
 function moveEditingFurniture(dx, dz) {

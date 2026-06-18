@@ -347,3 +347,9 @@ Additional tests:
 - Furniture sitting routes append the computed sit-approach point as the final walking segment when A* simplifies to a nearby grid cell, so the character walks to the trigger point instead of sliding there during the sit animation.
 - The bed hip inset is shallower than the chair inset so Fritia does not sit too deep on the bed.
 - This avoids the old failure mode where path clipping or a waypoint inside the bed/chair collider caused Fritia to sit in midair near the furniture edge.
+
+### 2026-06-18 Furniture Edit View-Axis Move Note
+
+- Dream furniture object-control move buttons still move furniture only along world X/Z axes.
+- During active furniture editing, forward/back/left/right are derived from the current camera horizontal look direction snapped to the nearest world X or Z axis.
+- Long-press movement recomputes this mapping on each smooth movement tick, so rotating the view while editing immediately changes the button basis for the active furniture only.
