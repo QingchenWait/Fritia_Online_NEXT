@@ -50,6 +50,7 @@ export function initControls(camera, domElement, colliders) {
         'achievements-panel',
         'dream-terminal-panel',
         'dream-furniture-editor-panel',
+        'dream-placement-editor-panel',
         'dream-object-controls'
     ];
     let resumeAfterOverlay = false;

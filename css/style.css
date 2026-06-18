@@ -1718,7 +1718,8 @@ body {
 
 /* Dream system */
 #dream-terminal-panel,
-#dream-furniture-editor-panel {
+#dream-furniture-editor-panel,
+#dream-placement-editor-panel {
     position: fixed;
     inset: 0;
     z-index: 76;
@@ -1833,6 +1834,7 @@ body {
 
 #dream-terminal-close,
 #dream-editor-close,
+#dream-placement-editor-close,
 .dream-inline-control button,
 .dream-editor-grid button,
 .dream-move-pad button,
@@ -1848,7 +1850,8 @@ body {
 }
 
 #dream-terminal-close,
-#dream-editor-close {
+#dream-editor-close,
+#dream-placement-editor-close {
     width: 40px;
     height: 40px;
     min-height: 40px;
@@ -1858,7 +1861,8 @@ body {
 }
 
 #dream-terminal-close img,
-#dream-editor-close img {
+#dream-editor-close img,
+#dream-placement-editor-close img {
     width: 22px;
     height: 22px;
     display: block;
@@ -1866,6 +1870,7 @@ body {
 
 #dream-terminal-close:hover,
 #dream-editor-close:hover,
+#dream-placement-editor-close:hover,
 .dream-inline-control button:hover,
 .dream-editor-grid button:hover,
 .dream-move-pad button:hover,
@@ -1892,6 +1897,7 @@ body {
 
 .dream-compose label,
 .dream-editor-section label,
+.dream-editor-card label,
 .dream-editor-label {
     color: rgba(226, 232, 240, 0.86);
     font-size: 0.78rem;
@@ -1938,7 +1944,8 @@ body {
 #dream-furniture-description,
 #dream-placement-input,
 #dream-editor-name,
-#dream-editor-placement {
+#dream-editor-placement,
+#dream-editor-style-instruction {
     width: 100%;
     border: 1px solid rgba(255, 255, 255, 0.13);
     border-radius: 6px;
@@ -1957,12 +1964,81 @@ body {
     resize: vertical;
 }
 
+#dream-editor-style-instruction {
+    min-height: 130px;
+    resize: vertical;
+}
+
 #dream-furniture-description:focus,
 #dream-placement-input:focus,
 #dream-editor-name:focus,
-#dream-editor-placement:focus {
+#dream-editor-placement:focus,
+#dream-editor-style-instruction:focus {
     border-color: rgba(125, 211, 252, 0.58);
     background: rgba(255, 255, 255, 0.1);
+}
+
+.dream-style-footer {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 12px;
+}
+
+.dream-style-progress {
+    height: 8px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    opacity: 0.55;
+}
+
+.dream-style-progress.active {
+    opacity: 1;
+}
+
+#dream-editor-style-progress-fill {
+    width: 0;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #7dd3fc, #f8fafc, #a7f3d0, #7dd3fc);
+    background-size: 200% 100%;
+    transition: width 0.24s ease;
+}
+
+.dream-style-progress.active #dream-editor-style-progress-fill {
+    animation: dream-progress-scan 1.05s linear infinite;
+}
+
+#dream-editor-style-apply {
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    border: none;
+    border-radius: 6px;
+    background: #f8fafc;
+    color: #111827;
+    padding: 9px 16px;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+#dream-editor-style-apply img {
+    width: 20px;
+    height: 20px;
+}
+
+#dream-editor-style-apply:disabled {
+    opacity: 0.58;
+    cursor: wait;
+}
+
+@keyframes dream-progress-scan {
+    from { background-position: 0 0; }
+    to { background-position: 200% 0; }
 }
 
 .dream-hint-strip {
@@ -2083,15 +2159,29 @@ body {
 #dream-editor-status[data-kind="ok"] { color: #9be7b3; }
 
 .dream-editor-shell {
-    width: min(700px, 94vw);
+    width: min(820px, 94vw);
     max-height: 88vh;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 8px;
-    background: linear-gradient(145deg, rgba(14, 18, 28, 0.98), rgba(26, 26, 38, 0.98));
-    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.46);
+    background:
+        radial-gradient(circle at 18% 0%, rgba(125, 211, 252, 0.12), transparent 34%),
+        linear-gradient(145deg, rgba(14, 18, 28, 0.94), rgba(26, 26, 38, 0.94));
+    box-shadow: 0 28px 90px rgba(0, 0, 0, 0.54), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.dream-placement-shell {
+    width: min(620px, 94vw);
+    max-height: 86vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 8px;
+    background: linear-gradient(145deg, rgba(14, 18, 28, 0.95), rgba(26, 26, 38, 0.95));
+    box-shadow: 0 28px 82px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .dream-editor-body {
@@ -2112,6 +2202,66 @@ body {
     display: flex;
     flex-direction: column;
     gap: 10px;
+}
+
+.dream-editor-titleline {
+    min-width: 0;
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+}
+
+.dream-editor-titleline > div:last-child {
+    min-width: 0;
+}
+
+.dream-editor-titleline span,
+.dream-placement-subtitle {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.76rem;
+    letter-spacing: 0.08em;
+}
+
+.dream-placement-subtitle {
+    margin-top: 4px;
+    letter-spacing: 0;
+    line-height: 1.5;
+}
+
+.dream-editor-mark {
+    width: 46px;
+    height: 46px;
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.075);
+}
+
+.dream-editor-mark img {
+    width: 28px;
+    height: 28px;
+}
+
+.dream-editor-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.052);
+}
+
+.dream-editor-card .dream-panel-head {
+    margin-bottom: 2px;
+}
+
+.dream-editor-card small {
+    color: rgba(255, 236, 179, 0.92);
+    font-size: 0.78rem;
+    font-weight: 600;
 }
 
 .dream-inline-control {
@@ -2236,8 +2386,68 @@ body {
 .dream-object-btn.rotate-left { left: -104px; top: 0; }
 .dream-object-btn.rotate-right { left: 104px; top: 0; }
 .dream-object-btn.delete { left: 184px; top: 0; }
-.dream-object-btn.edit { left: 0; top: 104px; }
+.dream-object-btn.placement { left: 184px; top: 104px; }
+.dream-object-btn.edit { left: 184px; top: -104px; }
 .dream-object-btn.confirm { left: 0; top: 0; }
+
+#dream-revision-confirm-bar {
+    position: fixed;
+    left: 50%;
+    bottom: 18%;
+    z-index: 123;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    transform: translateX(-50%);
+    pointer-events: auto;
+}
+
+.dream-revision-action {
+    min-width: 132px;
+    min-height: 48px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 8px;
+    color: #fff;
+    padding: 10px 18px;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+}
+
+.dream-revision-action kbd {
+    min-width: 24px;
+    height: 24px;
+    display: grid;
+    place-items: center;
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.18);
+    font: inherit;
+    font-size: 0.9rem;
+}
+
+.dream-revision-action.confirm {
+    background: rgba(22, 163, 74, 0.82);
+    border-color: rgba(187, 247, 208, 0.44);
+}
+
+.dream-revision-action.rollback {
+    background: rgba(220, 38, 38, 0.8);
+    border-color: rgba(254, 202, 202, 0.42);
+}
+
+body.dream-revision-pending #top-bar,
+body.dream-revision-pending .touch-actions {
+    pointer-events: none;
+    opacity: 0.35;
+}
 
 #dream-screen-toast {
     position: fixed;
@@ -2805,8 +3015,17 @@ body {
     #dream-furniture-description,
     #dream-placement-input,
     #dream-editor-name,
-    #dream-editor-placement {
+    #dream-editor-placement,
+    #dream-editor-style-instruction {
         font-size: 16px;
+    }
+
+    .dream-style-footer {
+        grid-template-columns: 1fr;
+    }
+
+    #dream-editor-style-apply {
+        width: 100%;
     }
 
     .dream-object-btn {
@@ -2826,8 +3045,21 @@ body {
     .dream-object-btn.rotate-left { left: -94px; top: 0; }
     .dream-object-btn.rotate-right { left: 94px; top: 0; }
     .dream-object-btn.delete { left: 170px; top: 0; }
-    .dream-object-btn.edit { left: 0; top: 94px; }
+    .dream-object-btn.placement { left: 170px; top: 94px; }
+    .dream-object-btn.edit { left: 170px; top: -94px; }
     .dream-object-btn.confirm { left: 0; top: 0; }
+
+    #dream-revision-confirm-bar {
+        bottom: 16%;
+        width: calc(100vw - 28px);
+        gap: 10px;
+    }
+
+    .dream-revision-action {
+        min-width: 0;
+        flex: 1;
+        padding: 10px 12px;
+    }
 }
 
 /* Touch Controls */

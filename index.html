@@ -93,11 +93,22 @@
             <button class="dream-object-btn delete" id="dream-object-delete" title="删除家具">
                 <img src="src/_logos/dream_trash.svg" alt="">
             </button>
+            <button class="dream-object-btn placement" id="dream-object-placement" title="重新自动摆放">
+                <img src="src/_logos/dream_gpt.svg" alt="">
+            </button>
             <button class="dream-object-btn edit" id="dream-object-edit" title="编辑家具">
                 <img src="src/_logos/dream_edit.svg" alt="">
             </button>
             <button class="dream-object-btn confirm" id="dream-object-close" title="确认并退出家具管理">
                 <img src="src/_logos/dream_confirm.svg" alt="">
+            </button>
+        </div>
+        <div id="dream-revision-confirm-bar" class="hidden" aria-live="polite">
+            <button id="dream-revision-confirm" class="dream-revision-action confirm">
+                <kbd>1</kbd><span>确认</span>
+            </button>
+            <button id="dream-revision-rollback" class="dream-revision-action rollback">
+                <kbd>2</kbd><span>回退</span>
             </button>
         </div>
         <div id="dream-screen-toast" class="hidden" aria-live="polite"></div>
@@ -323,11 +334,11 @@
                                 <h3>家具愿望</h3>
                             </div>
                         </div>
-                        <label for="dream-furniture-description">家具描述</label>
+                        <label for="dream-furniture-description"> </label>
                         <textarea id="dream-furniture-description" maxlength="520" placeholder="例如：一张适合两个人靠坐的星光阅读沙发，带柔软靠背和淡紫色灯带。"></textarea>
                         <div class="dream-hint-strip">
                             <img src="src/_logos/dream_ai_core.svg" alt="">
-                            <span>只会生成安全 JSON 规格，本地用基础几何体构建。</span>
+                            <span>使用几何体创造家具。若 LLM 返回输出错误，请重试几次。</span>
                         </div>
                     </section>
                     <aside class="dream-forge-console">
@@ -371,33 +382,87 @@
     <div id="dream-furniture-editor-panel" class="hidden">
         <div class="dream-editor-shell">
             <div class="dream-editor-header">
-                <div>
-                    <h3 id="dream-editor-title">梦造家具</h3>
-                    <div id="dream-editor-meta"></div>
+                <div class="dream-editor-titleline">
+                    <div class="dream-editor-mark">
+                        <img src="src/_logos/dream_blueprint.svg" alt="">
+                    </div>
+                    <div>
+                        <span>FURNITURE EDITOR</span>
+                        <h3 id="dream-editor-title">梦造家具</h3>
+                        <div id="dream-editor-meta"></div>
+                    </div>
                 </div>
                 <button id="dream-editor-close" aria-label="关闭家具编辑">
                     <img src="src/_logos/dream_close.svg" alt="">
                 </button>
             </div>
             <div class="dream-editor-body">
-                <div class="dream-editor-section">
+                <section class="dream-editor-card name-card">
+                    <div class="dream-panel-head">
+                        <img src="src/_logos/dream_edit.svg" alt="">
+                        <div>
+                            <span>IDENTITY</span>
+                            <h3>家具档案</h3>
+                        </div>
+                    </div>
                     <label for="dream-editor-name">家具名称</label>
                     <div class="dream-inline-control">
                         <input id="dream-editor-name" type="text" maxlength="24">
                         <button id="dream-editor-save-name">保存</button>
                     </div>
-                </div>
-                <div class="dream-editor-section">
-                    <div class="dream-editor-label">新的摆放位置</div>
-                    <div class="dream-inline-control">
-                        <input id="dream-editor-placement" type="text" maxlength="120" placeholder="输入新的摆放位置">
-                        <button id="dream-editor-auto-place">自动摆放</button>
+                </section>
+                <section class="dream-editor-card style-card">
+                    <div class="dream-panel-head">
+                        <img src="src/_logos/dream_ai_core.svg" alt="">
+                        <div>
+                            <span>LLM RESTYLE</span>
+                            <h3>家具样式修改 <small>🪙 100</small></h3>
+                        </div>
                     </div>
-                </div>
+                    <textarea id="dream-editor-style-instruction" maxlength="360" placeholder="例如：在桌子上放一台电脑；把床加宽一些；给椅子加一个柔软靠垫。"></textarea>
+                    <div class="dream-style-footer">
+                        <div class="dream-style-progress" id="dream-editor-style-progress" aria-hidden="true">
+                            <div id="dream-editor-style-progress-fill"></div>
+                        </div>
+                        <button id="dream-editor-style-apply">
+                            <img src="src/_logos/dream_wand.svg" alt="">
+                            <span>样式变更</span>
+                        </button>
+                    </div>
+                </section>
                 <div class="dream-editor-actions">
                     <button id="dream-editor-reset">重置</button>
                 </div>
                 <div id="dream-editor-status" aria-live="polite"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="dream-placement-editor-panel" class="hidden">
+        <div class="dream-placement-shell">
+            <div class="dream-editor-header">
+                <div class="dream-editor-titleline">
+                    <div class="dream-editor-mark">
+                        <img src="src/_logos/dream_gpt.svg" alt="">
+                    </div>
+                    <div>
+                        <span>POSITION REQUEST</span>
+                        <h3>家具位置调整</h3>
+                        <div class="dream-placement-subtitle">用自然语言描述新的摆放位置，系统会重新寻找安全位置。</div>
+                    </div>
+                </div>
+                <button id="dream-placement-editor-close" aria-label="关闭位置调整">
+                    <img src="src/_logos/dream_close.svg" alt="">
+                </button>
+            </div>
+            <div class="dream-editor-body">
+                <section class="dream-editor-card">
+                    <label for="dream-editor-placement">新的摆放位置</label>
+                    <div class="dream-inline-control">
+                        <input id="dream-editor-placement" type="text" maxlength="120" placeholder="例如：靠窗右侧，不要挡住门">
+                        <button id="dream-editor-auto-place">自动摆放</button>
+                    </div>
+                </section>
             </div>
         </div>
     </div>

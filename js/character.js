@@ -703,6 +703,24 @@ function isSegmentClear(cd, start, end) {
     return true;
 }
 
+function isCurrentWalkPathClear(cd) {
+    if (!cd?.root || cd.state !== STATES.WALKING || cd.targetWaypoint?.ignoreCollision) return true;
+    const points = [cd.walkEnd.clone()];
+    if (Array.isArray(cd.walkPathQueue)) {
+        points.push(...cd.walkPathQueue.map(point => point.clone ? point.clone() : point));
+    }
+
+    let anchor = cd.root.position.clone();
+    anchor.y = cd.baseY;
+    for (const point of points) {
+        const next = point.clone ? point.clone() : new THREE.Vector3(point.x, point.y, point.z);
+        next.y = cd.baseY;
+        if (!isSegmentClear(cd, anchor, next)) return false;
+        anchor = next;
+    }
+    return true;
+}
+
 function simplifyPath(cd, start, points) {
     if (points.length <= 1) return points;
     const result = [];
@@ -1214,6 +1232,29 @@ export function setCharacterNavigationScope(cd, scope = {}) {
     cd.state = STATES.IDLE;
     applyIdlePose(cd);
     forceUpdate(cd);
+}
+
+export function refreshCharacterNavigationData(cd, scope = {}) {
+    if (!cd) return;
+    cd.waypoints = Array.isArray(scope.waypoints) ? scope.waypoints : cd.waypoints;
+    cd.colliders = Array.isArray(scope.colliders) ? scope.colliders : cd.colliders;
+    cd.navigationScope = {
+        ...(cd.navigationScope || {}),
+        ...(scope.roomId ? { roomId: scope.roomId } : {}),
+        ...(scope.bounds ? { bounds: scope.bounds } : {})
+    };
+
+    if (!isCurrentWalkPathClear(cd)) {
+        cd.walkPathQueue = null;
+        cd.targetWaypoint = null;
+        cd.walkProgress = 0;
+        cd.walkBlend = 0;
+        cd.stateTimer = 0;
+        cd.idleDuration = 0.5;
+        cd.state = STATES.IDLE;
+        applyIdlePose(cd);
+        forceUpdate(cd);
+    }
 }
 
 export function moveCharacterToWaypoint(cd, waypoint, options = {}) {

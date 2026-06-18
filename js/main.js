@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { initScene } from './scene.js';
 import { createRoom } from './room.js';
 import { initControls } from './controls.js';
-import { loadCharacter, updateCharacter, getCharacterPosition, startInteraction, endInteraction, startWaving, swapModel, applySleepingPose, applyIdlePose, updateBlink, setSittingEnabled, setCharacterNavigationScope, forceCharacterIntoRoom, moveCharacterToWaypoint } from './character.js';
+import { loadCharacter, updateCharacter, getCharacterPosition, startInteraction, endInteraction, startWaving, swapModel, applySleepingPose, applyIdlePose, updateBlink, setSittingEnabled, setCharacterNavigationScope, refreshCharacterNavigationData, forceCharacterIntoRoom, moveCharacterToWaypoint } from './character.js';
 import { initDialogue, showDialogue, hideDialogue, isDialogueVisible, getConversationHistory, importConversationHistory } from './dialogue.js';
 import { initDateDialogue, openDatePanel, closeDatePanel, isDatePanelVisible, getDateConversationHistory, importDateConversationHistory, getDateLocations } from './date_dialogue.js';
 import { initSettings } from './settings.js';
@@ -12,6 +12,8 @@ import { closeAchievementsPanel, evaluateAchievements, exportAchievements, flush
 import {
     closeDreamFurnitureEditor,
     closeDreamPanel,
+    confirmPendingDreamRevision,
+    constrainPendingRevisionPlayer,
     exportDreamFurniture,
     getDreamFurnitureColliders,
     getDreamFurnitureLabel,
@@ -20,11 +22,13 @@ import {
     importDreamFurniture,
     initDreamSystem,
     isDreamOverlayVisible,
+    isDreamRevisionPending,
     isLookingAtDreamFurniture,
     isLookingAtDreamTerminal,
     openDreamFurnitureEditor,
     openDreamPanel,
-    refreshDreamFurnitureAfterImport
+    refreshDreamFurnitureAfterImport,
+    rollbackPendingDreamRevision
 } from './dream_system.js';
 
 let scene, camera, renderer;
@@ -249,6 +253,15 @@ async function init() {
 }
 
 function onKeyDown(e) {
+    if (isDreamRevisionPending()) {
+        if (e.code === 'Digit1' || e.code === 'Numpad1') {
+            confirmPendingDreamRevision();
+        } else if (e.code === 'Digit2' || e.code === 'Numpad2') {
+            rollbackPendingDreamRevision();
+        }
+        return;
+    }
+
     if (e.code === 'KeyF') {
         if (isDialogueVisible()) return;
         if (isDatePanelVisible()) return;
@@ -431,8 +444,12 @@ function handleDreamFurnitureChanged() {
         controlsModule.setColliders([...basePlayerColliders, ...dynamicColliders]);
     }
     if (charData && currentPlayerRoomId === 'dream') {
-        charData.waypoints = [...dreamRoomWaypoints, ...getDreamFurnitureWaypoints()];
-        charData.colliders = [...dreamStaticColliders, ...dynamicColliders];
+        refreshCharacterNavigationData(charData, {
+            roomId: 'dream',
+            bounds: dreamRoomBounds,
+            waypoints: [...dreamRoomWaypoints, ...getDreamFurnitureWaypoints()],
+            colliders: [...dreamStaticColliders, ...dynamicColliders]
+        });
     }
 }
 
@@ -532,6 +549,7 @@ function animate() {
     if (controlsModule) {
         if (!isSleeping) {
             controlsModule.update(delta);
+            constrainPendingRevisionPlayer();
         }
     }
 
@@ -549,6 +567,11 @@ function animate() {
 function updateInteractionPrompt() {
     const prompt = document.getElementById('interaction-prompt');
     const paintingPrompt = document.getElementById('painting-prompt');
+    if (isDreamRevisionPending()) {
+        prompt.classList.add('hidden');
+        if (paintingPrompt) paintingPrompt.classList.add('hidden');
+        return;
+    }
     if (isSleeping || isInteracting || isDialogueVisible() || isDatePanelVisible() || isGiftOverlayVisible() || isDreamOverlayVisible()) {
         prompt.classList.add('hidden');
         if (paintingPrompt) paintingPrompt.classList.add('hidden');

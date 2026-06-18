@@ -353,3 +353,17 @@ Additional tests:
 - Dream furniture object-control move buttons still move furniture only along world X/Z axes.
 - During active furniture editing, forward/back/left/right are derived from the current camera horizontal look direction snapped to the nearest world X or Z axis.
 - Long-press movement recomputes this mapping on each smooth movement tick, so rotating the view while editing immediately changes the button basis for the active furniture only.
+
+### 2026-06-18 Dream Furniture LLM Revision Note
+
+- `js/dream_llm.js` exports `requestDreamFurnitureRevision({ furniture, instruction, roomContext, settings })`.
+- Style revision sends the current safe furniture JSON plus the player's natural-language request to the existing OpenAI-compatible `chat/completions` settings, and expects one complete replacement furniture spec JSON.
+- The revised spec is still validated locally through `normalizeFurnitureSpec()`, `createFurnitureFromSpec()`, and `validateRuntimePlacement()`; LLM output is never executed.
+- `dream_furniture_factory.js` now exposes `createFurnitureColliders(group)` for component-level dynamic colliders. Runtime keeps one whole-furniture AABB for UI projection, but player and character collision use the component collider list so revised furniture can gain or lose solid areas such as wall doorways.
+- `character.js` exports `refreshCharacterNavigationData(cd, scope)`. Dream furniture changes update Fritia's active waypoints/colliders without a full room-scope reset, and invalidate the current walking path if it was planned through an area that is now blocked by revised furniture.
+- `#dream-furniture-editor-panel` now contains `#dream-editor-style-instruction`, `#dream-editor-style-apply`, `#dream-editor-style-progress`, and `#dream-editor-style-progress-fill`.
+- Style revision costs `100 数据金` only after the revised furniture preview is validated and deployed. While pending, `#dream-revision-confirm-bar` shows `#dream-revision-confirm` (`1`) and `#dream-revision-rollback` (`2`).
+- Confirm keeps the preview. Rollback restores the previous spec and refunds `50 数据金` through `addMoney(..., 'dream_furniture_revision_refund')`.
+- During pending revision confirmation, `isDreamRevisionPending()` blocks normal E/F interactions, hides normal interaction prompts, disables top/touch UI pointer events with `body.dream-revision-pending`, and `constrainPendingRevisionPlayer()` keeps the player inside dream-room bounds.
+- Position auto-placement moved out of the edit overlay into `#dream-placement-editor-panel`, opened by `#dream-object-placement` in the object-control button cluster. `#dream-editor-placement` and `#dream-editor-auto-place` are now scoped to that placement overlay.
+- `controls.js` overlay ids include `dream-placement-editor-panel`; `src/_logos/dream_gpt.svg` is the local GPT-style icon used for the placement button.

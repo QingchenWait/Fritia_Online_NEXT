@@ -331,6 +331,43 @@ export function createFurnitureCollider(group) {
     return box;
 }
 
+function makeColliderFromBox(box) {
+    const collider = box.clone();
+    const minThickness = 0.04;
+    const size = new THREE.Vector3();
+    collider.getSize(size);
+
+    if (size.x < minThickness) collider.expandByVector(new THREE.Vector3((minThickness - size.x) / 2, 0, 0));
+    if (size.z < minThickness) collider.expandByVector(new THREE.Vector3(0, 0, (minThickness - size.z) / 2));
+    collider.max.y = Math.max(collider.max.y, collider.min.y + 0.04);
+    return collider;
+}
+
+export function createFurnitureColliders(group) {
+    group.updateMatrixWorld(true);
+    const colliders = [];
+
+    group.traverse(child => {
+        if (!child.isMesh || !child.geometry) return;
+        const box = new THREE.Box3().setFromObject(child);
+        if (!Number.isFinite(box.min.x) || !Number.isFinite(box.max.x)) return;
+
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        const horizontalArea = Math.max(size.x, 0.04) * Math.max(size.z, 0.04);
+        const hasMeaningfulHeight = size.y > 0.08 || box.max.y > 0.16;
+        if (horizontalArea < 0.002 || !hasMeaningfulHeight) return;
+
+        colliders.push(makeColliderFromBox(box));
+    });
+
+    if (colliders.length === 0) {
+        colliders.push(createFurnitureCollider(group));
+    }
+
+    return colliders;
+}
+
 export function serializeFurniture(furniture) {
     return {
         id: furniture.id,

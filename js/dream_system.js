@@ -10,10 +10,11 @@ import {
     getMoney,
     spendMoney
 } from './game_state.js';
-import { requestDreamFurnitureSpec, requestFurnitureRomanticLine } from './dream_llm.js';
+import { requestDreamFurnitureRevision, requestDreamFurnitureSpec, requestFurnitureRomanticLine } from './dream_llm.js';
 import {
     applyFurniturePose,
     createFurnitureCollider,
+    createFurnitureColliders,
     createFurnitureFromSpec,
     deserializeFurniture,
     estimateFurnitureAABB,
@@ -23,6 +24,8 @@ import {
 
 const STORAGE_KEY = 'fritia_dream_furniture';
 const DREAM_COST = 500;
+const DREAM_REVISION_COST = 100;
+const DREAM_REVISION_REFUND = 50;
 const DREAM_DELETE_REFUND = 400;
 const DIALOGUE_COOLDOWN_MS = 20 * 1000;
 const FURNITURE_DIALOGUE_LLM_RATE = 0.5;
@@ -69,8 +72,10 @@ const furnitureRecords = [];
 const runtime = new Map();
 const els = {};
 let isCreating = false;
+let isRevising = false;
 let editingId = null;
 let editSnapshot = null;
+let pendingRevision = null;
 let rotateHoldTimer = null;
 let rotateHoldDelayTimer = null;
 let moveHoldTimer = null;
@@ -121,6 +126,14 @@ function clamp(value, min, max) {
     return Math.max(min, Math.min(max, num));
 }
 
+export function constrainPendingRevisionPlayer() {
+    if (!pendingRevision || !camera || !dreamRoomBounds) return;
+    const margin = 0.3;
+    camera.position.x = clamp(camera.position.x, dreamRoomBounds.min.x + margin, dreamRoomBounds.max.x - margin);
+    camera.position.z = clamp(camera.position.z, dreamRoomBounds.min.z + margin, dreamRoomBounds.max.z - margin);
+    camera.position.y = 1.6;
+}
+
 function clampName(value, fallback = '梦造家具') {
     const chars = Array.from(String(value || fallback).trim());
     return chars.slice(0, 12).join('') || fallback;
@@ -135,6 +148,10 @@ function copyPose(pose) {
         },
         rotationY: Number(pose?.rotationY) || 0
     };
+}
+
+function copyJson(value) {
+    return JSON.parse(JSON.stringify(value));
 }
 
 function getUsableBounds(margin = 0.35) {
@@ -175,7 +192,7 @@ function isBoxInsideRoom(box) {
 function getOtherFurnitureColliders(excludeId = '') {
     return Array.from(runtime.values())
         .filter(item => item.id !== excludeId)
-        .map(item => item.collider)
+        .flatMap(item => item.colliders || (item.collider ? [item.collider] : []))
         .filter(Boolean);
 }
 
@@ -413,11 +430,13 @@ function deployRecord(record) {
     scene.add(group);
 
     const collider = createFurnitureCollider(group);
+    const colliders = createFurnitureColliders(group);
     const waypoint = createWaypoint(record, group);
     runtime.set(record.id, {
         id: record.id,
         group,
         collider,
+        colliders,
         waypoint
     });
     return runtime.get(record.id);
@@ -493,16 +512,27 @@ export function initDreamSystem(options) {
     els.editorTitle = document.getElementById('dream-editor-title');
     els.editorMeta = document.getElementById('dream-editor-meta');
     els.editorName = document.getElementById('dream-editor-name');
-    els.editorPlacement = document.getElementById('dream-editor-placement');
+    els.editorStyleInstruction = document.getElementById('dream-editor-style-instruction');
+    els.editorStyleButton = document.getElementById('dream-editor-style-apply');
+    els.editorStyleProgress = document.getElementById('dream-editor-style-progress');
+    els.editorStyleProgressFill = document.getElementById('dream-editor-style-progress-fill');
     els.editorStatus = document.getElementById('dream-editor-status');
+    els.placementPanel = document.getElementById('dream-placement-editor-panel');
+    els.placementClose = document.getElementById('dream-placement-editor-close');
+    els.editorPlacement = document.getElementById('dream-editor-placement');
+    els.revisionConfirmBar = document.getElementById('dream-revision-confirm-bar');
+    els.revisionConfirm = document.getElementById('dream-revision-confirm');
+    els.revisionRollback = document.getElementById('dream-revision-rollback');
     els.objectControls = document.getElementById('dream-object-controls');
     els.screenToast = document.getElementById('dream-screen-toast');
 
     els.close?.addEventListener('click', closeDreamPanel);
     els.create?.addEventListener('click', handleCreateFurniture);
-    els.editorClose?.addEventListener('click', closeDreamFurnitureEditor);
+    els.editorClose?.addEventListener('click', closeFurnitureEditPanel);
 
     document.getElementById('dream-editor-save-name')?.addEventListener('click', handleRename);
+    els.editorStyleButton?.addEventListener('click', handleStyleRevision);
+    els.placementClose?.addEventListener('click', closePlacementEditPanel);
     document.getElementById('dream-editor-auto-place')?.addEventListener('click', handleAutoPlaceEdit);
     document.getElementById('dream-editor-reset')?.addEventListener('click', resetEditingFurniture);
     bindMoveHold('dream-object-move-forward', 'forward');
@@ -510,8 +540,11 @@ export function initDreamSystem(options) {
     bindMoveHold('dream-object-move-left', 'left');
     bindMoveHold('dream-object-move-right', 'right');
     document.getElementById('dream-object-edit')?.addEventListener('click', openFurnitureEditPanel);
+    document.getElementById('dream-object-placement')?.addEventListener('click', openPlacementEditPanel);
     document.getElementById('dream-object-close')?.addEventListener('click', closeDreamFurnitureEditor);
     document.getElementById('dream-object-delete')?.addEventListener('click', handleDeleteFurniture);
+    els.revisionConfirm?.addEventListener('click', confirmPendingDreamRevision);
+    els.revisionRollback?.addEventListener('click', rollbackPendingDreamRevision);
     bindRotateHold('dream-object-rotate-left', -ROTATE_STEP);
     bindRotateHold('dream-object-rotate-right', ROTATE_STEP);
     bindObjectLookDrag();
@@ -660,7 +693,12 @@ export function closeDreamPanel() {
 export function isDreamOverlayVisible() {
     return (els.panel && !els.panel.classList.contains('hidden'))
         || (els.editor && !els.editor.classList.contains('hidden'))
+        || (els.placementPanel && !els.placementPanel.classList.contains('hidden'))
         || (els.objectControls && !els.objectControls.classList.contains('hidden'));
+}
+
+export function isDreamRevisionPending() {
+    return Boolean(pendingRevision);
 }
 
 export function isLookingAtDreamTerminal(activeCamera = camera) {
@@ -851,14 +889,47 @@ function openFurnitureEditPanel() {
         `;
     }
     if (els.editorName) els.editorName.value = record.name;
-    if (els.editorPlacement) els.editorPlacement.value = '';
+    if (els.editorStyleInstruction) els.editorStyleInstruction.value = '';
+    updateStyleRevisionProgress(false);
     setEditorStatus('');
     els.editor?.classList.remove('hidden');
     setTimeout(() => els.editorName?.focus(), 80);
 }
 
+function returnToObjectControls() {
+    if (!editingId || pendingRevision) return;
+    els.objectControls?.classList.remove('hidden');
+    controlsModule?.setMovementLocked?.(true);
+    startObjectControlsProjection();
+}
+
+function closeFurnitureEditPanel() {
+    els.editor?.classList.add('hidden');
+    returnToObjectControls();
+    document.dispatchEvent(new CustomEvent('fritia-overlay-closed', { detail: { id: 'dream-furniture-editor-panel' } }));
+}
+
+function openPlacementEditPanel() {
+    const record = getEditingRecord();
+    if (!record) return;
+    stopObjectControlsProjection();
+    els.objectControls?.classList.add('hidden');
+    if (els.editorPlacement) els.editorPlacement.value = '';
+    setEditorStatus('');
+    els.placementPanel?.classList.remove('hidden');
+    setTimeout(() => els.editorPlacement?.focus(), 80);
+}
+
+function closePlacementEditPanel() {
+    els.placementPanel?.classList.add('hidden');
+    returnToObjectControls();
+    document.dispatchEvent(new CustomEvent('fritia-overlay-closed', { detail: { id: 'dream-placement-editor-panel' } }));
+}
+
 export function closeDreamFurnitureEditor() {
+    if (pendingRevision) return;
     const editorWasOpen = els.editor && !els.editor.classList.contains('hidden');
+    const placementWasOpen = els.placementPanel && !els.placementPanel.classList.contains('hidden');
     const controlsWereOpen = els.objectControls && !els.objectControls.classList.contains('hidden');
     clearTimeout(moveHoldDelayTimer);
     clearInterval(moveHoldTimer);
@@ -874,6 +945,8 @@ export function closeDreamFurnitureEditor() {
     els.objectControls?.classList.add('hidden');
     if (editorWasOpen) closeById('dream-furniture-editor-panel');
     else els.editor?.classList.add('hidden');
+    if (placementWasOpen) closeById('dream-placement-editor-panel');
+    else els.placementPanel?.classList.add('hidden');
     controlsModule?.setMovementLocked?.(false);
     if (controlsWereOpen) {
         document.dispatchEvent(new CustomEvent('fritia-overlay-closed', { detail: { id: 'dream-object-controls' } }));
@@ -924,6 +997,17 @@ function setEditorStatus(text, kind = '') {
     els.editorStatus.dataset.kind = kind;
 }
 
+function updateStyleRevisionProgress(active, text = '') {
+    if (els.editorStyleProgress) {
+        els.editorStyleProgress.classList.toggle('active', Boolean(active));
+        els.editorStyleProgress.setAttribute('aria-hidden', active ? 'false' : 'true');
+    }
+    if (els.editorStyleProgressFill) {
+        els.editorStyleProgressFill.style.width = active ? '100%' : '0%';
+    }
+    if (text) setEditorStatus(text);
+}
+
 function getEditingRecord() {
     return furnitureRecords.find(item => item.id === editingId) || null;
 }
@@ -935,6 +1019,7 @@ function refreshRecordRuntime(record) {
         return validation;
     }
     deployed.collider = createFurnitureCollider(deployed.group);
+    deployed.colliders = createFurnitureColliders(deployed.group);
     deployed.waypoint = createWaypoint(record, deployed.group);
     runtime.set(record.id, deployed);
     saveFurniture();
@@ -1027,10 +1112,164 @@ function handleAutoPlaceEdit() {
             setEditorStatus(placement.error || '没有安全摆放位置。', 'warn');
             return;
         }
-        tryPoseEdit(record, placement.pose, '已根据位置描述重新摆放。');
+        if (tryPoseEdit(record, placement.pose, '')) {
+            closePlacementEditPanel();
+        }
     } catch (err) {
         setEditorStatus(err.message || '重新摆放失败。', 'warn');
     }
+}
+
+async function handleStyleRevision() {
+    if (isRevising || pendingRevision) return;
+    const record = getEditingRecord();
+    if (!record) return;
+    const instruction = els.editorStyleInstruction?.value.trim() || '';
+    if (!instruction) {
+        setEditorStatus('请先填写家具样式修改要求。', 'warn');
+        return;
+    }
+
+    if (!canAfford(DREAM_REVISION_COST)) {
+        setEditorStatus(`余额不足，需要 ${formatMoney(DREAM_REVISION_COST)}。`, 'warn');
+        return;
+    }
+    const settings = getSettings();
+    if (!settings.apiKey) {
+        setEditorStatus('未配置 API Key。请先在设置面板填写 API Key。', 'warn');
+        return;
+    }
+
+    isRevising = true;
+    if (els.editorStyleButton) els.editorStyleButton.disabled = true;
+    updateStyleRevisionProgress(true, '正在解析样式修改要求...');
+
+    try {
+        const previousSpec = copyJson(record.spec);
+        const roomContext = {
+            bounds: vectorToPlainBounds(dreamRoomBounds),
+            doorClearanceZone: vectorToPlainBounds(doorClearanceZone)
+        };
+        const llm = await requestDreamFurnitureRevision({
+            furniture: record,
+            instruction,
+            roomContext,
+            settings
+        });
+        if (!llm.ok) {
+            setEditorStatus(llm.error || '家具样式修改请求失败。', 'warn');
+            return;
+        }
+
+        updateStyleRevisionProgress(true, '正在校验新的家具结构...');
+        let revisedSpec;
+        try {
+            revisedSpec = normalizeFurnitureSpec(llm.spec);
+            revisedSpec.name = previousSpec.name || record.name;
+            revisedSpec.description = previousSpec.description || record.description;
+        } catch (err) {
+            setEditorStatus(`JSON schema 校验失败：${err.message}`, 'warn');
+            return;
+        }
+
+        let created;
+        try {
+            created = createFurnitureFromSpec(revisedSpec);
+            applyFurniturePose(created.group, record.pose);
+        } catch (err) {
+            setEditorStatus(`家具尺寸或组件校验失败：${err.message}`, 'warn');
+            return;
+        }
+
+        updateStyleRevisionProgress(true, '正在检查房间安全边界...');
+        const validation = validateRuntimePlacement(created.group, record.id);
+        if (!validation.ok) {
+            setEditorStatus(validation.error || '修改后的家具无法安全放置。', 'warn');
+            return;
+        }
+
+        updateStyleRevisionProgress(true, '正在部署样式预览...');
+        record.spec = revisedSpec;
+        const refresh = refreshRecordRuntime(record);
+        if (!refresh.ok) {
+            record.spec = previousSpec;
+            refreshRecordRuntime(record);
+            setEditorStatus(refresh.error || '样式预览部署失败。', 'warn');
+            return;
+        }
+        if (!spendMoney(DREAM_REVISION_COST)) {
+            record.spec = previousSpec;
+            refreshRecordRuntime(record);
+            setEditorStatus('扣款失败，样式修改已回滚。', 'warn');
+            return;
+        }
+
+        pendingRevision = {
+            furnitureId: record.id,
+            previousSpec,
+            previewSpec: copyJson(revisedSpec),
+            createdAt: Date.now()
+        };
+        closeRevisionOverlaysForPreview();
+        showRevisionConfirmBar();
+        onFurnitureChanged();
+        showDreamScreenToast('样式预览已生成，请确认或回退。', 'ok');
+    } catch (err) {
+        console.error('[Dream] style revision failed:', err);
+        setEditorStatus(`未知错误：${err.message || err}`, 'warn');
+    } finally {
+        isRevising = false;
+        if (els.editorStyleButton) els.editorStyleButton.disabled = false;
+        updateStyleRevisionProgress(false);
+    }
+}
+
+function closeRevisionOverlaysForPreview() {
+    stopObjectControlsProjection();
+    els.objectControls?.classList.add('hidden');
+    els.editor?.classList.add('hidden');
+    els.placementPanel?.classList.add('hidden');
+    controlsModule?.setMovementLocked?.(false);
+    editingId = null;
+    editSnapshot = null;
+    document.dispatchEvent(new CustomEvent('fritia-overlay-closed', { detail: { id: 'dream-furniture-editor-panel' } }));
+}
+
+function showRevisionConfirmBar() {
+    els.revisionConfirmBar?.classList.remove('hidden');
+    document.body?.classList.add('dream-revision-pending');
+}
+
+function hideRevisionConfirmBar() {
+    els.revisionConfirmBar?.classList.add('hidden');
+    document.body?.classList.remove('dream-revision-pending');
+}
+
+export function confirmPendingDreamRevision() {
+    if (!pendingRevision) return;
+    const record = furnitureRecords.find(item => item.id === pendingRevision.furnitureId);
+    if (record) {
+        saveFurniture();
+        onFurnitureChanged();
+    }
+    pendingRevision = null;
+    hideRevisionConfirmBar();
+    showDreamScreenToast('家具样式已确认。', 'ok');
+}
+
+export function rollbackPendingDreamRevision() {
+    if (!pendingRevision) return;
+    const record = furnitureRecords.find(item => item.id === pendingRevision.furnitureId);
+    if (record) {
+        record.spec = pendingRevision.previousSpec;
+        refreshRecordRuntime(record);
+        saveFurniture();
+    }
+    addMoney(DREAM_REVISION_REFUND, 'dream_furniture_revision_refund');
+    pendingRevision = null;
+    hideRevisionConfirmBar();
+    onFurnitureChanged();
+    showDreamScreenToast(`已回退样式，并返还 ${formatMoney(DREAM_REVISION_REFUND)}。`, 'warn');
 }
 
 function handleRename() {
@@ -1208,7 +1447,9 @@ export function getDreamFurnitureInteractables() {
 }
 
 export function getDreamFurnitureColliders() {
-    return Array.from(runtime.values()).map(item => item.collider).filter(Boolean);
+    return Array.from(runtime.values())
+        .flatMap(item => item.colliders || (item.collider ? [item.collider] : []))
+        .filter(Boolean);
 }
 
 export function getDreamFurnitureWaypoints() {
@@ -1272,13 +1513,13 @@ export function importDreamFurniture(data) {
                 skipped++;
                 continue;
             }
-            const collider = createFurnitureCollider(group);
-            if (acceptedColliders.some(existing => existing.intersectsBox(collider))) {
+            const colliders = createFurnitureColliders(group);
+            if (colliders.some(collider => acceptedColliders.some(existing => existing.intersectsBox(collider)))) {
                 skipped++;
                 continue;
             }
             furnitureRecords.push(record);
-            acceptedColliders.push(collider);
+            acceptedColliders.push(...colliders);
             existingIds.add(record.id);
             added++;
         } catch {

@@ -290,6 +290,31 @@ function buildFurniturePrompt({ description, placementText, roomContext, existin
     ].join('\n');
 }
 
+function buildFurnitureRevisionPrompt({ furniture, instruction, roomContext }) {
+    const bounds = roomContext?.bounds || {};
+    const currentSpec = furniture?.spec || {};
+    return [
+        `玩家要修改已经存在的造梦家具：「${furniture?.name || currentSpec.name || '造梦家具'}」。`,
+        `玩家的样式修改要求：${instruction}`,
+        '',
+        '当前家具安全 JSON 规格如下：',
+        JSON.stringify(currentSpec, null, 2),
+        '',
+        '房间坐标上下文：',
+        `造梦房间可用范围：X ${bounds.minX} 到 ${bounds.maxX}，Z ${bounds.minZ} 到 ${bounds.maxZ}，墙高约 ${bounds.maxY}。`,
+        '',
+        '请基于当前 JSON 修改家具形态，只输出修改后的完整家具规格 JSON。不要输出 Markdown，不要解释，不要生成 JavaScript。',
+        '必须保留同一个家具实体的语义；如果玩家要求添加电脑、靠垫、灯带等物件，请作为同一个家具的 components 增加或调整。',
+        '如果玩家要求在墙、屏风、隔断等实体上开门洞、窗洞或通道，必须把实体拆成门洞两侧和上方等多个 box 组件，不要用一整块 box 表示带洞的墙。',
+        '顶层 JSON 必须直接包含非空 components 数组，不要把 components 放进其他字段。',
+        'components 是 1 到 24 个 primitive；type 只能是 box/cylinder/sphere/cone/torus/plane。',
+        '每个 component 必须包含 name, position{x,y,z}, rotation{x,y,z}, size{x,y,z}, color, material。',
+        'dimensions.width/depth/height 使用米，不能超过房间安全尺寸；不要输出外部 URL 或贴图。',
+        'color 使用 #RRGGBB；material 只能是 wood/fabric/metal/glass/plastic/ceramic/light/default 等本地材质意图。',
+        '家具名称、描述和最终摆放位置会由本地程序保持不变，你不需要改变它们。'
+    ].join('\n');
+}
+
 function cleanRomanticLine(content) {
     let text = stripCodeFence(content);
     try {
@@ -372,6 +397,52 @@ export async function requestDreamFurnitureSpec({ description, placementText, ro
         return { ok: true, spec: json, raw: content };
     } catch (err) {
         return { ok: false, error: err.message || 'LLM 请求失败。' };
+    }
+}
+
+export async function requestDreamFurnitureRevision({ furniture, instruction, roomContext, settings }) {
+    const text = String(instruction || '').trim();
+    if (!text) {
+        return { ok: false, error: '请先填写家具样式修改要求。' };
+    }
+    if (!settings?.apiKey) {
+        return { ok: false, error: '未配置 API Key。' };
+    }
+
+    const body = {
+        model: settings.model,
+        stream: false,
+        temperature: 0.28,
+        max_tokens: FURNITURE_MAX_TOKENS,
+        messages: [
+            {
+                role: 'system',
+                content: [
+                    '你是芙提雅 Online NEXT 的造梦家具样式修改器。',
+                    '你只能输出严格 JSON，不能输出 Markdown、解释、注释或代码。',
+                    '你会收到一个已经通过安全校验的 Three.js primitive 家具 JSON，以及玩家的自然语言修改要求。',
+                    '你的任务是输出修改后的完整家具规格 JSON；不能删除 components 数组，也不能让 components 为空。',
+                    '不要输出外部 URL，不要输出 JavaScript，不要输出多件独立家具。'
+                ].join('\n')
+            },
+            {
+                role: 'user',
+                content: buildFurnitureRevisionPrompt({ furniture, instruction: text, roomContext })
+            }
+        ]
+    };
+
+    try {
+        const content = await fetchChatCompletion(settings, body);
+        if (!content.trim()) {
+            return { ok: false, error: 'LLM 返回了空内容。' };
+        }
+        console.log('[Dream][LLM] furniture revision raw output:', content);
+        const json = extractJsonObject(content);
+        console.log('[Dream][LLM] furniture revision parsed JSON:', json);
+        return { ok: true, spec: json, raw: content };
+    } catch (err) {
+        return { ok: false, error: err.message || '家具样式修改请求失败。' };
     }
 }
 
