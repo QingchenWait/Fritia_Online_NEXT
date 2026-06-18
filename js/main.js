@@ -2,12 +2,13 @@ import * as THREE from 'three';
 import { initScene } from './scene.js';
 import { createRoom } from './room.js';
 import { initControls } from './controls.js';
-import { loadCharacter, updateCharacter, getCharacterPosition, startInteraction, endInteraction, startWaving, swapModel, applySleepingPose, applyIdlePose, updateBlink } from './character.js';
+import { loadCharacter, updateCharacter, getCharacterPosition, startInteraction, endInteraction, startWaving, swapModel, applySleepingPose, applyIdlePose, updateBlink, setSittingEnabled } from './character.js';
 import { initDialogue, showDialogue, hideDialogue, isDialogueVisible, getConversationHistory, importConversationHistory } from './dialogue.js';
 import { initDateDialogue, openDatePanel, closeDatePanel, isDatePanelVisible, getDateConversationHistory, importDateConversationHistory, getDateLocations } from './date_dialogue.js';
 import { initSettings } from './settings.js';
-import { addAffinity, exportGameState, getAffinity, getGameTimeInfo, getMoney, importGameState, initGameState, updateGameTime } from './game_state.js';
+import { addAffinity, exportGameState, getAffinity, getGameTimeInfo, getMoney, importGameState, initGameState, recordHeadPat, recordModelUsed, updateGameTime } from './game_state.js';
 import { closeGiftCollection, closeGiftTerminal, initGiftSystem, isGiftOverlayVisible, openGiftCollection, openGiftTerminal, renderGiftCollection } from './gift_system.js?v=20260618-gift-stream';
+import { closeAchievementsPanel, evaluateAchievements, exportAchievements, flushStartupAchievementToasts, importAchievements, initAchievements, isAchievementsPanelVisible, refreshAchievementsFromImport } from './achievements.js';
 
 let scene, camera, renderer;
 let controlsModule, charData;
@@ -127,6 +128,7 @@ async function init() {
     await initDateDialogue();
     initSettings();
     initGiftSystem();
+    initAchievements();
     initPainting();
     updateGameHud(true);
 
@@ -145,13 +147,18 @@ async function init() {
     document.addEventListener('fritia-game-state-updated', () => {
         updateGameHud(true);
         renderGiftCollection();
+        evaluateAchievements();
     });
     document.addEventListener('fritia-affinity-updated', (e) => {
         updateGameHud(true);
         showAffinityToast(e.detail?.delta || 0);
+        evaluateAchievements();
     });
     document.getElementById('btn-pet').addEventListener('click', () => { if (isSleeping) petFritiaHead(); });
     document.getElementById('btn-wake').addEventListener('click', () => { if (isSleeping) exitSleepMode(); });
+    document.getElementById('btn-achievements').addEventListener('click', () => {
+        controlsModule.releaseControlMode({ resumeOnClose: true });
+    });
     document.getElementById('btn-export').addEventListener('click', exportData);
     document.getElementById('btn-import').addEventListener('click', importData);
     document.getElementById('import-file').addEventListener('change', handleImportFile);
@@ -175,6 +182,7 @@ async function init() {
     const clickToPlay = document.getElementById('click-to-play');
     const onFirstClick = () => {
         clickToPlay.removeEventListener('click', onFirstClick);
+        flushStartupAchievementToasts();
         playStartupVoice();
         setTimeout(() => {
             if (charData) startWaving(charData);
@@ -218,7 +226,7 @@ function onKeyDown(e) {
             } else if (isLookingAtCollectionCabinet()) {
                 openGiftCollection();
                 controlsModule.releaseControlMode({ resumeOnClose: true });
-            } else if (isLookingAtBed() && !currentModelPath.includes('国主驾到')) {
+            } else if (isLookingAtBed() && !isSmallTeacherModel()) {
                 enterSleepMode();
             } else if (isLookingAtDesk() || isLookingAtDoor()) {
                 openDatePanel();
@@ -235,6 +243,10 @@ function onKeyDown(e) {
         if (isGiftOverlayVisible()) {
             closeGiftTerminal();
             closeGiftCollection();
+            return;
+        }
+        if (isAchievementsPanelVisible()) {
+            closeAchievementsPanel();
             return;
         }
         if (isDatePanelVisible()) {
@@ -367,6 +379,7 @@ function animate() {
     const timeUpdate = updateGameTime(delta);
     if (timeUpdate.displayChanged || timeUpdate.salary > 0) {
         updateGameHud(false, timeUpdate.salary);
+        evaluateAchievements();
     }
     updateWindowSky();
 
@@ -432,7 +445,7 @@ function updateInteractionPrompt() {
             paintingPrompt.innerHTML = '按 <kbd>E</kbd> 换装';
             paintingPrompt.classList.remove('hidden');
         } else if (lookBed) {
-            if (currentModelPath.includes('国主驾到')) {
+            if (isSmallTeacherModel()) {
                 paintingPrompt.innerHTML = '<span style="opacity:0.4;cursor:not-allowed;">按 <kbd>E</kbd> 休息 <small style="font-size:0.75em;">(该装扮不可用)</small></span>';
             } else {
                 paintingPrompt.innerHTML = '按 <kbd>E</kbd> 休息';
@@ -537,6 +550,10 @@ const ALTERABLE_MODELS = [
 let currentModelPath = DEFAULT_MODEL.path;
 let isSwapping = false;
 
+function isSmallTeacherModel(path = currentModelPath) {
+    return String(path || '').includes('国主驾到') || String(path || '').includes('small_king');
+}
+
 function openModelSelector() {
     const panel = document.getElementById('model-selector');
     const list = document.getElementById('model-list');
@@ -564,11 +581,16 @@ async function selectModel(model) {
     if (model.path === currentModelPath || isSwapping) return;
     isSwapping = true;
     closeModelSelector();
+    const previousModelPath = currentModelPath;
 
     try {
+        setSittingEnabled(charData, !isSmallTeacherModel(model.path));
         await swapModel(scene, charData, model.path);
         currentModelPath = model.path;
+        setSittingEnabled(charData, !isSmallTeacherModel(currentModelPath));
+        recordModelUsed(model.path);
     } catch (err) {
+        setSittingEnabled(charData, !isSmallTeacherModel(previousModelPath));
         console.error('Model swap failed:', err);
     } finally {
         isSwapping = false;
@@ -737,6 +759,7 @@ function petFritiaHead() {
     if (!charData || isPetting) return;
     isPetting = true;
     addAffinity(1);
+    recordHeadPat();
 
     const mesh = charData.mesh;
     const inf = mesh.morphTargetInfluences;
@@ -1051,6 +1074,8 @@ function exportData() {
         gameState,
         money: gameState.money,
         affinity: gameState.affinity,
+        stats: gameState.stats,
+        achievements: exportAchievements(),
         gifts: gameState.gifts,
         settings: JSON.parse(localStorage.getItem('fritia-settings') || '{}'),
         conversations: getConversationHistory(),
@@ -1088,7 +1113,9 @@ function handleImportFile(e) {
             if (data.dateConversations && typeof data.dateConversations === 'object') {
                 importDateConversationHistory(data.dateConversations);
             }
-            const importResult = importGameState(data);
+            const importResult = importGameState(data, { suppressEvent: true });
+            importAchievements(data.achievements);
+            refreshAchievementsFromImport();
             updateGameHud(true);
             renderGiftCollection();
             alert(`导入成功！礼物同步新增 ${importResult.giftsAdded || 0} 条。刷新页面以应用设置。`);

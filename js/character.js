@@ -257,6 +257,8 @@ export function loadCharacter(scene, waypoints, colliders, onProgress) {
                         root: mesh, mesh, skeleton, bones, boneRef,
                         initialPositions, colliders: colliders || [],
                         state: STATES.IDLE,
+                        disableSitting: false,
+                        lastStoodFromFurnitureWaypointName: null,
                         currentWaypoint: null, stateTimer: 0,
                         idleDuration: randomRange(IDLE_MIN, IDLE_MAX),
                         sitDuration: randomRange(SIT_MIN, SIT_MAX),
@@ -614,7 +616,7 @@ function lerpPose(cd, from, to, t) {
 function updateIdle(cd, delta) {
     updateBreathing(cd);
     if (cd.stateTimer > cd.idleDuration) {
-        const avail = cd.waypoints.filter(w => w.name !== cd.currentWaypoint?.name);
+        const avail = cd.waypoints.filter(w => canChooseWaypoint(cd, w));
         if (avail.length === 0) return;
         const target = avail[Math.floor(Math.random() * avail.length)];
         cd.walkEnd.copy(target.position);
@@ -627,6 +629,20 @@ function updateIdle(cd, delta) {
         cd.state = STATES.WALKING;
         cd.stateTimer = 0;
     }
+}
+
+function canChooseWaypoint(cd, waypoint) {
+    if (!waypoint) return false;
+    if (waypoint.name === cd.currentWaypoint?.name) return false;
+    if (cd.disableSitting && waypoint.isFurniture) return false;
+    if (
+        isPostStandCooldownActive(cd)
+        && waypoint.isFurniture
+        && waypoint.name === cd.lastStoodFromFurnitureWaypointName
+    ) {
+        return false;
+    }
+    return true;
 }
 
 const _charBox = new THREE.Box3();
@@ -674,11 +690,16 @@ function updateWalking(cd, delta) {
 function finishWalking(cd) {
     cd.walkBlend = 0;
     const t = cd.targetWaypoint;
+    if (!t) {
+        cd.state = STATES.IDLE;
+        cd.idleDuration = randomRange(IDLE_MIN, IDLE_MAX);
+        cd.stateTimer = 0;
+        applyIdlePose(cd);
+        return;
+    }
     cd.currentWaypoint = t;
-    if (t.isFurniture) {
-        const now = performance.now() * 0.001;
-        const timeSinceStand = cd.standUpTime ? now - cd.standUpTime : Infinity;
-        if (timeSinceStand < SIT_COOLDOWN) {
+    if (t.isFurniture && !cd.disableSitting) {
+        if (isPostStandCooldownActive(cd)) {
             cd.state = STATES.IDLE;
             cd.idleDuration = randomRange(IDLE_MIN, IDLE_MAX);
             cd.stateTimer = 0;
@@ -697,6 +718,19 @@ function finishWalking(cd) {
         cd.stateTimer = 0;
         applyIdlePose(cd);
     }
+}
+
+function markStoodFromFurniture(cd) {
+    const waypoint = cd.currentWaypoint?.isFurniture
+        ? cd.currentWaypoint
+        : (cd.targetWaypoint?.isFurniture ? cd.targetWaypoint : null);
+    cd.lastStoodFromFurnitureWaypointName = waypoint?.name || null;
+    cd.standUpTime = performance.now() * 0.001;
+}
+
+function isPostStandCooldownActive(cd) {
+    if (!cd.standUpTime) return false;
+    return performance.now() * 0.001 - cd.standUpTime < SIT_COOLDOWN;
 }
 
 const SIT_DROP = 0.35;
@@ -780,10 +814,10 @@ function updateStandTransition(cd, delta) {
         cd.root.position.x = cd.sitStandEndX;
         cd.root.position.y = cd.baseY;
         cd.root.position.z = cd.sitStandEndZ;
-        cd.standUpTime = performance.now() * 0.001;
+        markStoodFromFurniture(cd);
 
         applyIdlePose(cd);
-        const avail = cd.waypoints.filter(w => !w.isFurniture);
+        const avail = cd.waypoints.filter(w => canChooseWaypoint(cd, w));
         if (avail.length > 0) {
             const target = avail[Math.floor(Math.random() * avail.length)];
             cd.walkEnd.copy(target.position);
@@ -808,6 +842,37 @@ function updateStandTransition(cd, delta) {
     cd.root.position.x = cd.sitStandStartX + (cd.sitStandEndX - cd.sitStandStartX) * t;
     cd.root.position.y = cd.sitStandStartY + (cd.baseY - cd.sitStandStartY) * t;
     cd.root.position.z = cd.sitStandStartZ + (cd.sitStandEndZ - cd.sitStandStartZ) * t;
+}
+
+export function forceStandUp(cd) {
+    if (!cd?.root) return;
+    const wasSitting = cd.state === STATES.SITTING
+        || cd.state === STATES.STAND_TO_SIT
+        || cd.state === STATES.TURNING_TO_SIT
+        || cd.state === STATES.SIT_TO_STAND;
+    if (wasSitting) markStoodFromFurniture(cd);
+    cd.state = STATES.IDLE;
+    cd.prevState = STATES.IDLE;
+    cd.currentWaypoint = null;
+    cd.targetWaypoint = null;
+    cd.transitionProgress = 0;
+    cd.walkProgress = 0;
+    cd.walkBlend = 0;
+    cd.stateTimer = 0;
+    cd.idleDuration = randomRange(IDLE_MIN, IDLE_MAX);
+    if (wasSitting && Number.isFinite(cd.sitStartX) && Number.isFinite(cd.sitStartZ)) {
+        cd.root.position.x = cd.sitStartX;
+        cd.root.position.z = cd.sitStartZ;
+    }
+    cd.root.position.y = cd.baseY;
+    applyIdlePose(cd);
+    forceUpdate(cd);
+}
+
+export function setSittingEnabled(cd, enabled) {
+    if (!cd) return;
+    cd.disableSitting = !enabled;
+    if (!enabled) forceStandUp(cd);
 }
 
 export function getCharacterPosition(cd) {
@@ -891,7 +956,7 @@ export function endInteraction(cd) {
     cd.getPlayerPos = null;
     cd.interactionHeadOrigRot = null;
 
-    if (cd.prevState === STATES.SITTING || cd.prevState === STATES.STAND_TO_SIT || cd.prevState === STATES.TURNING_TO_SIT) {
+    if (!cd.disableSitting && (cd.prevState === STATES.SITTING || cd.prevState === STATES.STAND_TO_SIT || cd.prevState === STATES.TURNING_TO_SIT)) {
         cd.state = STATES.SITTING;
     } else {
         cd.state = STATES.IDLE;
@@ -966,6 +1031,7 @@ export async function swapModel(scene, cd, modelPath) {
                     const savedPos = cd.root.position.clone();
                     const savedRot = cd.root.rotation.clone();
                     const savedState = cd.state;
+                    const sittingDisabled = Boolean(cd.disableSitting);
 
                     scene.remove(cd.root);
                     mesh.position.copy(savedPos);
@@ -1007,12 +1073,13 @@ export async function swapModel(scene, cd, modelPath) {
                     cd.hasAnimation = bones.length > 0;
                     cd.blinkIndex = blinkIndex;
                     cd.smileIndex = smileIndex;
+                    cd.disableSitting = sittingDisabled;
 
                     if (smileIndex >= 0 && mesh.morphTargetInfluences) {
                         mesh.morphTargetInfluences[smileIndex] = 0.3;
                     }
 
-                    if (savedState === STATES.SITTING || savedState === STATES.STAND_TO_SIT || savedState === STATES.TURNING_TO_SIT) {
+                    if (!cd.disableSitting && (savedState === STATES.SITTING || savedState === STATES.STAND_TO_SIT || savedState === STATES.TURNING_TO_SIT)) {
                         applySittingPose(cd);
                         cd.state = STATES.SITTING;
                     } else {

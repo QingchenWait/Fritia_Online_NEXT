@@ -44,7 +44,8 @@ export function initControls(camera, domElement, colliders) {
         'sleep-ui',
         'date-panel',
         'gift-terminal-panel',
-        'gift-collection-panel'
+        'gift-collection-panel',
+        'achievements-panel'
     ];
     let resumeAfterOverlay = false;
     let resumeInProgress = false;

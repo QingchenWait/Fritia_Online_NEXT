@@ -70,6 +70,7 @@
         <div id="painting-prompt" class="hidden" role="button" tabindex="0">
             按 <kbd>E</kbd> 更换挂画
         </div>
+        <div id="achievement-toast-host"></div>
         <div id="click-to-play" class="hidden">
             点击屏幕进入操作模式
         </div>
@@ -94,6 +95,9 @@
     </div>
 
     <div id="top-bar">
+        <button id="btn-achievements" title="成就">
+            <img src="src/_logos/achievement_trophy.svg" alt="">
+        </button>
         <button id="btn-history" title="历史对话">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>
         </button>
@@ -111,6 +115,27 @@
         </div>
     </div>
     <input type="file" id="import-file" accept=".json" style="display:none">
+
+    <div id="achievements-panel" class="hidden">
+        <div class="achievements-shell">
+            <div class="achievements-hero">
+                <div class="achievements-mark">
+                    <img src="src/_logos/achievement_trophy.svg" alt="">
+                </div>
+                <div>
+                    <div class="achievements-kicker">Fritia Online NEXT</div>
+                    <h2>成就列表</h2>
+                    <p>记录你和芙提雅共同完成的关键时刻。</p>
+                </div>
+                <div class="achievements-summary">
+                    <span id="achievement-summary">0/15</span>
+                    <small>已解锁</small>
+                </div>
+                <button id="achievements-close" aria-label="关闭成就列表">×</button>
+            </div>
+            <div id="achievement-list"></div>
+        </div>
+    </div>
 
     <div id="settings-panel" class="hidden">
         <div class="settings-inner">

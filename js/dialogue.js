@@ -1,5 +1,5 @@
 import { getSettings } from './settings.js';
-import { addAffinity, getGameTimeContext } from './game_state.js';
+import { addAffinity, getGameTimeContext, recordDialogueInteraction } from './game_state.js';
 
 const HISTORY_KEY = 'fritia_chat_history';
 
@@ -201,7 +201,10 @@ async function handleSend() {
         const assistantMsg = { role: 'assistant', content: fullText, ts: getTimestamp() };
         conversationHistory.push(assistantMsg);
         saveHistory();
-        if (fullText.trim()) addAffinity(1);
+        if (fullText.trim()) {
+            addAffinity(1);
+            recordDialogueInteraction('daily', fullText);
+        }
 
     } catch (err) {
         thinkingEl.remove();

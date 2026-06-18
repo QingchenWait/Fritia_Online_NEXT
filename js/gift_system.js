@@ -11,6 +11,7 @@ import {
     getGameTimeInfo,
     getGifts,
     getMoney,
+    recordGiftEstimate,
     spendMoney
 } from './game_state.js';
 
@@ -146,6 +147,7 @@ async function handleEvaluateGift() {
             score: evaluation.score,
             comment: evaluation.comment
         };
+        recordGiftEstimate(pendingGift.amount);
         if (els.payBtn) {
             const affordable = canAfford(pendingGift.amount);
             els.payBtn.textContent = `支付 ${formatMoney(pendingGift.amount)}`;

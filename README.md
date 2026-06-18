@@ -13,3 +13,5 @@
 *_💖 对你的爱，跨越空间 💖_*
 
 </div>
+
+<div align=center>  <img src="./src/sample_screenshot.png" width=70%>

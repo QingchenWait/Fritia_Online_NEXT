@@ -7,13 +7,21 @@ const DAILY_SALARY = 4000;
 const INITIAL_MONEY = 40000;
 const INITIAL_AFFINITY = 124;
 const MONTH_DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+const DEFAULT_MODELS = [
+    'src/_fritia_3d_model/驰掣-毛绒派对.pmx',
+    'src/_fritia_alterable_models/sweety_straw/芙提雅-驰掣 草莓甜心物理裙a1.0.pmx',
+    'src/_fritia_alterable_models/cyan_leaf/芙提雅 青叶密裹1.0.pmx',
+    'src/_fritia_alterable_models/pool_guard/芙提雅-驰掣 泳池护卫a2.0.pmx',
+    'src/_fritia_alterable_models/small_king/芙提雅-炬芯 国主驾到.pmx'
+];
 
 let state = {
     gameMinutes: INITIAL_GAME_MINUTES,
     money: INITIAL_MONEY,
     affinity: INITIAL_AFFINITY,
     lastSalaryDay: 0,
-    gifts: []
+    gifts: [],
+    stats: createDefaultStats()
 };
 
 let lastDisplayBucket = Math.floor(INITIAL_GAME_MINUTES / DISPLAY_STEP_MINUTES);
@@ -22,6 +30,40 @@ function saveState() {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch {}
+}
+
+function createDefaultStats() {
+    return {
+        moneySpent: 0,
+        fiveStarGiftCount: 0,
+        maxGiftEstimate: 0,
+        dailyUserMessages: 0,
+        dailyBotMessages: 0,
+        dateUserMessages: 0,
+        dateBotMessages: 0,
+        dateInteractionLocations: [],
+        usedModelPaths: [DEFAULT_MODELS[0]],
+        smallTeacherStartsWithGanShenme: 0,
+        headPatCount: 0
+    };
+}
+
+function normalizeStats(data = {}) {
+    const defaults = createDefaultStats();
+    const list = (value) => Array.isArray(value) ? value.filter(Boolean).map(String) : [];
+    return {
+        moneySpent: Math.max(0, Math.round(Number(data.moneySpent) || 0)),
+        fiveStarGiftCount: Math.max(0, Math.round(Number(data.fiveStarGiftCount) || 0)),
+        maxGiftEstimate: Math.max(0, Math.round(Number(data.maxGiftEstimate) || 0)),
+        dailyUserMessages: Math.max(0, Math.round(Number(data.dailyUserMessages) || 0)),
+        dailyBotMessages: Math.max(0, Math.round(Number(data.dailyBotMessages) || 0)),
+        dateUserMessages: Math.max(0, Math.round(Number(data.dateUserMessages) || 0)),
+        dateBotMessages: Math.max(0, Math.round(Number(data.dateBotMessages) || 0)),
+        dateInteractionLocations: [...new Set(list(data.dateInteractionLocations))],
+        usedModelPaths: [...new Set([...defaults.usedModelPaths, ...list(data.usedModelPaths)])],
+        smallTeacherStartsWithGanShenme: Math.max(0, Math.round(Number(data.smallTeacherStartsWithGanShenme) || 0)),
+        headPatCount: Math.max(0, Math.round(Number(data.headPatCount) || 0))
+    };
 }
 
 function normalizeGift(gift) {
@@ -61,7 +103,8 @@ function loadState() {
             lastSalaryDay: Number.isFinite(Number(data.lastSalaryDay))
                 ? Math.max(0, Math.floor(Number(data.lastSalaryDay)))
                 : Math.floor((Number.isFinite(gameMinutes) ? gameMinutes : INITIAL_GAME_MINUTES) / DAY_MINUTES),
-            gifts
+            gifts,
+            stats: normalizeStats(data.stats)
         };
     } catch {}
 }
@@ -124,6 +167,7 @@ function getFestival(month, day) {
 
 export function initGameState() {
     loadState();
+    deriveStatsFromCurrentData();
     lastDisplayBucket = Math.floor(state.gameMinutes / DISPLAY_STEP_MINUTES);
     saveState();
 }
@@ -206,6 +250,68 @@ export function addAffinity(amount) {
     return { delta, value: state.affinity };
 }
 
+export function getStats() {
+    return {
+        ...state.stats,
+        dateInteractionLocations: [...state.stats.dateInteractionLocations],
+        usedModelPaths: [...state.stats.usedModelPaths]
+    };
+}
+
+export function getAllModelPaths() {
+    return [...DEFAULT_MODELS];
+}
+
+export function recordGiftEstimate(amount) {
+    const value = Math.max(0, Math.round(Number(amount) || 0));
+    if (value > state.stats.maxGiftEstimate) {
+        state.stats.maxGiftEstimate = value;
+        saveState();
+        dispatchStatsUpdated();
+    }
+}
+
+export function recordDialogueInteraction(type, assistantText = '', locationId = '') {
+    if (type === 'date') {
+        state.stats.dateUserMessages += 1;
+        state.stats.dateBotMessages += 1;
+        if (locationId && !state.stats.dateInteractionLocations.includes(locationId)) {
+            state.stats.dateInteractionLocations.push(locationId);
+        }
+    } else {
+        state.stats.dailyUserMessages += 1;
+        state.stats.dailyBotMessages += 1;
+    }
+
+    const text = String(assistantText || '').trim();
+    if (state.stats.smallTeacherStartsWithGanShenme <= 0 && text.startsWith('干什么')) {
+        state.stats.smallTeacherStartsWithGanShenme = 1;
+    }
+
+    saveState();
+    dispatchStatsUpdated();
+}
+
+export function recordModelUsed(path) {
+    const value = String(path || '').trim();
+    if (!value || state.stats.usedModelPaths.includes(value)) return;
+    state.stats.usedModelPaths.push(value);
+    saveState();
+    dispatchStatsUpdated();
+}
+
+export function recordHeadPat() {
+    state.stats.headPatCount += 1;
+    saveState();
+    dispatchStatsUpdated();
+}
+
+function dispatchStatsUpdated() {
+    if (typeof document !== 'undefined') {
+        document.dispatchEvent(new CustomEvent('fritia-game-state-updated'));
+    }
+}
+
 export function canAfford(amount) {
     return state.money >= Math.max(0, Math.round(amount));
 }
@@ -214,7 +320,9 @@ export function spendMoney(amount) {
     const value = Math.max(0, Math.round(amount));
     if (state.money < value) return false;
     state.money -= value;
+    state.stats.moneySpent += value;
     saveState();
+    dispatchStatsUpdated();
     return true;
 }
 
@@ -224,7 +332,11 @@ export function addGift(gift) {
     if (!state.gifts.some(item => getGiftKey(item) === getGiftKey(normalized))) {
         state.gifts.push(normalized);
         state.gifts.sort((a, b) => (b.gameMinutes || b.createdAt) - (a.gameMinutes || a.createdAt));
+        if (normalized.score >= 5) {
+            state.stats.fiveStarGiftCount += 1;
+        }
         saveState();
+        dispatchStatsUpdated();
     }
     return normalized;
 }
@@ -275,11 +387,12 @@ export function exportGameState() {
         affinity: {
             value: state.affinity
         },
+        stats: getStats(),
         gifts: getGifts()
     };
 }
 
-export function importGameState(data) {
+export function importGameState(data, options = {}) {
     if (!data || typeof data !== 'object') return { giftsAdded: 0 };
 
     const source = data.gameState && typeof data.gameState === 'object' ? data.gameState : data;
@@ -311,8 +424,35 @@ export function importGameState(data) {
         ? source.gifts
         : (Array.isArray(data.gifts) ? data.gifts : []);
     const giftsAdded = mergeGifts(gifts);
+    state.stats = mergeStats(state.stats, normalizeStats(source.stats || data.stats));
+    deriveStatsFromCurrentData();
     saveState();
+    if (!options.suppressEvent) {
+        dispatchStatsUpdated();
+    }
     return { giftsAdded };
+}
+
+function mergeStats(current, imported) {
+    return {
+        moneySpent: Math.max(current.moneySpent, imported.moneySpent),
+        fiveStarGiftCount: Math.max(current.fiveStarGiftCount, imported.fiveStarGiftCount),
+        maxGiftEstimate: Math.max(current.maxGiftEstimate, imported.maxGiftEstimate),
+        dailyUserMessages: Math.max(current.dailyUserMessages, imported.dailyUserMessages),
+        dailyBotMessages: Math.max(current.dailyBotMessages, imported.dailyBotMessages),
+        dateUserMessages: Math.max(current.dateUserMessages, imported.dateUserMessages),
+        dateBotMessages: Math.max(current.dateBotMessages, imported.dateBotMessages),
+        dateInteractionLocations: [...new Set([...current.dateInteractionLocations, ...imported.dateInteractionLocations])],
+        usedModelPaths: [...new Set([...current.usedModelPaths, ...imported.usedModelPaths])],
+        smallTeacherStartsWithGanShenme: Math.max(current.smallTeacherStartsWithGanShenme, imported.smallTeacherStartsWithGanShenme),
+        headPatCount: Math.max(current.headPatCount, imported.headPatCount)
+    };
+}
+
+function deriveStatsFromCurrentData() {
+    state.stats.usedModelPaths = [...new Set([...state.stats.usedModelPaths, DEFAULT_MODELS[0]])];
+    const fiveStarCount = state.gifts.filter(gift => Number(gift.score) >= 5).length;
+    state.stats.fiveStarGiftCount = Math.max(state.stats.fiveStarGiftCount, fiveStarCount);
 }
 
 function parseAffinityValue(value, fallback) {
