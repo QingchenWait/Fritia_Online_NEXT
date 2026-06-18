@@ -19,8 +19,10 @@ import {
     getDreamFurnitureLabel,
     getDreamFurnitureWaypoints,
     getLookingDreamFurniture,
+    hasEditableDreamPainting,
     importDreamFurniture,
     initDreamSystem,
+    isDreamPaintingFurniture,
     isDreamOverlayVisible,
     isDreamRevisionPending,
     isLookingAtDreamFurniture,
@@ -28,6 +30,8 @@ import {
     openDreamFurnitureEditor,
     openDreamPanel,
     refreshDreamFurnitureAfterImport,
+    requestDreamPaintingTextureUpload,
+    consumeDreamPaintingTextureFile,
     rollbackPendingDreamRevision
 } from './dream_system.js';
 
@@ -304,6 +308,18 @@ function onKeyDown(e) {
         return;
     }
 
+    if ((e.code === 'Digit1' || e.code === 'Numpad1') && !isTypingInEditableElement()) {
+        const lookedDreamFurniture = getLookingDreamFurniture(camera);
+        if (hasEditableDreamPainting()) {
+            requestDreamPaintingTextureUpload();
+            return;
+        }
+        if (lookedDreamFurniture && isDreamPaintingFurniture(lookedDreamFurniture)) {
+            requestDreamPaintingTextureUpload(lookedDreamFurniture);
+            return;
+        }
+    }
+
     if (e.code === 'KeyF') {
         if (isDialogueVisible()) return;
         if (isDatePanelVisible()) return;
@@ -418,6 +434,13 @@ function endInteractionMode() {
     isInteracting = false;
     endInteraction(charData);
     hideDialogue();
+}
+
+function isTypingInEditableElement() {
+    const active = document.activeElement;
+    if (!active) return false;
+    const tag = String(active.tagName || '').toUpperCase();
+    return active.isContentEditable || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
 }
 
 function updateGameHud(force = false, salary = 0) {
@@ -648,6 +671,8 @@ function startDreamFurnitureCinematic(record, runtimeItem) {
     }
     const paintingPrompt = document.getElementById('painting-prompt');
     if (paintingPrompt) paintingPrompt.classList.add('hidden');
+    const dreamPaintingPrompt = document.getElementById('dream-painting-prompt');
+    if (dreamPaintingPrompt) dreamPaintingPrompt.classList.add('hidden');
 }
 
 function skipDreamFurnitureCinematic() {
@@ -846,20 +871,23 @@ function animate() {
 function updateInteractionPrompt() {
     const prompt = document.getElementById('interaction-prompt');
     const paintingPrompt = document.getElementById('painting-prompt');
-    if (isDreamRevisionPending()) {
+    const dreamPaintingPrompt = document.getElementById('dream-painting-prompt');
+    const hideActionPrompts = () => {
         prompt.classList.add('hidden');
         if (paintingPrompt) paintingPrompt.classList.add('hidden');
+        if (dreamPaintingPrompt) dreamPaintingPrompt.classList.add('hidden');
+    };
+    if (isDreamRevisionPending()) {
+        hideActionPrompts();
         return;
     }
     if (isSleeping || isInteracting || isDialogueVisible() || isDatePanelVisible() || isGiftOverlayVisible() || isDreamOverlayVisible()) {
-        prompt.classList.add('hidden');
-        if (paintingPrompt) paintingPrompt.classList.add('hidden');
+        hideActionPrompts();
         return;
     }
 
     if (!controlsModule || !controlsModule.state.isLocked) {
-        prompt.classList.add('hidden');
-        if (paintingPrompt) paintingPrompt.classList.add('hidden');
+        hideActionPrompts();
         return;
     }
 
@@ -876,6 +904,7 @@ function updateInteractionPrompt() {
     }
 
     if (paintingPrompt) {
+        dreamPaintingPrompt?.classList.add('hidden');
         const lookDreamDoor = isLookingAtDreamDoor();
         const lookBed = isLookingAtBed();
         const lookDesk = isLookingAtDesk();
@@ -891,9 +920,14 @@ function updateInteractionPrompt() {
             paintingPrompt.innerHTML = '按 <kbd>E</kbd> 打开造梦终端';
             paintingPrompt.classList.remove('hidden');
         } else if (lookDreamFurniture) {
-            const furnitureName = getDreamFurnitureLabel(getLookingDreamFurniture(camera));
+            const dreamFurnitureId = getLookingDreamFurniture(camera);
+            const furnitureName = getDreamFurnitureLabel(dreamFurnitureId);
             paintingPrompt.innerHTML = `按 <kbd>E</kbd> 管理 [${furnitureName}]`;
             paintingPrompt.classList.remove('hidden');
+            if (isDreamPaintingFurniture(dreamFurnitureId) && dreamPaintingPrompt) {
+                dreamPaintingPrompt.innerHTML = '按 <kbd>1</kbd> 替换图片';
+                dreamPaintingPrompt.classList.remove('hidden');
+            }
         } else if (lookTerminal) {
             paintingPrompt.innerHTML = '按 <kbd>E</kbd> 打开购物终端';
             paintingPrompt.classList.remove('hidden');
@@ -924,30 +958,23 @@ function updateInteractionPrompt() {
         }
     }
 
-    adjustPromptOverlap(prompt, paintingPrompt);
+    stackPromptButtons(prompt, paintingPrompt, dreamPaintingPrompt);
 }
 
-function adjustPromptOverlap(prompt1, prompt2) {
-    if (!prompt1 || !prompt2) return;
-    if (prompt1.classList.contains('hidden') || prompt2.classList.contains('hidden')) {
-        prompt1.style.bottom = '';
-        prompt1.dataset.shifted = '';
-        return;
-    }
-    if (prompt1.dataset.shifted) return;
-    const gap = 16;
-    const r1 = prompt1.getBoundingClientRect();
-    const r2 = prompt2.getBoundingClientRect();
-    if (r1.right > r2.left && r1.left < r2.right && r1.bottom > r2.top) {
-        const shift = Math.ceil(r1.bottom - r2.top + gap);
-        prompt1.style.bottom = `calc(30% + ${shift}px)`;
-        prompt1.dataset.shifted = '1';
+function stackPromptButtons(...prompts) {
+    let row = 0;
+    for (const prompt of prompts.slice().reverse()) {
+        if (!prompt || prompt.classList.contains('hidden')) continue;
+        prompt.style.bottom = `calc(24% + ${row * 56}px)`;
+        prompt.dataset.shifted = '';
+        row += 1;
     }
 }
 
 function initPromptButtons() {
     const prompt = document.getElementById('interaction-prompt');
     const paintingPrompt = document.getElementById('painting-prompt');
+    const dreamPaintingPrompt = document.getElementById('dream-painting-prompt');
 
     function handlePromptTap(e, keyCode) {
         e.preventDefault();
@@ -972,6 +999,15 @@ function initPromptButtons() {
         if (paintingPrompt.classList.contains('hidden')) return;
         handlePromptTap(e, 'KeyE');
     }, { passive: false });
+
+    dreamPaintingPrompt?.addEventListener('click', (e) => {
+        if (dreamPaintingPrompt.classList.contains('hidden')) return;
+        handlePromptTap(e, 'Digit1');
+    });
+    dreamPaintingPrompt?.addEventListener('touchend', (e) => {
+        if (dreamPaintingPrompt.classList.contains('hidden')) return;
+        handlePromptTap(e, 'Digit1');
+    }, { passive: false });
 }
 
 function initPainting() {
@@ -984,6 +1020,10 @@ function initPainting() {
     fileInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
+        if (consumeDreamPaintingTextureFile(file)) {
+            fileInput.value = '';
+            return;
+        }
         const reader = new FileReader();
         reader.onload = (ev) => {
             const dataUrl = ev.target.result;
@@ -1235,6 +1275,8 @@ async function enterSleepMode() {
     if (prompt) prompt.classList.add('hidden');
     const paintingPrompt = document.getElementById('painting-prompt');
     if (paintingPrompt) paintingPrompt.classList.add('hidden');
+    const dreamPaintingPrompt = document.getElementById('dream-painting-prompt');
+    if (dreamPaintingPrompt) dreamPaintingPrompt.classList.add('hidden');
     document.getElementById('sleep-ui').classList.remove('hidden');
 
     await fadeFromBlack();

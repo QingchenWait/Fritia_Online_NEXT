@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 export const DREAM_FURNITURE_SCHEMA_VERSION = 1;
 
-const ALLOWED_CATEGORIES = new Set(['seat', 'table', 'bed', 'storage', 'lighting', 'decor', 'plant', 'toy', 'hanging', 'custom']);
+const ALLOWED_CATEGORIES = new Set(['seat', 'table', 'bed', 'storage', 'lighting', 'decor', 'plant', 'toy', 'hanging', 'painting', 'custom']);
 const ALLOWED_PRIMITIVES = new Set(['box', 'cylinder', 'sphere', 'cone', 'torus', 'plane']);
 const ALLOWED_FRONT_DIRECTIONS = new Set(['+X', '-X', '+Z', '-Z']);
 const MAX_COMPONENTS = 24;
@@ -446,7 +446,8 @@ export function serializeFurniture(furniture) {
         createdAt: furniture.createdAt,
         gameDateTime: furniture.gameDateTime,
         revisionCount: Math.max(0, Math.round(Number(furniture.revisionCount) || 0)),
-        lastDialogueAt: furniture.lastDialogueAt || 0
+        lastDialogueAt: furniture.lastDialogueAt || 0,
+        customTexture: furniture.customTexture || ''
     };
 }
 
@@ -475,6 +476,7 @@ export function deserializeFurniture(data) {
         createdAt: String(data.createdAt || new Date().toISOString()),
         gameDateTime: String(data.gameDateTime || ''),
         revisionCount: Math.max(0, Math.round(Number(data.revisionCount) || 0)),
-        lastDialogueAt: Math.max(0, Number(data.lastDialogueAt) || 0)
+        lastDialogueAt: Math.max(0, Number(data.lastDialogueAt) || 0),
+        customTexture: typeof data.customTexture === 'string' ? data.customTexture : ''
     };
 }

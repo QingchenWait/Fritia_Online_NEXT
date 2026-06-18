@@ -570,6 +570,46 @@ export function applySleepingPose(cd) {
     forceUpdate(cd);
 }
 
+function applyDreamBedPose(cd) {
+    if (!cd.hasAnimation) return;
+    resetAllBones(cd);
+
+    const centerBone = cd.boneRef.center;
+    if (centerBone && cd.initialPositions.center) {
+        centerBone.position.y = cd.initialPositions.center.y + 0.18;
+        centerBone.rotation.x = -Math.PI / 2;
+        centerBone.rotation.y = 0;
+        centerBone.rotation.z = 0;
+    }
+
+    addRot(cd.boneRef.spine, 0.02, 0, 0);
+    addRot(cd.boneRef.spine2, 0.02, 0, 0);
+    addRot(cd.boneRef.leftLeg, 0, 0, 0);
+    addRot(cd.boneRef.rightLeg, 0, 0, 0);
+    addRot(cd.boneRef.leftKnee, 0.04, 0, 0);
+    addRot(cd.boneRef.rightKnee, 0.04, 0, 0);
+
+    const lc = cd.boneRef.leftShoulderC;
+    const rc = cd.boneRef.rightShoulderC;
+    if (lc) lc.rotation.z = -0.55;
+    if (rc) rc.rotation.z = 0.55;
+
+    const ls = cd.boneRef.leftShoulder;
+    const rs = cd.boneRef.rightShoulder;
+    if (ls) ls.rotation.x = 0.05;
+    if (rs) rs.rotation.x = 0.05;
+
+    addRot(cd.boneRef.leftElbow, 0.12, 0, 0);
+    addRot(cd.boneRef.rightElbow, 0.12, 0, 0);
+
+    if (cd.boneRef.head) {
+        cd.boneRef.head.rotation.x = 0.02;
+        cd.boneRef.head.rotation.y = 0;
+    }
+
+    forceUpdate(cd);
+}
+
 function capturePose(cd) {
     const pose = {};
     for (const bone of cd.bones) {
@@ -944,6 +984,13 @@ function finishWalking(cd) {
         return;
     }
     cd.currentWaypoint = t;
+    const interactionRate = t.isDynamicDreamFurniture && t.isFurniture
+        ? Math.max(0, Math.min(1, Number.isFinite(t.interactionRate) ? t.interactionRate : 0))
+        : 1;
+    const shouldTryFurnitureAction = t.isFurniture
+        && !cd.disableSitting
+        && !isPostStandCooldownActive(cd)
+        && (!t.isDynamicDreamFurniture || Math.random() < interactionRate);
     const nextTransitionWaypoint = Array.isArray(cd.roomTransitionQueue)
         ? cd.roomTransitionQueue.shift()
         : null;
@@ -951,7 +998,7 @@ function finishWalking(cd) {
         if (beginWalkToWaypoint(cd, nextTransitionWaypoint)) return;
         cd.roomTransitionQueue = null;
     }
-    if (t.isDynamicDreamFurniture && typeof document !== 'undefined') {
+    if (t.isDynamicDreamFurniture && !shouldTryFurnitureAction && typeof document !== 'undefined') {
         document.dispatchEvent(new CustomEvent('fritia-dream-furniture-visited', {
             detail: {
                 furnitureId: t.furnitureId,
@@ -962,7 +1009,7 @@ function finishWalking(cd) {
             }
         }));
     }
-    if (t.isFurniture && !cd.disableSitting) {
+    if (t.isFurniture && !cd.disableSitting && shouldTryFurnitureAction) {
         if (isPostStandCooldownActive(cd)) {
             cd.state = STATES.IDLE;
             cd.idleDuration = randomRange(IDLE_MIN, IDLE_MAX);
@@ -970,7 +1017,15 @@ function finishWalking(cd) {
             applyIdlePose(cd);
             return;
         }
-        cd.turnTarget = getFurnitureSitPose(cd, t)?.faceDirection ?? cd.faceDirection + Math.PI;
+        const sitPose = getFurnitureSitPose(cd, t);
+        if (!sitPose) {
+            cd.state = STATES.IDLE;
+            cd.idleDuration = randomRange(IDLE_MIN, IDLE_MAX);
+            cd.stateTimer = 0;
+            applyIdlePose(cd);
+            return;
+        }
+        cd.turnTarget = sitPose.faceDirection;
         cd.turnStart = cd.faceDirection;
         cd.state = STATES.TURNING_TO_SIT;
         cd.transitionProgress = 0;
@@ -1000,25 +1055,96 @@ function isPostStandCooldownActive(cd) {
 const SIT_DROP = 0.35;
 const BED_SIT_RAISE = 0.08;
 const SIT_APPROACH_GAP = 0.15;
+const DREAM_BED_LIE_Y_OFFSET = -0.42;
+
+function isSeatWaypoint(waypoint) {
+    return waypoint?.furnitureType === 'chair' || waypoint?.furnitureType === 'seat';
+}
+
+function shouldUseDreamBedPose(waypoint) {
+    return waypoint?.isDynamicDreamFurniture && waypoint?.furnitureType === 'bed';
+}
+
+function getWaypointFrontVector(waypoint) {
+    const source = waypoint?.frontVector;
+    const x = Number(source?.x);
+    const z = Number(source?.z);
+    if (!Number.isFinite(x) || !Number.isFinite(z)) return null;
+    const length = Math.hypot(x, z);
+    if (length < 0.001) return null;
+    return { x: x / length, z: z / length };
+}
+
+function getFurnitureEdgeCandidates(box, pos) {
+    const x = Number(pos?.x) || 0;
+    const z = Number(pos?.z) || 0;
+    const clampedX = Math.max(box.min.x, Math.min(box.max.x, x));
+    const clampedZ = Math.max(box.min.z, Math.min(box.max.z, z));
+    return [
+        { edge: 'minX', distance: Math.abs(x - box.min.x), x: box.min.x, z: clampedZ, normalX: -1, normalZ: 0 },
+        { edge: 'maxX', distance: Math.abs(x - box.max.x), x: box.max.x, z: clampedZ, normalX: 1, normalZ: 0 },
+        { edge: 'minZ', distance: Math.abs(z - box.min.z), x: clampedX, z: box.min.z, normalX: 0, normalZ: -1 },
+        { edge: 'maxZ', distance: Math.abs(z - box.max.z), x: clampedX, z: box.max.z, normalX: 0, normalZ: 1 }
+    ];
+}
+
+function pickFurnitureInteractionEdge(box, waypoint, pos) {
+    let candidates = getFurnitureEdgeCandidates(box, pos);
+    const front = getWaypointFrontVector(waypoint);
+    if (front && (waypoint?.furnitureType === 'bed' || isSeatWaypoint(waypoint))) {
+        candidates.sort((a, b) => {
+            const dotA = a.normalX * front.x + a.normalZ * front.z;
+            const dotB = b.normalX * front.x + b.normalZ * front.z;
+            return (dotB - dotA) || (a.distance - b.distance);
+        });
+        return candidates[0] || null;
+    }
+    if (waypoint?.furnitureType === 'bed') {
+        candidates = candidates.filter(candidate => candidate.edge === 'maxX');
+    } else if (isSeatWaypoint(waypoint)) {
+        candidates = candidates.filter(candidate => candidate.edge === 'maxZ');
+    }
+    candidates.sort((a, b) => a.distance - b.distance);
+    return candidates[0] || null;
+}
+
+function getFurnitureEdgePoint(box, edge, waypoint) {
+    if (waypoint?.furnitureType !== 'bed') {
+        return { x: edge.x, z: edge.z };
+    }
+    const centerX = (box.min.x + box.max.x) * 0.5;
+    const centerZ = (box.min.z + box.max.z) * 0.5;
+    return {
+        x: edge.normalX === 0 ? centerX : edge.x,
+        z: edge.normalZ === 0 ? centerZ : edge.z
+    };
+}
+
+function getDreamBedLieY(cd, waypoint) {
+    const surfaceY = Number(waypoint?.bedSurfaceY);
+    if (Number.isFinite(surfaceY)) {
+        return surfaceY + DREAM_BED_LIE_Y_OFFSET;
+    }
+    const box = waypoint?.sitCollider;
+    if (box?.min && box?.max) {
+        const sizeY = box.max.y - box.min.y;
+        return box.min.y + Math.min(Math.max(sizeY * 0.45, 0.28), 0.75) + DREAM_BED_LIE_Y_OFFSET;
+    }
+    return cd.baseY - SIT_DROP + BED_SIT_RAISE;
+}
 
 function getSitApproachPosition(waypoint) {
     const box = waypoint?.sitCollider;
     if (!box?.min || !box?.max) return null;
     const source = waypoint.position || {};
-    const x = Number(source.x) || 0;
-    const z = Number(source.z) || 0;
-    if (waypoint.furnitureType === 'bed') {
+    const edge = pickFurnitureInteractionEdge(box, waypoint, source);
+    if (!edge) return null;
+    if (waypoint.furnitureType === 'bed' || isSeatWaypoint(waypoint)) {
+        const edgePoint = getFurnitureEdgePoint(box, edge, waypoint);
         return new THREE.Vector3(
-            box.max.x + SIT_APPROACH_GAP,
+            edgePoint.x + edge.normalX * SIT_APPROACH_GAP,
             0,
-            Math.max(box.min.z + 0.25, Math.min(box.max.z - 0.25, z))
-        );
-    }
-    if (waypoint.furnitureType === 'chair') {
-        return new THREE.Vector3(
-            Math.max(box.min.x + 0.12, Math.min(box.max.x - 0.12, x)),
-            0,
-            box.max.z + SIT_APPROACH_GAP
+            edgePoint.z + edge.normalZ * SIT_APPROACH_GAP
         );
     }
     return null;
@@ -1027,32 +1153,29 @@ function getSitApproachPosition(waypoint) {
 function getFurnitureSitPose(cd, waypoint) {
     const box = waypoint?.sitCollider;
     if (!box?.min || !box?.max || !cd?.root) return null;
+    const sizeX = box.max.x - box.min.x;
+    const sizeY = box.max.y - box.min.y;
+    const sizeZ = box.max.z - box.min.z;
+    if (waypoint.furnitureType === 'bed' && (sizeX < 0.8 || sizeZ < 1.1 || sizeY < 0.12)) {
+        console.info('[Dream] bed interaction skipped: collider is not bed-like.', waypoint.name);
+        return null;
+    }
+    if (isSeatWaypoint(waypoint) && (sizeX < 0.32 || sizeZ < 0.32 || sizeY < 0.12)) {
+        console.info('[Dream] seat interaction skipped: collider is not seat-like.', waypoint.name);
+        return null;
+    }
 
     const pos = cd.root.position;
-    const centerX = (box.min.x + box.max.x) * 0.5;
-    const centerZ = (box.min.z + box.max.z) * 0.5;
-    const clampedX = Math.max(box.min.x, Math.min(box.max.x, pos.x));
-    const clampedZ = Math.max(box.min.z, Math.min(box.max.z, pos.z));
-    let candidates = [
-        { edge: 'minX', distance: Math.abs(pos.x - box.min.x), x: box.min.x, z: clampedZ, normalX: -1, normalZ: 0 },
-        { edge: 'maxX', distance: Math.abs(pos.x - box.max.x), x: box.max.x, z: clampedZ, normalX: 1, normalZ: 0 },
-        { edge: 'minZ', distance: Math.abs(pos.z - box.min.z), x: clampedX, z: box.min.z, normalX: 0, normalZ: -1 },
-        { edge: 'maxZ', distance: Math.abs(pos.z - box.max.z), x: clampedX, z: box.max.z, normalX: 0, normalZ: 1 }
-    ];
-    if (waypoint.furnitureType === 'bed') {
-        candidates = candidates.filter(candidate => candidate.edge === 'maxX');
-    } else if (waypoint.furnitureType === 'chair') {
-        candidates = candidates.filter(candidate => candidate.edge === 'maxZ');
-    }
-    candidates.sort((a, b) => a.distance - b.distance);
-
-    const best = candidates[0];
-    const edgeInset = waypoint.furnitureType === 'chair' ? 0.3 : 0.26;
+    const best = pickFurnitureInteractionEdge(box, waypoint, pos);
+    if (!best) return null;
+    const edgePoint = getFurnitureEdgePoint(box, best, waypoint);
+    const edgeInset = isSeatWaypoint(waypoint) ? 0.3 : 0.45;
+    const isDreamBed = shouldUseDreamBedPose(waypoint);
     const outside = SIT_APPROACH_GAP;
-    const sitX = best.x - best.normalX * edgeInset;
-    const sitZ = best.z - best.normalZ * edgeInset;
-    const startX = best.x + best.normalX * outside;
-    const startZ = best.z + best.normalZ * outside;
+    const sitX = edgePoint.x - best.normalX * edgeInset;
+    const sitZ = edgePoint.z - best.normalZ * edgeInset;
+    const startX = edgePoint.x + best.normalX * outside;
+    const startZ = edgePoint.z + best.normalZ * outside;
     const faceDirection = Math.atan2(best.normalX, best.normalZ);
 
     return {
@@ -1060,7 +1183,7 @@ function getFurnitureSitPose(cd, waypoint) {
         startZ,
         sitEndX: sitX,
         sitEndZ: sitZ,
-        sitEndY: cd.baseY - SIT_DROP + (waypoint.furnitureType === 'bed' ? BED_SIT_RAISE : 0),
+        sitEndY: isDreamBed ? getDreamBedLieY(cd, waypoint) : cd.baseY - SIT_DROP + (waypoint.furnitureType === 'bed' ? BED_SIT_RAISE : 0),
         faceDirection
     };
 }
@@ -1083,15 +1206,22 @@ function updateTurningToSit(cd, delta) {
             cd.root.rotation.y = cd.faceDirection;
             const BACK_OFFSET = 0.4;
             const isBed = cd.currentWaypoint?.furnitureType === 'bed';
+            const isDreamBed = shouldUseDreamBedPose(cd.currentWaypoint);
             cd.sitStartX = cd.root.position.x;
             cd.sitStartZ = cd.root.position.z;
             cd.sitEndX = cd.root.position.x - Math.sin(cd.faceDirection) * BACK_OFFSET;
             cd.sitEndZ = cd.root.position.z - Math.cos(cd.faceDirection) * BACK_OFFSET;
-            cd.sitEndY = cd.baseY - SIT_DROP + (isBed ? BED_SIT_RAISE : 0);
+            cd.sitEndY = isDreamBed
+                ? getDreamBedLieY(cd, cd.currentWaypoint)
+                : cd.baseY - SIT_DROP + (isBed ? BED_SIT_RAISE : 0);
         }
         cd.sitStartY = cd.root.position.y;
         cd.sitStart = capturePose(cd);
-        applySittingPose(cd);
+        if (shouldUseDreamBedPose(cd.currentWaypoint)) {
+            applyDreamBedPose(cd);
+        } else {
+            applySittingPose(cd);
+        }
         cd.sitEnd = capturePose(cd);
         applySnapshot(cd, cd.sitStart);
         cd.state = STATES.STAND_TO_SIT;
@@ -1502,7 +1632,11 @@ export async function swapModel(scene, cd, modelPath) {
                     }
 
                     if (!cd.disableSitting && (savedState === STATES.SITTING || savedState === STATES.STAND_TO_SIT || savedState === STATES.TURNING_TO_SIT)) {
-                        applySittingPose(cd);
+                        if (shouldUseDreamBedPose(cd.currentWaypoint)) {
+                            applyDreamBedPose(cd);
+                        } else {
+                            applySittingPose(cd);
+                        }
                         cd.state = STATES.SITTING;
                     } else {
                         applyIdlePose(cd);

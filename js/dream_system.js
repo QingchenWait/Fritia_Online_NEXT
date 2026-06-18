@@ -31,6 +31,8 @@ const DREAM_REVISION_REFUND = 50;
 const DREAM_DELETE_REFUND = 400;
 const DIALOGUE_COOLDOWN_MS = 20 * 1000;
 const FURNITURE_DIALOGUE_LLM_RATE = 0.5;
+const SEAT_INTERACTION_RATE = 0.42;
+const BED_INTERACTION_RATE = 0.42;
 const MOVE_STEP = 0.25;
 const WALL_MOVE_STEP = 0.18;
 const ROTATE_STEP = THREE.MathUtils.degToRad(15);
@@ -97,7 +99,10 @@ const projectedControlPosition = new THREE.Vector3();
 const projectedBubblePosition = new THREE.Vector3();
 const furnitureSpeechTarget = new THREE.Vector3();
 const characterBubbleBox = new THREE.Box3();
+const dreamYAxis = new THREE.Vector3(0, 1, 0);
 let furnitureSpeechTurnToken = 0;
+let pendingDreamPaintingTextureId = '';
+let pendingDreamPaintingTextureTimer = null;
 
 function vectorToPlainBounds(box) {
     if (!box) return null;
@@ -163,11 +168,15 @@ function copyPose(pose) {
 
 function isWallFurniture(recordOrSpec) {
     const spec = recordOrSpec?.spec || recordOrSpec;
-    return spec?.anchor === 'wall' || spec?.category === 'hanging';
+    return spec?.anchor === 'wall' || spec?.category === 'hanging' || spec?.category === 'painting';
 }
 
 function hasExplicitWallMountIntent(text) {
     return /挂在墙|挂墙|墙上|墙面|壁挂|悬挂|挂钟|挂画|墙饰|wall[-\s]?mounted|on\s+the\s+wall|hanging/i.test(String(text || ''));
+}
+
+function hasPaintingIntent(text) {
+    return /挂画|画框|相框|照片框|展示框|墙画|壁画|painting|picture\s*frame|photo\s*frame|wall\s*art/i.test(String(text || ''));
 }
 
 function hasFurnitureSurfaceHangingIntent(text) {
@@ -401,6 +410,42 @@ function buildCandidatePositions(spec, placementText = '', placement = {}) {
     return candidates;
 }
 
+function buildExhaustiveFloorCandidates() {
+    const usable = getUsableBounds();
+    const candidates = [];
+    const step = 0.45;
+    const centerX = (usable.minX + usable.maxX) / 2;
+    const centerZ = (usable.minZ + usable.maxZ) / 2;
+    const points = [];
+
+    for (let x = usable.minX; x <= usable.maxX + 0.001; x += step) {
+        for (let z = usable.minZ; z <= usable.maxZ + 0.001; z += step) {
+            points.push({ x, z });
+        }
+    }
+    points.sort((a, b) => {
+        const da = Math.hypot(a.x - centerX, a.z - centerZ);
+        const db = Math.hypot(b.x - centerX, b.z - centerZ);
+        return da - db;
+    });
+    for (const point of points) {
+        candidates.push({ x: point.x, z: point.z, reason: 'exhaustive_grid' });
+    }
+    return candidates;
+}
+
+function getFloorRotationCandidates(pos, spec, baseRotation) {
+    const interiorRotation = rotateTowardInterior(pos, spec, baseRotation);
+    return Array.from(new Set([
+        interiorRotation,
+        baseRotation,
+        0,
+        Math.PI / 2,
+        Math.PI,
+        -Math.PI / 2
+    ].map(value => Number(value.toFixed(6)))));
+}
+
 function buildWallMountCandidates(spec, placementText = '') {
     const text = `${placementText || ''} ${spec.placement?.intent || ''} ${spec.placement?.preferredWall || ''}`.toLowerCase();
     const width = spec.dimensions.width;
@@ -451,15 +496,38 @@ function buildWallMountCandidates(spec, placementText = '') {
     add('front', centerX, clamp(2.05, yMin, yMax), zFront, Math.PI, 'front_high');
     add('back', centerX, clamp(1.2, yMin, yMax), zBack, 0, 'back_low');
 
+    const yLevels = Array.from(new Set([
+        yDefault,
+        clamp(1.15, yMin, yMax),
+        clamp(1.65, yMin, yMax),
+        clamp(2.05, yMin, yMax)
+    ].map(value => Number(value.toFixed(2)))));
+    const gridStep = 0.72;
+    for (const y of yLevels) {
+        for (let x = xMinOnZWall; x <= xMaxOnZWall + 0.001; x += gridStep) {
+            add('front', x, y, zFront, Math.PI, 'grid_front');
+            add('back', x, y, zBack, 0, 'grid_back');
+        }
+        for (let z = zMinOnXWall; z <= zMaxOnXWall + 0.001; z += gridStep) {
+            add('right', xFar, y, z, -Math.PI / 2, 'grid_right');
+            add('shared', xShared, y, z, Math.PI / 2, 'grid_shared');
+        }
+    }
+
     return candidates;
 }
 
 function findSafeWallPlacement(group, spec, placementText = '', excludeId = '') {
     const candidates = buildWallMountCandidates(spec, placementText);
+    const errors = new Set();
+    const tried = new Set();
     let lastError = '没有安全悬挂位置。';
 
     group.userData.anchor = 'wall';
     for (const candidate of candidates) {
+        const key = `${candidate.wall}:${candidate.rotationY.toFixed(2)}:${candidate.position.x.toFixed(2)}:${candidate.position.y.toFixed(2)}:${candidate.position.z.toFixed(2)}`;
+        if (tried.has(key)) continue;
+        tried.add(key);
         const pose = applyWallFurniturePose(group, {
             position: candidate.position,
             rotationY: candidate.rotationY,
@@ -473,10 +541,11 @@ function findSafeWallPlacement(group, spec, placementText = '', excludeId = '') 
                 pose
             };
         }
+        if (validation.error) errors.add(validation.error);
         lastError = validation.error;
     }
 
-    return { ok: false, error: lastError };
+    return { ok: false, error: errors.size > 1 ? '没有找到可安全悬挂的位置。' : lastError };
 }
 
 function alignWallFurnitureToSurface(group, wall) {
@@ -520,27 +589,37 @@ function findSafePlacement(group, spec, placementText = '', excludeId = '') {
     }
 
     const baseRotation = directionToRotation(spec.frontDirection);
-    const candidates = buildCandidatePositions(spec, placementText, spec.placement);
+    const candidates = [
+        ...buildCandidatePositions(spec, placementText, spec.placement),
+        ...buildExhaustiveFloorCandidates()
+    ];
     let lastError = '没有安全摆放位置。';
 
+    const errors = new Set();
+    const tried = new Set();
     for (const candidate of candidates) {
         const pos = new THREE.Vector3(candidate.x, 0, candidate.z);
-        const rotationY = rotateTowardInterior(pos, spec, baseRotation);
-        applyFurniturePose(group, { position: pos, rotationY });
-        const validation = validateRuntimePlacement(group, excludeId);
-        if (validation.ok) {
-            return {
-                ok: true,
-                pose: {
-                    position: { x: pos.x, y: 0, z: pos.z },
-                    rotationY
-                }
-            };
+        for (const rotationY of getFloorRotationCandidates(pos, spec, baseRotation)) {
+            const key = `${pos.x.toFixed(2)}:${pos.z.toFixed(2)}:${rotationY.toFixed(2)}`;
+            if (tried.has(key)) continue;
+            tried.add(key);
+            applyFurniturePose(group, { position: pos, rotationY });
+            const validation = validateRuntimePlacement(group, excludeId);
+            if (validation.ok) {
+                return {
+                    ok: true,
+                    pose: {
+                        position: { x: pos.x, y: 0, z: pos.z },
+                        rotationY
+                    }
+                };
+            }
+            if (validation.error) errors.add(validation.error);
+            lastError = validation.error;
         }
-        lastError = validation.error;
     }
 
-    return { ok: false, error: lastError };
+    return { ok: false, error: errors.size > 1 ? '没有找到可安全摆放的位置。' : lastError };
 }
 
 function saveFurniture() {
@@ -583,6 +662,66 @@ function removeRuntimeFurniture(id) {
     runtime.delete(id);
 }
 
+function getSpecFrontVector(spec) {
+    switch (spec?.frontDirection) {
+        case '+X': return new THREE.Vector3(1, 0, 0);
+        case '-X': return new THREE.Vector3(-1, 0, 0);
+        case '-Z': return new THREE.Vector3(0, 0, -1);
+        case '+Z':
+        default:
+            return new THREE.Vector3(0, 0, 1);
+    }
+}
+
+function getWorldFurnitureFrontVector(record, group) {
+    const front = getSpecFrontVector(record?.spec).applyAxisAngle(dreamYAxis, group.rotation.y);
+    front.y = 0;
+    if (front.lengthSq() < 0.0001) return { x: 0, z: 1 };
+    front.normalize();
+    return { x: front.x, z: front.z };
+}
+
+function estimateDreamBedSurfaceY(record, group) {
+    if (record?.category !== 'bed') return null;
+    const spec = record.spec || {};
+    const components = Array.isArray(spec.components) ? spec.components : [];
+    const dimensions = spec.dimensions || {};
+    const footprintArea = Math.max(0.08, (Number(dimensions.width) || 1) * (Number(dimensions.depth) || 1) * 0.12);
+    let best = null;
+    let bestScore = -Infinity;
+
+    for (const component of components) {
+        const size = component?.size || {};
+        const position = component?.position || {};
+        const sx = Math.abs(Number(size.x) || 0);
+        const sy = Math.abs(Number(size.y) || 0);
+        const sz = Math.abs(Number(size.z) || 0);
+        const area = sx * sz;
+        if (sx < 0.35 || sz < 0.55 || sy <= 0 || area < footprintArea) continue;
+
+        const name = `${component.name || ''} ${component.material || ''}`.toLowerCase();
+        if (/headboard|pillow|枕|床头|靠背|leg|脚|rail|栏|sideboard|床栏/.test(name)) continue;
+
+        const topY = (Number(group?.position?.y) || 0) + (Number(position.y) || 0) + sy / 2;
+        const maxReasonableY = (Number(group?.position?.y) || 0) + Math.max(0.35, (Number(dimensions.height) || 1) * 0.72);
+        let score = area;
+        if (/mattress|matress|cushion|sleep|surface|top|床垫|床面|垫|睡眠面/.test(name)) score *= 3.5;
+        if (/base|platform|frame|主体|床架|底座/.test(name)) score *= 1.4;
+        if (sy > Math.max(0.42, (Number(dimensions.height) || 1) * 0.45)) score *= 0.45;
+        if (topY > maxReasonableY) score *= 0.25;
+
+        if (score > bestScore) {
+            bestScore = score;
+            best = topY;
+        }
+    }
+
+    if (Number.isFinite(best)) return best;
+    const collider = createFurnitureCollider(group);
+    const sizeY = collider.max.y - collider.min.y;
+    return collider.min.y + Math.min(Math.max(sizeY * 0.45, 0.28), 0.75);
+}
+
 function createWaypoint(record, group) {
     const offset = record.spec.interaction?.waypoint?.offset || { x: 0, y: 0, z: 1 };
     const localOffset = new THREE.Vector3(offset.x, 0, offset.z);
@@ -597,12 +736,21 @@ function createWaypoint(record, group) {
         position.x = Math.max(position.x, doorClearanceZone.max.x + 0.45);
     }
 
+    const interactionType = record.category === 'bed' ? 'bed' : (record.category === 'seat' ? 'seat' : '');
+    const interactionRate = interactionType === 'bed' ? BED_INTERACTION_RATE : (interactionType === 'seat' ? SEAT_INTERACTION_RATE : 0);
+    const frontVector = getWorldFurnitureFrontVector(record, group);
+    const bedSurfaceY = interactionType === 'bed' ? estimateDreamBedSurfaceY(record, group) : null;
+
     return {
         name: `dream_furniture_${record.id}`,
         roomId: 'dream',
         position,
-        isFurniture: false,
-        furnitureType: record.spec.interaction?.waypoint?.furnitureType || record.category,
+        isFurniture: Boolean(interactionType),
+        furnitureType: interactionType || record.spec.interaction?.waypoint?.furnitureType || record.category,
+        sitCollider: interactionType ? createFurnitureCollider(group) : null,
+        interactionRate,
+        frontVector,
+        bedSurfaceY,
         isDynamicDreamFurniture: true,
         furnitureId: record.id,
         furnitureName: record.name,
@@ -645,6 +793,9 @@ function deployRecord(record) {
         colliders,
         waypoint
     });
+    if (record.category === 'painting' && record.customTexture) {
+        applyDreamPaintingTexture(record, record.customTexture);
+    }
     return runtime.get(record.id);
 }
 
@@ -1078,10 +1229,10 @@ async function handleCreateFurniture() {
             spec = normalizeFurnitureSpec(llm.spec);
             if (hasExplicitWallMountIntent(`${description} ${placementText}`)) {
                 spec.anchor = 'wall';
-                spec.category = 'hanging';
+                spec.category = hasPaintingIntent(`${description} ${placementText}`) ? 'painting' : 'hanging';
             } else if (isWallFurniture(spec)) {
                 spec.anchor = 'floor';
-                if (spec.category === 'hanging') spec.category = 'decor';
+                if (spec.category === 'hanging' || spec.category === 'painting') spec.category = 'decor';
             }
         } catch (err) {
             setStatus(`JSON schema 校验失败：${err.message}`, 'warn');
@@ -1177,6 +1328,32 @@ function updateObjectControlModes(record) {
     if (back) back.title = wallMounted ? '向下移动' : '向后移动';
 }
 
+export function hasEditableDreamPainting() {
+    const record = getEditingRecord();
+    return Boolean(record && record.category === 'painting');
+}
+
+export function isDreamPaintingFurniture(furnitureId) {
+    const record = furnitureRecords.find(item => item.id === furnitureId);
+    return Boolean(record && record.category === 'painting');
+}
+
+export function requestDreamPaintingTextureUpload(furnitureId = '') {
+    const record = furnitureId
+        ? furnitureRecords.find(item => item.id === furnitureId)
+        : getEditingRecord();
+    if (!record || record.category !== 'painting') return false;
+    clearTimeout(pendingDreamPaintingTextureTimer);
+    pendingDreamPaintingTextureId = record.id;
+    pendingDreamPaintingTextureTimer = setTimeout(() => {
+        pendingDreamPaintingTextureId = '';
+        pendingDreamPaintingTextureTimer = null;
+    }, 60000);
+    showDreamScreenToast('选择图片后会替换画框中的内容。', 'ok');
+    document.getElementById('painting-upload')?.click();
+    return true;
+}
+
 function openFurnitureEditPanel() {
     const record = getEditingRecord();
     if (!record) return;
@@ -1202,7 +1379,11 @@ function openFurnitureEditPanel() {
     }
     renderBalance();
     updateStyleRevisionProgress(false);
-    setEditorStatus(isWallFurniture(record) ? '悬挂式家具无法编辑样式，只能沿墙面移动或删除。' : '');
+    if (record.category === 'painting') {
+        setEditorStatus('painting 类悬挂画框无法编辑样式；按 1 可从本地选择图片替换画框内容。');
+    } else {
+        setEditorStatus(isWallFurniture(record) ? '悬挂式家具无法编辑样式，只能沿墙面移动或删除。' : '');
+    }
     els.editor?.classList.remove('hidden');
     setTimeout(() => els.editorName?.focus(), 80);
 }
@@ -1323,6 +1504,66 @@ function updateStyleRevisionProgress(active, text = '') {
 
 function getEditingRecord() {
     return furnitureRecords.find(item => item.id === editingId) || null;
+}
+
+function findPaintingDisplayMesh(group) {
+    let best = null;
+    let bestArea = 0;
+    group?.traverse(child => {
+        if (!child.isMesh || !child.geometry) return;
+        const box = new THREE.Box3().setFromObject(child);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        const thin = Math.min(size.x, size.z);
+        const broadArea = Math.max(size.x, size.z) * size.y;
+        const name = String(child.name || '').toLowerCase();
+        const score = broadArea * (/image|photo|picture|canvas|display|画|图|相片/.test(name) ? 1.8 : 1);
+        if (thin <= 0.18 && score > bestArea) {
+            best = child;
+            bestArea = score;
+        }
+    });
+    return best;
+}
+
+function applyDreamPaintingTexture(record, dataUrl) {
+    const item = runtime.get(record?.id);
+    const mesh = findPaintingDisplayMesh(item?.group);
+    if (!mesh || !mesh.material) {
+        console.warn('[Dream] painting texture skipped: no rectangular display surface.', record?.id);
+        return false;
+    }
+    const img = new Image();
+    img.onload = () => {
+        const tex = new THREE.Texture(img);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.needsUpdate = true;
+        const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+        material.map = tex;
+        material.color?.set?.(0xffffff);
+        material.needsUpdate = true;
+    };
+    img.src = dataUrl;
+    return true;
+}
+
+export function consumeDreamPaintingTextureFile(file) {
+    const record = furnitureRecords.find(item => item.id === pendingDreamPaintingTextureId);
+    clearTimeout(pendingDreamPaintingTextureTimer);
+    pendingDreamPaintingTextureTimer = null;
+    pendingDreamPaintingTextureId = '';
+    if (!record || record.category !== 'painting' || !file) return false;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+        const dataUrl = String(ev.target?.result || '');
+        if (!dataUrl) return;
+        if (applyDreamPaintingTexture(record, dataUrl)) {
+            record.customTexture = dataUrl;
+            saveFurniture();
+        }
+    };
+    reader.readAsDataURL(file);
+    return true;
 }
 
 function refreshRecordRuntime(record, options = {}) {

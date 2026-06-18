@@ -223,9 +223,10 @@ body {
     100% { opacity: 0; transform: translateY(-4px); }
 }
 
-#interaction-prompt {
+#interaction-prompt,
+#painting-prompt,
+#dream-painting-prompt {
     position: absolute;
-    bottom: 30%;
     left: 50%;
     transform: translateX(-50%);
     background: rgba(0, 0, 0, 0.7);
@@ -242,41 +243,33 @@ body {
     -webkit-touch-callout: none;
     -webkit-user-select: none;
     user-select: none;
-    transition: background 0.15s, bottom 0.15s ease-out;
-}
-
-#interaction-prompt:active {
-    background: rgba(255, 255, 255, 0.25);
-}
-
-#painting-prompt {
-    position: absolute;
-    bottom: 24%;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(0, 0, 0, 0.7);
-    padding: 12px 28px;
-    border-radius: 30px;
-    font-size: 0.9rem;
-    letter-spacing: 0.05em;
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    white-space: nowrap;
-    z-index: 99;
-    cursor: pointer;
-    pointer-events: auto;
-    touch-action: manipulation;
-    -webkit-touch-callout: none;
-    -webkit-user-select: none;
-    user-select: none;
     transition: background 0.15s;
 }
 
-#painting-prompt:active {
+#interaction-prompt {
+    bottom: calc(24% + 112px);
+    z-index: 101;
+}
+
+#painting-prompt {
+    z-index: 99;
+    bottom: calc(24% + 56px);
+}
+
+#dream-painting-prompt {
+    z-index: 98;
+    bottom: 24%;
+}
+
+#interaction-prompt:active,
+#painting-prompt:active,
+#dream-painting-prompt:active {
     background: rgba(255, 255, 255, 0.25);
 }
 
 #interaction-prompt kbd,
-#painting-prompt kbd {
+#painting-prompt kbd,
+#dream-painting-prompt kbd {
     display: inline-block;
     background: rgba(255, 255, 255, 0.2);
     border: 1px solid rgba(255, 255, 255, 0.3);

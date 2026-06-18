@@ -990,3 +990,38 @@ Escape：
 - 造梦家具摆放是本地候选点搜索，不是完整物理引擎。
 - 芙提雅寻路是轻量网格 A*，复杂迷宫家具可能仍需要短暂穿模兜底。
 - 浏览器端直接调用 OpenAI 兼容 API 会受 CORS 限制；需要服务商 API 支持浏览器跨域访问。
+
+## 2026-06-19 造梦家具分类互动补充
+
+- `dream_furniture_factory.js`
+  - `ALLOWED_CATEGORIES` 新增 `painting`。
+  - `serializeFurniture()` / `deserializeFurniture()` 新增 `customTexture` 字段，用于保存 painting 类家具的本地图片 data URL。
+
+- `dream_llm.js`
+  - 家具生成 prompt 允许 `painting` 分类。
+  - 当玩家明确要求“挂画、相框、照片框、展示框、墙画”等墙面矩形边框家具时，引导 LLM 输出 `anchor:"wall"` 与 `category:"painting"`。
+
+- `dream_system.js`
+  - `SEAT_INTERACTION_RATE` 控制造梦 `seat` 家具触发坐下动作的概率。
+  - `BED_INTERACTION_RATE` 控制造梦 `bed` 家具触发平躺动作的概率。
+  - 当前二者默认都是 `0.42`。需要调高或调低交互频率时，直接修改这两个常量，取值范围建议为 `0` 到 `1`。
+  - `findSafePlacement()` 会先尝试玩家语义位置，再追加全房间地面网格兜底候选；每个地面候选点会尝试多个朝向，避免一个朝向挡窗/挡门就直接失败。
+  - `findSafeWallPlacement()` 会在四面墙和多个高度上做网格兜底扫描，悬挂家具不会只因首选窗边墙失败就停止。
+  - `createWaypoint()` 为 `seat` / `bed` 造梦家具生成 `isFurniture` waypoint，并写入 `frontVector`，该向量来自家具 `frontDirection` 和当前摆放旋转。
+  - `hasEditableDreamPainting()`：判断当前正在管理的造梦家具是否为 `painting`。
+  - `isDreamPaintingFurniture(furnitureId)`：判断指定造梦家具是否为 `painting`，供主界面提示和快捷键入口使用。
+  - `requestDreamPaintingTextureUpload()`：请求从本地选择图片替换 painting 类家具内容。
+  - `consumeDreamPaintingTextureFile(file)`：复用 `#painting-upload` 的文件选择结果，若当前挂起的是造梦 painting 家具，则把本地图片应用到画框内侧展示面并保存。
+
+- `character.js`
+  - `seat` 类造梦家具在抵达 waypoint 后按 `interactionRate` 决定是否触发坐下。触发时不会派发 `fritia-dream-furniture-visited`，因此不会同时出现家具台词气泡。
+  - `bed` 类造梦家具在抵达 waypoint 后按 `interactionRate` 决定是否触发平躺。触发时同样不会显示家具台词气泡。
+  - 旧房间床的睡眠仍使用 `applySleepingPose(cd)` 和固定旧床位置；造梦床使用 `applyDreamBedPose(cd)`，由 `estimateDreamBedSurfaceY()` 优先识别床垫/床面等宽大水平组件作为躺倒高度，再叠加 `DREAM_BED_LIE_Y_OFFSET` 偏移量，身体与地面平行并面向天花板。
+  - 坐下/平躺的边缘选择优先使用 waypoint 的 `frontVector`，避免继续硬编码到某一条世界坐标边。
+  - 若 `seat` / `bed` 的碰撞盒尺寸明显不支持对应动作，会跳过动作并在 console 输出提示。
+
+- `main.js`
+  - 在管理 `painting` 类造梦家具时，按 `1` / 小键盘 `1` 会打开本地图片选择。
+  - 在普通操作模式下看向 `painting` 类造梦家具时，提示会显示 `1 替换图片`，按 `1` 可直接替换图片。
+  - `#dream-painting-prompt` 是独立的 `1 替换图片` 提示按钮；当同时出现 `F`、`E`、`1` 时，三者按 F/E/1 自上而下排列，移动端可分别点击。
+  - 当焦点位于 `input`、`textarea`、`select` 或可编辑元素中时，不会触发该快捷键，避免输入文字时误打开文件选择。
