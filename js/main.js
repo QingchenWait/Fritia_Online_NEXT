@@ -41,10 +41,23 @@ import {
     isRoomPanoramaActive,
     updateRoomPanorama
 } from './room_panorama.js';
+import {
+    BAR_ROOM_ID,
+    ensureBarScene,
+    getBarBounds,
+    getBarCharacterColliders,
+    getBarExitInteractionMesh,
+    getBarPlayerColliders,
+    getBarSpawn,
+    getBarWaypoints,
+    isPointInBarBounds,
+    setBarSceneVisible
+} from './bar_scene.js';
 
 let scene, camera, renderer;
 let controlsModule, charData;
 let isInteracting = false;
+let roomGroup;
 let paintingMesh;
 let paintingLabel;
 let wardrobeMesh;
@@ -68,7 +81,13 @@ let dreamRoomWaypoints = [];
 let basePlayerColliders = [];
 let bedroomColliders = [];
 let dreamStaticColliders = [];
+let barSceneData = null;
 let currentPlayerRoomId = 'bedroom';
+let isBarSceneActive = false;
+let barTransitionInProgress = false;
+let previousSceneFog = null;
+let previousSceneBackground = null;
+let hasStoredRoomAtmosphere = false;
 let isSleeping = false;
 let isDreamDoorOpen = false;
 let dreamDoorAnimating = false;
@@ -119,6 +138,7 @@ async function init() {
     await setLoadingText('构建房间...');
     setLoadingProgress(25);
     const room = createRoom(scene);
+    roomGroup = room.group;
     paintingMesh = room.painting;
     paintingLabel = room.paintingLabel;
     wardrobeMesh = room.wardrobeMesh;
@@ -201,6 +221,15 @@ async function init() {
     await setLoadingText('初始化控制...');
     setLoadingProgress(90);
     controlsModule = initControls(camera, renderer.domElement, getActivePlayerColliders());
+
+    await setLoadingText('加载暖调闲聚地图...');
+    setLoadingProgress(92);
+    try {
+        barSceneData = await ensureBarScene(scene);
+    } catch (err) {
+        console.error('[BarScene] 暖调闲聚地图加载失败:', err);
+        barSceneData = null;
+    }
 
     await setLoadingText('准备对话系统...');
     setLoadingProgress(95);
@@ -311,6 +340,7 @@ async function init() {
 
 function onKeyDown(e) {
     igniteForKey(e.code);
+    if (barTransitionInProgress) return;
     if (isRoomPanoramaActive()) {
         if (e.code === 'Escape' || e.code === 'KeyE' || e.code === 'Digit1' || e.code === 'Numpad1') exitRoomPanorama();
         return;
@@ -331,16 +361,16 @@ function onKeyDown(e) {
     }
 
     if ((e.code === 'Digit1' || e.code === 'Numpad1') && !isTypingInEditableElement()) {
-        const lookedDreamFurniture = getLookingDreamFurniture(camera);
-        if (controlsModule?.state?.isLocked && isLookingAtDreamTerminal(camera)) {
+        const lookedDreamFurniture = isBarSceneActive ? null : getLookingDreamFurniture(camera);
+        if (!isBarSceneActive && controlsModule?.state?.isLocked && isLookingAtDreamTerminal(camera)) {
             enterRoomPanorama();
             return;
         }
-        if (hasEditableDreamPainting()) {
+        if (!isBarSceneActive && hasEditableDreamPainting()) {
             requestDreamPaintingTextureUpload();
             return;
         }
-        if (lookedDreamFurniture && isDreamPaintingFurniture(lookedDreamFurniture)) {
+        if (!isBarSceneActive && lookedDreamFurniture && isDreamPaintingFurniture(lookedDreamFurniture)) {
             requestDreamPaintingTextureUpload(lookedDreamFurniture);
             return;
         }
@@ -376,11 +406,13 @@ function onKeyDown(e) {
         if (controlsModule && controlsModule.state.isLocked) {
             if (isSleeping) {
                 exitSleepMode();
-            } else if (isLookingAtDreamDoor()) {
+            } else if (isLookingAtBarExit()) {
+                exitBarScene();
+            } else if (!isBarSceneActive && isLookingAtDreamDoor()) {
                 toggleDreamDoor();
-            } else if (isLookingAtDreamTerminal(camera)) {
+            } else if (!isBarSceneActive && isLookingAtDreamTerminal(camera)) {
                 openDreamPanel();
-            } else if (isLookingAtDreamFurniture(camera)) {
+            } else if (!isBarSceneActive && isLookingAtDreamFurniture(camera)) {
                 openDreamFurnitureEditor(getLookingDreamFurniture(camera));
             } else if (isLookingAtTerminal()) {
                 openGiftTerminal();
@@ -390,9 +422,11 @@ function onKeyDown(e) {
                 controlsModule.releaseControlMode({ resumeOnClose: true });
             } else if (isLookingAtBed() && !isSmallTeacherModel()) {
                 enterSleepMode();
-            } else if (isLookingAtDesk() || isLookingAtDoor()) {
+            } else if (isLookingAtDesk()) {
                 openDatePanel();
                 controlsModule.releaseControlMode({ resumeOnClose: true });
+            } else if (isLookingAtDoor()) {
+                enterBarScene();
             } else if (isLookingAtPainting()) {
                 document.getElementById('painting-upload').click();
             } else if (isLookingAtWardrobe()) {
@@ -535,6 +569,16 @@ function handleDreamFurnitureChanged(options = {}) {
     if (controlsModule) {
         controlsModule.setColliders(getActivePlayerColliders());
     }
+    if (charData && currentPlayerRoomId === BAR_ROOM_ID) {
+        refreshCharacterNavigationData(charData, {
+            roomId: BAR_ROOM_ID,
+            bounds: getBarBounds(),
+            waypoints: getBarWaypoints(),
+            colliders: getBarCharacterColliders(),
+            forceRepath: Boolean(options.forceCharacterRepath)
+        });
+        return;
+    }
     if (charData && currentPlayerRoomId === 'dream') {
         refreshCharacterNavigationData(charData, {
             roomId: 'dream',
@@ -555,11 +599,13 @@ function handleDreamFurnitureChanged(options = {}) {
 }
 
 function getActiveBasePlayerColliders() {
+    if (isBarSceneActive) return getBarPlayerColliders();
     if (isDreamDoorOpen || !dreamDoorCollider) return basePlayerColliders.filter(collider => collider !== dreamDoorCollider);
     return basePlayerColliders;
 }
 
 function getActivePlayerColliders() {
+    if (isBarSceneActive) return getBarPlayerColliders();
     return [...getActiveBasePlayerColliders(), ...getDreamFurnitureColliders()];
 }
 
@@ -582,6 +628,15 @@ function refreshCollisionScopesAfterDreamDoorChange() {
         controlsModule.resolveCameraCollisions?.();
     }
     if (!charData) return;
+    if (currentPlayerRoomId === BAR_ROOM_ID) {
+        refreshCharacterNavigationData(charData, {
+            roomId: BAR_ROOM_ID,
+            bounds: getBarBounds(),
+            waypoints: getBarWaypoints(),
+            colliders: getBarCharacterColliders()
+        });
+        return;
+    }
     if (currentPlayerRoomId === 'dream') {
         refreshCharacterNavigationData(charData, {
             roomId: 'dream',
@@ -734,6 +789,9 @@ function updateDreamFurnitureCinematic(delta) {
 }
 
 function getRoomIdForPosition(position) {
+    if (isBarSceneActive || isPointInBarBounds(position)) {
+        return BAR_ROOM_ID;
+    }
     if (dreamRoomBounds
         && position.x >= dreamRoomBounds.min.x - 0.05
         && position.x <= dreamRoomBounds.max.x + 0.05
@@ -742,6 +800,128 @@ function getRoomIdForPosition(position) {
         return 'dream';
     }
     return 'bedroom';
+}
+
+function applyBarNavigationScope() {
+    if (!charData) return;
+    setCharacterNavigationScope(charData, {
+        roomId: BAR_ROOM_ID,
+        bounds: getBarBounds(),
+        waypoints: getBarWaypoints(),
+        colliders: getBarCharacterColliders()
+    });
+    const spawn = getBarSpawn();
+    if (spawn?.character) {
+        forceCharacterIntoRoom(charData, BAR_ROOM_ID, spawn.character);
+    }
+}
+
+function applyBarSceneAtmosphere() {
+    if (!scene) return;
+    if (!hasStoredRoomAtmosphere) {
+        previousSceneFog = scene.fog || null;
+        previousSceneBackground = scene.background || null;
+        hasStoredRoomAtmosphere = true;
+    }
+    scene.background = new THREE.Color(0x20151d);
+    scene.fog = new THREE.Fog(0x20151d, 28, 72);
+}
+
+function restoreRoomAtmosphere() {
+    if (!scene) return;
+    scene.fog = previousSceneFog || null;
+    scene.background = previousSceneBackground || new THREE.Color(0x1a1a2e);
+    previousSceneFog = null;
+    previousSceneBackground = null;
+    hasStoredRoomAtmosphere = false;
+}
+
+async function enterBarScene() {
+    if (barTransitionInProgress) return;
+    barTransitionInProgress = true;
+    controlsModule?.setMovementLocked?.(true);
+    let needsFadeIn = false;
+
+    try {
+        if (!barSceneData) {
+            barSceneData = await ensureBarScene(scene);
+        }
+        if (!barSceneData) return;
+
+        await fadeToBlack();
+        needsFadeIn = true;
+        setBarSceneVisible(true);
+        if (roomGroup) roomGroup.visible = false;
+        applyBarSceneAtmosphere();
+        isBarSceneActive = true;
+        currentPlayerRoomId = BAR_ROOM_ID;
+
+        const spawn = getBarSpawn();
+        if (spawn?.playerPosition) {
+            camera.position.copy(spawn.playerPosition);
+            if (spawn.lookAt) camera.lookAt(spawn.lookAt);
+            camera.updateMatrixWorld(true);
+        }
+        applyBarNavigationScope();
+        controlsModule?.setColliders(getActivePlayerColliders());
+        controlsModule?.resolveCameraCollisions?.();
+
+        await fadeFromBlack();
+        needsFadeIn = false;
+    } catch (err) {
+        console.error('[BarScene] 无法进入暖调闲聚:', err);
+        if (roomGroup) roomGroup.visible = true;
+        setBarSceneVisible(false);
+        restoreRoomAtmosphere();
+        isBarSceneActive = false;
+        currentPlayerRoomId = 'bedroom';
+        if (needsFadeIn) await fadeFromBlack();
+    } finally {
+        controlsModule?.setMovementLocked?.(false);
+        barTransitionInProgress = false;
+    }
+}
+
+async function exitBarScene() {
+    if (barTransitionInProgress) return;
+    barTransitionInProgress = true;
+    controlsModule?.setMovementLocked?.(true);
+    let needsFadeIn = false;
+
+    try {
+        await fadeToBlack();
+        needsFadeIn = true;
+        isBarSceneActive = false;
+        setBarSceneVisible(false);
+        if (roomGroup) roomGroup.visible = true;
+        restoreRoomAtmosphere();
+        currentPlayerRoomId = 'bedroom';
+
+        camera.position.set(-2.2, 1.6, 1.55);
+        camera.lookAt(new THREE.Vector3(-2.2, 1.25, 0.25));
+        camera.updateMatrixWorld(true);
+        controlsModule?.setColliders(getActivePlayerColliders());
+        controlsModule?.resolveCameraCollisions?.();
+
+        setCharacterNavigationScope(charData, {
+            roomId: 'bedroom',
+            bounds: oldRoomBounds,
+            waypoints: charData.originalBedroomWaypoints || charData.waypoints || [],
+            colliders: getActiveBedroomCharacterColliders()
+        });
+        forceCharacterIntoRoom(charData, 'bedroom', { x: -1.35, z: 1.45, rotationY: -Math.PI });
+
+        await fadeFromBlack();
+        needsFadeIn = false;
+    } catch (err) {
+        console.error('[BarScene] 返回卧室失败:', err);
+        if (roomGroup) roomGroup.visible = true;
+        restoreRoomAtmosphere();
+        if (needsFadeIn) await fadeFromBlack();
+    } finally {
+        controlsModule?.setMovementLocked?.(false);
+        barTransitionInProgress = false;
+    }
 }
 
 function easeInOutCubic(t) {
@@ -780,6 +960,17 @@ function toggleDreamDoor() {
 
 function refreshCharacterRoomScope(force = false) {
     if (!charData || !oldRoomBounds || !dreamRoomBounds) return;
+    if (isBarSceneActive) {
+        if (!force && currentPlayerRoomId === BAR_ROOM_ID) return;
+        currentPlayerRoomId = BAR_ROOM_ID;
+        setCharacterNavigationScope(charData, {
+            roomId: BAR_ROOM_ID,
+            bounds: getBarBounds(),
+            waypoints: getBarWaypoints(),
+            colliders: getBarCharacterColliders()
+        });
+        return;
+    }
     const roomId = getRoomIdForPosition(camera.position);
     if (!force && roomId === currentPlayerRoomId) return;
     currentPlayerRoomId = roomId;
@@ -938,44 +1129,58 @@ function updateInteractionPrompt() {
 
     if (paintingPrompt) {
         dreamPaintingPrompt?.classList.add('hidden');
+        const lookBarExit = isLookingAtBarExit();
         const lookDreamDoor = isLookingAtDreamDoor();
         const lookBed = isLookingAtBed();
         const lookDesk = isLookingAtDesk();
         const lookDoor = isLookingAtDoor();
-        const lookDreamTerminal = isLookingAtDreamTerminal(camera);
-        const lookDreamFurniture = isLookingAtDreamFurniture(camera);
+        const lookDreamTerminal = !isBarSceneActive && isLookingAtDreamTerminal(camera);
+        const lookDreamFurniture = !isBarSceneActive && isLookingAtDreamFurniture(camera);
         const lookTerminal = isLookingAtTerminal();
         const lookCollectionCabinet = isLookingAtCollectionCabinet();
-        if (lookDreamDoor) {
+        if (lookBarExit) {
+            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 返回卧室';
+            paintingPrompt.dataset.promptKey = 'KeyE';
+            paintingPrompt.classList.remove('hidden');
+        } else if (lookDreamDoor) {
             paintingPrompt.innerHTML = getDreamDoorPromptText();
+            paintingPrompt.dataset.promptKey = 'KeyE';
             paintingPrompt.classList.remove('hidden');
         } else if (lookDreamTerminal) {
             paintingPrompt.innerHTML = '按 <kbd>E</kbd> 打开造梦终端';
+            paintingPrompt.dataset.promptKey = 'KeyE';
             paintingPrompt.classList.remove('hidden');
             if (dreamPaintingPrompt) {
                 dreamPaintingPrompt.innerHTML = '按 <kbd>1</kbd> 拍摄房间';
+                dreamPaintingPrompt.dataset.promptKey = 'Digit1';
                 dreamPaintingPrompt.classList.remove('hidden');
             }
         } else if (lookDreamFurniture) {
             const dreamFurnitureId = getLookingDreamFurniture(camera);
             const furnitureName = getDreamFurnitureLabel(dreamFurnitureId);
             paintingPrompt.innerHTML = `按 <kbd>E</kbd> 管理 [${furnitureName}]`;
+            paintingPrompt.dataset.promptKey = 'KeyE';
             paintingPrompt.classList.remove('hidden');
             if (isDreamPaintingFurniture(dreamFurnitureId) && dreamPaintingPrompt) {
                 dreamPaintingPrompt.innerHTML = '按 <kbd>1</kbd> 替换图片';
+                dreamPaintingPrompt.dataset.promptKey = 'Digit1';
                 dreamPaintingPrompt.classList.remove('hidden');
             }
         } else if (lookTerminal) {
             paintingPrompt.innerHTML = '按 <kbd>E</kbd> 打开购物终端';
+            paintingPrompt.dataset.promptKey = 'KeyE';
             paintingPrompt.classList.remove('hidden');
         } else if (lookCollectionCabinet) {
             paintingPrompt.innerHTML = '按 <kbd>E</kbd> 打开礼物收藏';
+            paintingPrompt.dataset.promptKey = 'KeyE';
             paintingPrompt.classList.remove('hidden');
         } else if (lookPaint) {
             paintingPrompt.innerHTML = '按 <kbd>E</kbd> 更换挂画';
+            paintingPrompt.dataset.promptKey = 'KeyE';
             paintingPrompt.classList.remove('hidden');
         } else if (lookWardrobe) {
             paintingPrompt.innerHTML = '按 <kbd>E</kbd> 换装';
+            paintingPrompt.dataset.promptKey = 'KeyE';
             paintingPrompt.classList.remove('hidden');
         } else if (lookBed) {
             if (isSmallTeacherModel()) {
@@ -983,12 +1188,15 @@ function updateInteractionPrompt() {
             } else {
                 paintingPrompt.innerHTML = '按 <kbd>E</kbd> 休息';
             }
+            paintingPrompt.dataset.promptKey = 'KeyE';
             paintingPrompt.classList.remove('hidden');
         } else if (lookDesk) {
             paintingPrompt.innerHTML = '按 <kbd>E</kbd> 开始今日约会行程';
+            paintingPrompt.dataset.promptKey = 'KeyE';
             paintingPrompt.classList.remove('hidden');
         } else if (lookDoor) {
-            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 出门约会';
+            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 前往暖调闲聚';
+            paintingPrompt.dataset.promptKey = 'KeyE';
             paintingPrompt.classList.remove('hidden');
         } else {
             paintingPrompt.classList.add('hidden');
@@ -1202,6 +1410,7 @@ function applyPaintingTexture(src) {
 }
 
 function isLookingAtBed() {
+    if (isBarSceneActive) return false;
     if (!bedMesh || !camera) return false;
     raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
     const hits = raycaster.intersectObject(bedMesh, true);
@@ -1209,6 +1418,7 @@ function isLookingAtBed() {
 }
 
 function isLookingAtDesk() {
+    if (isBarSceneActive) return false;
     if (!deskMesh || !camera) return false;
     raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
     const hits = raycaster.intersectObject(deskMesh);
@@ -1216,6 +1426,7 @@ function isLookingAtDesk() {
 }
 
 function isLookingAtDoor() {
+    if (isBarSceneActive) return false;
     if (!doorMesh || !camera) return false;
     raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
     const hits = raycaster.intersectObject(doorMesh);
@@ -1223,6 +1434,7 @@ function isLookingAtDoor() {
 }
 
 function isLookingAtTerminal() {
+    if (isBarSceneActive) return false;
     if (!terminalMesh || !camera) return false;
     const centerX = terminalMesh.userData?.interactionCenter?.x ?? terminalMesh.position.x;
     if (camera.position.x > centerX + 0.02) return false;
@@ -1233,6 +1445,7 @@ function isLookingAtTerminal() {
 }
 
 function isLookingAtCollectionCabinet() {
+    if (isBarSceneActive) return false;
     if (!collectionCabinetMesh || !camera) return false;
     raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
     const hits = raycaster.intersectObject(collectionCabinetMesh, true);
@@ -1241,6 +1454,7 @@ function isLookingAtCollectionCabinet() {
 }
 
 function isLookingAtDreamDoor() {
+    if (isBarSceneActive) return false;
     if (!dreamDoorInteractionMesh || !camera) return false;
     const oldFar = raycaster.far;
     raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
@@ -1248,6 +1462,18 @@ function isLookingAtDreamDoor() {
     const hits = raycaster.intersectObject(dreamDoorInteractionMesh, true);
     raycaster.far = oldFar;
     return hits.length > 0 && hasClearLineOfSight(hits[0].point, hits[0].distance);
+}
+
+function isLookingAtBarExit() {
+    if (!isBarSceneActive || !camera) return false;
+    const exitMesh = getBarExitInteractionMesh();
+    if (!exitMesh) return false;
+    const oldFar = raycaster.far;
+    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+    raycaster.far = 12;
+    const hits = raycaster.intersectObject(exitMesh, true);
+    raycaster.far = oldFar;
+    return hits.length > 0;
 }
 
 function getDreamDoorPromptText() {
@@ -1455,6 +1681,7 @@ async function exitSleepMode() {
 }
 
 function isLookingAtPainting() {
+    if (isBarSceneActive) return false;
     if (!paintingMesh || !camera) return false;
     raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
     const hits = raycaster.intersectObject(paintingMesh);
@@ -1462,6 +1689,7 @@ function isLookingAtPainting() {
 }
 
 function isLookingAtWardrobe() {
+    if (isBarSceneActive) return false;
     if (!wardrobeMesh || !camera) return false;
     raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
     const hits = raycaster.intersectObject(wardrobeMesh);

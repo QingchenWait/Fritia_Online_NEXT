@@ -750,6 +750,7 @@ export function createRoom(scene) {
     const dreamRoomColliders = [];
 
     return {
+        group,
         colliders,
         playerColliders,
         waypoints,

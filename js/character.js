@@ -8,7 +8,7 @@ const WALK_CYCLE_SPEED = 5.2;
 const WALK_BLEND_EDGE = 0.18;
 const PATH_GRID_STEP = 0.45;
 const PATH_SAMPLE_STEP = 0.18;
-const PATH_MAX_NODES = 1400;
+const PATH_MAX_NODES = 3600;
 const IDLE_MIN = 3;
 const IDLE_MAX = 8;
 const SIT_MIN = 8;
@@ -758,22 +758,85 @@ function canChooseWaypoint(cd, waypoint) {
 }
 
 const _charBox = new THREE.Box3();
-const _charSize = new THREE.Vector3(0.25, 1.5, 0.25);
+const CHARACTER_COLLISION_RADIUS = 0.22;
+const CHARACTER_COLLISION_HEIGHT = 1.5;
+const CHARACTER_COLLISION_FOOT_OFFSET = 0.04;
+const CHARACTER_HEIGHT_SMOOTH_SPEED = 10;
+
+function getNavigationFloorY(cd) {
+    const y = Number(cd?.navigationScope?.bounds?.min?.y);
+    return Number.isFinite(y) ? y : 0;
+}
+
+function isWalkableCollider(collider) {
+    const walkableHeight = Number(collider?.userData?.walkableHeight);
+    return Number.isFinite(walkableHeight) && collider.max.y <= walkableHeight;
+}
+
+function overlapsCharacterFootprint(pos, collider, radius = CHARACTER_COLLISION_RADIUS) {
+    return pos.x + radius > collider.min.x && pos.x - radius < collider.max.x
+        && pos.z + radius > collider.min.z && pos.z - radius < collider.max.z;
+}
+
+function isPointInColliderIgnoreZone(pos, collider) {
+    const zones = collider?.userData?.ignoreZones;
+    if (!Array.isArray(zones)) return false;
+    return zones.some(zone => pos.x >= zone.minX && pos.x <= zone.maxX
+        && pos.z >= zone.minZ && pos.z <= zone.maxZ);
+}
+
+function getGroundYAt(cd, pos, radius = CHARACTER_COLLISION_RADIUS) {
+    let groundY = getNavigationFloorY(cd);
+    if (!Array.isArray(cd?.colliders)) return groundY;
+    for (const collider of cd.colliders) {
+        if (!isWalkableCollider(collider)) continue;
+        if (!overlapsCharacterFootprint(pos, collider, radius)) continue;
+        const dynamicGroundY = typeof collider.userData?.surfaceYAt === 'function'
+            ? collider.userData.surfaceYAt(pos, collider)
+            : null;
+        groundY = Math.max(groundY, Number.isFinite(dynamicGroundY) ? dynamicGroundY : collider.max.y);
+    }
+    return groundY;
+}
+
+function getStandingRootY(cd, pos) {
+    return cd.baseY + getGroundYAt(cd, pos);
+}
+
+function setCharacterCollisionBox(cd, pos) {
+    const floorY = getGroundYAt(cd, pos);
+    _charBox.min.set(
+        pos.x - CHARACTER_COLLISION_RADIUS,
+        floorY + CHARACTER_COLLISION_FOOT_OFFSET,
+        pos.z - CHARACTER_COLLISION_RADIUS
+    );
+    _charBox.max.set(
+        pos.x + CHARACTER_COLLISION_RADIUS,
+        floorY + CHARACTER_COLLISION_HEIGHT,
+        pos.z + CHARACTER_COLLISION_RADIUS
+    );
+}
 
 function checkCollision(cd, pos) {
     if (!cd.colliders || cd.colliders.length === 0) return false;
-    _charBox.setFromCenterAndSize(pos, _charSize);
+    setCharacterCollisionBox(cd, pos);
     for (const col of cd.colliders) {
+        if (isWalkableCollider(col)) continue;
+        if (isPointInColliderIgnoreZone(pos, col)) continue;
         if (_charBox.intersectsBox(col)) return true;
     }
     return false;
+}
+
+function shouldStrictlyEnforceNavigationCollision(cd) {
+    return cd?.navigationScope?.roomId === 'bar';
 }
 
 function getWaypointPosition(cd, waypoint) {
     if (!waypoint?.position) return null;
     const sitApproach = waypoint.isFurniture ? getSitApproachPosition(waypoint) : null;
     if (sitApproach) {
-        sitApproach.y = cd.baseY;
+        sitApproach.y = getStandingRootY(cd, sitApproach);
         return sitApproach;
     }
     const pos = waypoint.position.clone ? waypoint.position.clone() : new THREE.Vector3(
@@ -781,7 +844,7 @@ function getWaypointPosition(cd, waypoint) {
         Number(waypoint.position.y) || 0,
         Number(waypoint.position.z) || 0
     );
-    pos.y = cd.baseY;
+    pos.y = getStandingRootY(cd, pos);
     return pos;
 }
 
@@ -810,7 +873,7 @@ function isSegmentClear(cd, start, end) {
     const sample = new THREE.Vector3();
     for (let i = 1; i <= steps; i++) {
         sample.lerpVectors(start, end, i / steps);
-        sample.y = cd.baseY;
+        sample.y = getStandingRootY(cd, sample);
         if (checkCollision(cd, sample)) return false;
     }
     return true;
@@ -824,10 +887,10 @@ function isCurrentWalkPathClear(cd) {
     }
 
     let anchor = cd.root.position.clone();
-    anchor.y = cd.baseY;
+    anchor.y = getStandingRootY(cd, anchor);
     for (const point of points) {
         const next = point.clone ? point.clone() : new THREE.Vector3(point.x, point.y, point.z);
-        next.y = cd.baseY;
+        next.y = getStandingRootY(cd, next);
         if (!isSegmentClear(cd, anchor, next)) return false;
         anchor = next;
     }
@@ -894,7 +957,7 @@ function buildPathAroundColliders(cd, start, target) {
     });
     const toPos = (x, z) => new THREE.Vector3(
         bounds.minX + x * PATH_GRID_STEP,
-        cd.baseY,
+        getStandingRootY(cd, { x: bounds.minX + x * PATH_GRID_STEP, z: bounds.minZ + z * PATH_GRID_STEP }),
         bounds.minZ + z * PATH_GRID_STEP
     );
     const keyOf = (x, z) => `${x},${z}`;
@@ -971,7 +1034,8 @@ function buildPathAroundColliders(cd, start, target) {
 function startWalkSegment(cd, waypoint, end) {
     cd.walkEnd.copy(end);
     cd.walkStart.copy(cd.root.position);
-    cd.walkStart.y = cd.baseY;
+    cd.walkStart.y = getStandingRootY(cd, cd.walkStart);
+    cd.walkEnd.y = getStandingRootY(cd, cd.walkEnd);
     cd.walkProgress = 0;
     cd.walkCycle = 0;
     cd.walkBlend = 0;
@@ -986,7 +1050,7 @@ function beginWalkToWaypoint(cd, waypoint) {
     const targetPos = getWaypointPosition(cd, waypoint);
     if (!targetPos) return false;
     const startPos = cd.root.position.clone();
-    startPos.y = cd.baseY;
+    startPos.y = getStandingRootY(cd, startPos);
     const targetWaypoint = {
         ...waypoint,
         position: targetPos.clone()
@@ -994,10 +1058,15 @@ function beginWalkToWaypoint(cd, waypoint) {
     const path = waypoint.ignoreCollision
         ? [targetPos]
         : buildPathAroundColliders(cd, startPos, targetPos);
-    // If grid routing fails at a collider edge, keep the character moving.
-    // A short visual clip is preferable to getting stuck forever.
-    const safePath = path && path.length > 0 ? path : [targetPos];
-    const finalPath = safePath.map(point => point.clone ? point.clone() : point);
+    if (!path || path.length === 0) {
+        if (shouldStrictlyEnforceNavigationCollision(cd)) return false;
+        const fallbackPath = [targetPos];
+        const finalPath = fallbackPath.map(point => point.clone ? point.clone() : point);
+        cd.walkPathQueue = finalPath.slice(1).map(point => point.clone());
+        return startWalkSegment(cd, targetWaypoint, finalPath[0]);
+    }
+
+    const finalPath = path.map(point => point.clone ? point.clone() : point);
     const lastPathPoint = finalPath[finalPath.length - 1];
     if (
         waypoint.isFurniture
@@ -1020,14 +1089,28 @@ function updateWalking(cd, delta) {
     cd.walkCycle += delta * WALK_CYCLE_SPEED * (0.75 + cd.walkBlend * 0.25);
     if (cd.walkProgress >= 1) {
         cd.root.position.copy(cd.walkEnd);
-        cd.root.position.y = cd.baseY;
+        cd.root.position.y = getStandingRootY(cd, cd.root.position);
         finishWalking(cd);
         return;
     }
     const t = cd.walkProgress;
     const newPos = new THREE.Vector3().lerpVectors(cd.walkStart, cd.walkEnd, t);
-    newPos.y = cd.baseY;
+    const targetRootY = getStandingRootY(cd, newPos);
+    const heightBlend = 1 - Math.exp(-CHARACTER_HEIGHT_SMOOTH_SPEED * Math.max(0, delta));
+    newPos.y = cd.root.position.y + (targetRootY - cd.root.position.y) * heightBlend;
+    if (Math.abs(newPos.y - targetRootY) < 0.003) newPos.y = targetRootY;
     cd.walkClipping = checkCollision(cd, newPos);
+    if (cd.walkClipping && !cd.targetWaypoint?.ignoreCollision && shouldStrictlyEnforceNavigationCollision(cd)) {
+        cd.walkPathQueue = null;
+        cd.targetWaypoint = null;
+        cd.walkProgress = 0;
+        cd.walkBlend = 0;
+        cd.stateTimer = 0;
+        cd.idleDuration = 0.8;
+        cd.state = STATES.IDLE;
+        applyIdlePose(cd);
+        return;
+    }
     cd.root.position.copy(newPos);
     const dir = new THREE.Vector3().subVectors(cd.walkEnd, cd.walkStart);
     dir.y = 0;
@@ -1357,8 +1440,8 @@ function updateStandTransition(cd, delta) {
     if (cd.transitionProgress >= 1) {
         applySnapshot(cd, cd.sitEnd);
         cd.root.position.x = cd.sitStandEndX;
-        cd.root.position.y = cd.baseY;
         cd.root.position.z = cd.sitStandEndZ;
+        cd.root.position.y = getStandingRootY(cd, cd.root.position);
         markStoodFromFurniture(cd);
 
         applyIdlePose(cd);
@@ -1382,8 +1465,8 @@ function updateStandTransition(cd, delta) {
     const t = easeInOutCubic(cd.transitionProgress);
     lerpPose(cd, cd.sitStart, cd.sitEnd, t);
     cd.root.position.x = cd.sitStandStartX + (cd.sitStandEndX - cd.sitStandStartX) * t;
-    cd.root.position.y = cd.sitStandStartY + (cd.baseY - cd.sitStandStartY) * t;
     cd.root.position.z = cd.sitStandStartZ + (cd.sitStandEndZ - cd.sitStandStartZ) * t;
+    cd.root.position.y = cd.sitStandStartY + (getStandingRootY(cd, cd.root.position) - cd.sitStandStartY) * t;
 }
 
 export function forceStandUp(cd) {
@@ -1408,7 +1491,7 @@ export function forceStandUp(cd) {
         cd.root.position.x = cd.sitStartX;
         cd.root.position.z = cd.sitStartZ;
     }
-    cd.root.position.y = cd.baseY;
+    cd.root.position.y = getStandingRootY(cd, cd.root.position);
     applyIdlePose(cd);
     forceUpdate(cd);
 }
@@ -1491,6 +1574,7 @@ export function forceCharacterIntoRoom(cd, roomId, spawnPosition) {
     if (!cd?.root || !spawnPosition) return;
     forceStandUp(cd);
     cd.root.position.set(spawnPosition.x, cd.baseY, spawnPosition.z);
+    cd.root.position.y = getStandingRootY(cd, cd.root.position);
     cd.root.rotation.y = Number.isFinite(spawnPosition.rotationY) ? spawnPosition.rotationY : cd.root.rotation.y;
     cd.faceDirection = cd.root.rotation.y;
     cd.navigationScope = {
@@ -1566,7 +1650,7 @@ export function endInteraction(cd) {
         cd.state = STATES.SITTING;
     } else {
         cd.state = STATES.IDLE;
-        cd.root.position.y = cd.baseY;
+        cd.root.position.y = getStandingRootY(cd, cd.root.position);
         applyIdlePose(cd);
     }
     cd.stateTimer = 0;
@@ -1695,7 +1779,7 @@ export async function swapModel(scene, cd, modelPath) {
                     } else {
                         applyIdlePose(cd);
                         cd.state = STATES.IDLE;
-                        cd.root.position.y = cd.baseY;
+                        cd.root.position.y = getStandingRootY(cd, cd.root.position);
                     }
 
                     resolve(cd);

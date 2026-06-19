@@ -27,6 +27,9 @@ const MANUAL_LOOK_HARD_SPIKE = 260;
 const TOUCH_LOOK_MAX_STEP = 46;
 const TOUCH_LOOK_HARD_SPIKE = 180;
 const POINTER_LOCK_SUPPRESS_MS = 90;
+const PLAYER_EYE_HEIGHT = 1.6;
+const PLAYER_FOOT_CLEARANCE = 0.04;
+const CAMERA_HEIGHT_SMOOTH_SPEED = 12;
 
 function nowMs() {
     return typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
@@ -70,6 +73,7 @@ export function initControls(camera, domElement, colliders) {
         isLocked: false,
         movementLocked: false,
         lookLocked: false,
+        targetCameraY: camera.position.y,
         useTouchControls: isTouchDevice() && (!hasPhysicalKeyboard() || !pointerLockSupported)
     };
 
@@ -254,11 +258,69 @@ export function initControls(camera, domElement, colliders) {
         initTouchButtons(state);
     }
 
-    function checkCollision(pos, radius) {
+    function blocksFootPath(box) {
+        const walkableHeight = Number(box?.userData?.walkableHeight);
+        if (Number.isFinite(walkableHeight) && box.max.y <= walkableHeight) {
+            return false;
+        }
+        return true;
+    }
+
+    function overlapsFootprint(pos, radius, box) {
+        return pos.x + radius > box.min.x && pos.x - radius < box.max.x
+            && pos.z + radius > box.min.z && pos.z - radius < box.max.z;
+    }
+
+    function isPointInIgnoreZone(pos, box) {
+        const zones = box?.userData?.ignoreZones;
+        if (!Array.isArray(zones)) return false;
+        return zones.some(zone => pos.x >= zone.minX && pos.x <= zone.maxX
+            && pos.z >= zone.minZ && pos.z <= zone.maxZ);
+    }
+
+    function getWalkableSurfaceY(pos, radius) {
+        let surfaceY = 0;
         for (const box of state.colliders) {
-            if (pos.x + radius > box.min.x && pos.x - radius < box.max.x &&
-                pos.z + radius > box.min.z && pos.z - radius < box.max.z &&
-                1.6 > box.min.y && 0 < box.max.y) {
+            const walkableHeight = Number(box?.userData?.walkableHeight);
+            if (!Number.isFinite(walkableHeight) || box.max.y > walkableHeight) continue;
+            if (!overlapsFootprint(pos, radius, box)) continue;
+            const dynamicSurfaceY = typeof box.userData?.surfaceYAt === 'function'
+                ? box.userData.surfaceYAt(pos, box)
+                : null;
+            surfaceY = Math.max(surfaceY, Number.isFinite(dynamicSurfaceY) ? dynamicSurfaceY : box.max.y);
+        }
+        return surfaceY;
+    }
+
+    function getCameraStandingY(pos, radius = 0.25) {
+        return getWalkableSurfaceY(pos, radius) + PLAYER_EYE_HEIGHT;
+    }
+
+    function snapCameraHeight(radius = 0.25) {
+        const targetY = getCameraStandingY(controls.object.position, radius);
+        state.targetCameraY = targetY;
+        controls.object.position.y = targetY;
+    }
+
+    function smoothCameraHeight(delta, radius = 0.25) {
+        const targetY = getCameraStandingY(controls.object.position, radius);
+        state.targetCameraY = targetY;
+        const t = 1 - Math.exp(-CAMERA_HEIGHT_SMOOTH_SPEED * Math.max(0, delta));
+        controls.object.position.y += (targetY - controls.object.position.y) * t;
+        if (Math.abs(controls.object.position.y - targetY) < 0.003) {
+            controls.object.position.y = targetY;
+        }
+    }
+
+    function checkCollision(pos, radius) {
+        const footY = getWalkableSurfaceY(pos, radius);
+        const bodyMinY = footY + PLAYER_FOOT_CLEARANCE;
+        const bodyMaxY = footY + PLAYER_EYE_HEIGHT;
+        for (const box of state.colliders) {
+            if (!blocksFootPath(box)) continue;
+            if (isPointInIgnoreZone(pos, box)) continue;
+            if (overlapsFootprint(pos, radius, box) &&
+                bodyMaxY > box.min.y && bodyMinY < box.max.y) {
                 return true;
             }
         }
@@ -272,9 +334,13 @@ export function initControls(camera, domElement, colliders) {
         for (let i = 0; i < 8; i++) {
             let resolvedThisPass = false;
             for (const box of state.colliders) {
-                if (!(camera.position.x + radius > box.min.x && camera.position.x - radius < box.max.x &&
-                    camera.position.z + radius > box.min.z && camera.position.z - radius < box.max.z &&
-                    1.6 > box.min.y && 0 < box.max.y)) {
+                if (!blocksFootPath(box)) continue;
+                if (isPointInIgnoreZone(camera.position, box)) continue;
+                const footY = getWalkableSurfaceY(camera.position, radius);
+                const bodyMinY = footY + PLAYER_FOOT_CLEARANCE;
+                const bodyMaxY = footY + PLAYER_EYE_HEIGHT;
+                if (!(overlapsFootprint(camera.position, radius, box) &&
+                    bodyMaxY > box.min.y && bodyMinY < box.max.y)) {
                     continue;
                 }
 
@@ -293,7 +359,7 @@ export function initControls(camera, domElement, colliders) {
             if (!resolvedThisPass) break;
         }
 
-        camera.position.y = 1.6;
+        snapCameraHeight(radius);
         return moved;
     }
 
@@ -301,7 +367,7 @@ export function initControls(camera, domElement, colliders) {
         if (!state.isLocked) return;
         if (state.movementLocked) {
             clearMovementState();
-            controls.object.position.y = 1.6;
+            snapCameraHeight();
             return;
         }
 
@@ -331,7 +397,7 @@ export function initControls(camera, domElement, colliders) {
             }
         }
 
-        camera.position.y = 1.6;
+        smoothCameraHeight(delta, radius);
         camera.quaternion.copy(prevQuat);
     }
 
@@ -358,6 +424,7 @@ export function initControls(camera, domElement, colliders) {
 
     function setColliders(colliders) {
         state.colliders = Array.isArray(colliders) ? colliders : [];
+        state.targetCameraY = getCameraStandingY(controls.object.position);
     }
 
     function setMovementLocked(locked) {

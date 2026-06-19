@@ -54,6 +54,7 @@ fritia_online_v3/
 │   ├── gift_system.js
 │   ├── main.js
 │   ├── room.js
+│   ├── bar_scene.js
 │   ├── scene.js
 │   └── settings.js
 └── src/
@@ -74,6 +75,8 @@ fritia_online_v3/
     │   ├── achievement_*.svg / ach_*.svg
     │   ├── dream_*.svg
     │   └── license files
+    ├── _maps/
+    │   └── bar/              # 暖调闲聚 PMX 地图与贴图
     ├── _fritia_3d_model/
     └── _fritia_alterable_models/
 ```
@@ -104,8 +107,9 @@ npm run dev
 - `charData`：`character.js` 返回的角色运行态。
 - `isInteracting`：日常对话状态。
 - `isSleeping`：睡眠模式状态。
-- `currentPlayerRoomId`：`bedroom` 或 `dream`。
+- `currentPlayerRoomId`：`bedroom`、`dream` 或 `bar`。
 - `isDreamDoorOpen`, `dreamDoorAnimating`：造梦空间推拉门状态。
+- `isBarSceneActive`, `barTransitionInProgress`：暖调闲聚地图显示和黑屏转场状态。
 - `dreamCinematic`：造梦家具生成后的特写过场状态；存在时暂停玩家普通操作，`E` 可跳过。
 - `basePlayerColliders`, `bedroomColliders`, `dreamStaticColliders`：玩家和角色使用的基础碰撞体集合。
 
@@ -125,6 +129,7 @@ npm run dev
 - `refreshCharacterRoomScope(force)`：玩家进入新旧房间时，切换芙提雅导航作用域；优先让角色通过门步行进入对应房间，失败时才瞬移。
 - `getActivePlayerColliders()`：当前玩家碰撞体。门关闭时包含 `dreamDoorCollider`，门打开时移除。
 - `getActiveBedroomCharacterColliders()` / `getActiveDreamCharacterColliders()`：角色在不同房间的导航碰撞体。
+- `enterBarScene()` / `exitBarScene()`：通过黑屏转场进入/离开暖调闲聚；切换旧房间组显示、scene background/fog、玩家碰撞体和芙提雅导航作用域。
 - `exportData()`：导出设置、游戏状态、日常对话、约会对话、成就、礼物、造梦家具、挂画。
 - `handleImportFile(e)`：导入 JSON，兼容旧存档，导入后刷新 HUD、成就、礼物、造梦家具。
 
@@ -197,6 +202,30 @@ npm run dev
 - 购物终端：旧卧室右侧墙，远离造梦空间门。
 - 造梦终端：新房间窗户对面的墙上，靠近入口，玩家从旧房间进门后容易看到。
 - 礼物收藏柜、衣柜、床、书桌、约会门、挂画保持旧功能；约会门为静态触发门，视觉沿用造梦空间推拉门和门框样式，但不具备开关门状态，也不改变所在南侧墙面的厚度。
+
+## 暖调闲聚地图：`js/bar_scene.js`
+
+职责：
+
+- 使用 `MMDLoader` 懒加载 `src/_maps/bar/酒吧.pmx`，贴图位于 `src/_maps/bar/textures/`。
+- 将地图 PMX 转换为普通静态 `THREE.Mesh + MeshStandardMaterial`，隐藏原始 MMD 对象，避免静态地图继续触发 MMD 材质/骨骼相关渲染问题。
+- 地图默认隐藏；进入暖调闲聚时显示，返回卧室时隐藏。
+- 自动扫描地图三角面生成运行时 AABB 碰撞盒，并通过 `userData.walkableHeight` / `surfaceYAt` / `ignoreZones` 标记低台阶、平台和楼梯坡面。
+- 提供不可见出口交互平面；酒吧内看向出口显示 `按 E 返回卧室`。
+
+导出：
+
+- `ensureBarScene(scene)`：加载并初始化暖调闲聚场景，返回地图组、bounds、waypoints、colliders、出口 mesh 和出生点。
+- `setBarSceneVisible(visible)`：切换地图组显示。
+- `getBarBounds()` / `getBarWaypoints()` / `getBarPlayerColliders()` / `getBarCharacterColliders()`：供 `main.js` 切换玩家与角色作用域。
+- `getBarSpawn()`：返回玩家出生相机位置、看向点和芙提雅出生点；默认优先使用地图 X/Z 中央，若被碰撞体占用会搜索附近可站立点。
+- `getBarExitInteractionMesh()`：返回出口不可见交互平面。
+
+运行约定：
+
+- `currentPlayerRoomId === "bar"` 时，旧房间/造梦房间普通交互检测会被禁用，仅保留角色对话和酒吧出口。
+- 玩家控制器和角色导航都识别 `walkableHeight`，低平台/台阶作为脚下高度而不是水平阻挡。
+- 可设置 `localStorage.setItem('fritia_bar_debug_colliders','1')` 开启酒吧碰撞盒调试显示。
 
 ## 控制系统：`js/controls.js`
 
@@ -957,7 +986,9 @@ DOM ID：
 - 看向购物终端：打开礼物终端。
 - 看向礼物收藏柜：打开礼物收藏。
 - 看向床：进入睡眠。
-- 看向书桌或约会门：打开约会。
+- 看向书桌：打开约会。
+- 看向旧房间南侧门：前往暖调闲聚。
+- 暖调闲聚中看向出口平面：返回卧室。
 - 看向挂画：上传图片。
 - 看向衣柜：换装。
 
@@ -996,6 +1027,15 @@ Escape：
 5. 推拉门关闭时阻挡玩家和角色。
 6. 推拉门打开时门板滑入负 Z 侧墙体内部，玩家和角色可通过。
 7. 门打开后准星对准门洞仍能按 E 关门，且不会穿透触发门后实体。
+
+暖调闲聚：
+
+1. 看向旧房间南侧门，提示应为 `按 E 前往暖调闲聚`。
+2. 按 E 后黑屏转场进入暖调闲聚，旧卧室/造梦空间组隐藏，玩家和芙提雅都出现在酒吧地图内。
+3. 酒吧内 WASD 可移动，高物体阻挡；低台阶、低平台和出口楼梯不会把玩家或芙提雅卡住。
+4. 酒吧内接近芙提雅仍可按 F 对话。
+5. 酒吧内看向出口区域提示 `按 E 返回卧室`，按 E 黑屏回到旧房间南侧门附近。
+6. 返回卧室后，购物终端、礼物收藏柜、造梦门、书桌约会、睡觉、换装、挂画仍可正常触发。
 
 旧功能回归：
 
