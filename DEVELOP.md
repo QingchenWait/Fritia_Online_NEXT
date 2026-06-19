@@ -42,6 +42,7 @@ fritia_online_v3/
 │   ├── dream_furniture_factory.js
 │   ├── dream_llm.js
 │   ├── dream_system.js
+│   ├── room_panorama.js
 │   ├── game_state.js
 │   ├── gift_system.js
 │   ├── main.js
@@ -103,7 +104,7 @@ npm run dev
 主要函数：
 
 - `init()`：主初始化流程。按顺序初始化 `game_state`、`scene`、`room`、`character`、`controls`、对话系统、礼物系统、成就系统和造梦系统。
-- `onKeyDown(e)`：全局键盘交互。`E` 处理门、终端、家具、礼物、床、约会、挂画、衣柜；`F` 处理角色互动和摸头；`1/2` 处理造梦家具样式修改确认/回退。
+- `onKeyDown(e)`：全局键盘交互。`E` 处理门、终端、家具、礼物、床、约会、挂画、衣柜；`F` 处理角色互动和摸头；`1/2` 处理造梦家具样式修改确认/回退；看向造梦终端时 `1` 进入房间全景拍照模式。
 - `animate()`：主循环。更新游戏时间、控制器、角色、门动画、房间作用域、窗户天空色、交互提示并渲染场景。
 - 开局欢迎闸门：加载完成但玩家尚未点击 `#click-to-play` 前，角色只保留眨眼，不切换 waypoint、不随机移动；首次点击后先执行挥手欢迎，挥手结束再恢复正常行动。
 - `updateInteractionPrompt()`：复用 `#painting-prompt` 和 `#interaction-prompt` 显示当前可用交互；造梦家具显示 `按 E 管理 [家具名]`。
@@ -112,6 +113,7 @@ npm run dev
 - `toggleDreamDoor()`：切换造梦空间推拉门开关状态，并刷新玩家/角色碰撞作用域。
 - `updateDreamDoor(delta)`：用缓动插值滑动门板。门开启后移除门碰撞，门关闭后恢复门碰撞。
 - `startDreamFurnitureCinematic(record, runtimeItem)` / `updateDreamFurnitureCinematic(delta)` / `skipDreamFurnitureCinematic()`：新家具生成后播放约 3 秒的特写拉远镜头，镜头起终点限制在造梦空间内，避免穿墙；播放前检测结束落点的玩家碰撞风险，必要时保持玩家视角 Y 轴高度并改用附近安全位置；过场期间只允许按 `E` 跳过。
+- `initRoomPanorama()` / `enterRoomPanorama()` / `updateRoomPanorama()`：看向造梦终端时通过 `按 1 拍摄房间` 进入全景拍照模式。模式内固定相机到新旧房间斜上方，暂停玩家移动和普通交互，并通过黑屏淡入淡出切换视角。
 - `refreshCharacterRoomScope(force)`：玩家进入新旧房间时，切换芙提雅导航作用域；优先让角色通过门步行进入对应房间，失败时才瞬移。
 - `getActivePlayerColliders()`：当前玩家碰撞体。门关闭时包含 `dreamDoorCollider`，门打开时移除。
 - `getActiveBedroomCharacterColliders()` / `getActiveDreamCharacterColliders()`：角色在不同房间的导航碰撞体。
@@ -620,6 +622,46 @@ localStorage key：`fritia_achievements`
 - 台词气泡使用固定宽度，并会把完整气泡限制在可视区域内；芙提雅离开画面时气泡保留在离屏边缘，回到画面后立即恢复为头顶悬浮。
 - 台词气泡出现前，芙提雅会先在约 `0.46s` 内平滑转身，让身体正面面向对应家具。
 - 日常对话、约会、礼物、造梦 overlay、睡眠、非操作模式中不会触发家具台词。
+
+## 房间全景拍照：`js/room_panorama.js`
+
+职责：
+- 看向造梦终端时，`#dream-painting-prompt` 会显示 `按 1 拍摄房间`。
+- `Digit1` / `Numpad1` 或触控该提示按钮进入全景拍照模式。
+- 全景模式固定相机到新旧房间整体地图斜上方，暂停玩家移动、角色行动和普通交互。
+- 进入、退出、切换视角复用 `fadeToBlack()` / `fadeFromBlack()` 黑屏缓入缓出。
+- 模式内左/右按钮调用 `switchPanoramaView(direction)` 切换四个斜上方视角。
+- 支持鼠标滚轮缩放；触控屏支持双指缩放。缩放只改变全景相机到目标点的距离，不修改玩家相机或世界坐标。`#room-panorama-ui` 会接管整屏 pointer/wheel/touch 事件，避免输入穿透到底层画布。
+- 拍照模式使用 `body.room-panorama-active` 强制隐藏准星，进入时释放普通操作模式，模式内点击屏幕不会重新请求 Pointer Lock；退出完成后恢复操作模式。
+- 拍照模式会隐藏 `#top-bar` 右上角按钮；退出完成后由 `body.room-panorama-active` 移除自动恢复显示。
+- 拍照模式临时调整 `scene.background`、`scene.fog`、`renderer.toneMappingExposure`，并克隆房间地板/墙体/天花板材质做轻量美化；退出时恢复原状态。
+- 天花板始终透明；当前视角正对的 1-2 面外墙，以及这些墙上的系统挂件和造梦悬挂家具，会临时透明。
+- 截图按钮调用 `captureRoomPanorama()`，隐藏 HTML 拍照 UI 一帧后读取 WebGL canvas 并下载 `fritia_room_panorama_*.png`。
+
+关键实现：
+- `scene.js` 的 renderer 使用 `preserveDrawingBuffer: true`，保证 `renderer.domElement.toDataURL('image/png')` 可以稳定导出。
+- `room.js` 通过 `userData.panoramaLayer` 和 `userData.panoramaWall` 标记天花板、墙体、窗户、挂画、门等可透明对象。
+- `dream_system.js` 部署 `anchor: 'wall'` 的动态家具时写入 `userData.panoramaLayer = 'wallDecor'` 与 `userData.panoramaWall`。
+- `room_panorama.js` 临时克隆材质做透明化，退出或切换视角时恢复原材质，避免污染共用墙体材质。
+- `updateRoomPanorama()` 在进入/退出/切换黑屏过渡期间不会重写相机位置，避免退出时把玩家留在全景相机坐标。
+- `controls.js` overlay 列表包含 `room-panorama-ui`，且在 `body.room-panorama-active` 时屏蔽 `click-to-play` 与全局点击 Pointer Lock 入口，避免拍照模式中重新抢回普通操作模式。
+
+DOM ID：
+- `#room-panorama-ui`
+- `#room-panorama-prev`
+- `#room-panorama-next`
+- `#room-panorama-capture`
+- `#room-panorama-close`
+
+手动测试：
+1. 看向造梦终端时，应同时显示 `按 E 打开造梦终端` 和 `按 1 拍摄房间`。
+2. 按 `1` 或触控 `按 1 拍摄房间` 后，应黑屏淡入全景拍照模式。
+3. 拍照模式下玩家不能自由移动或转动镜头，旧房间、新房间、家具和芙提雅都应在画面范围内。
+4. 点击左右按钮应黑屏切换视角，并同步透明化对应墙体和墙面挂件。
+5. 鼠标滚轮或双指手势应能放大/缩小房间全景。
+6. 拍照模式中鼠标不应处于普通操作模式，准星不可见。
+7. 点击拍摄按钮应下载 PNG，截图中不包含 HTML 按钮。
+8. 按 `E`、`Escape` 或点击退出按钮后，应黑屏恢复原玩家视角和操作模式。
 
 ## DOM ID 清单
 

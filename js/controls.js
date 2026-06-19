@@ -69,6 +69,7 @@ export function initControls(camera, domElement, colliders) {
         colliders: colliders,
         isLocked: false,
         movementLocked: false,
+        lookLocked: false,
         useTouchControls: isTouchDevice() && (!hasPhysicalKeyboard() || !pointerLockSupported)
     };
 
@@ -85,7 +86,8 @@ export function initControls(camera, domElement, colliders) {
         'dream-terminal-panel',
         'dream-furniture-editor-panel',
         'dream-placement-editor-panel',
-        'dream-object-controls'
+        'dream-object-controls',
+        'room-panorama-ui'
     ];
     let resumeAfterOverlay = false;
     let resumeInProgress = false;
@@ -103,6 +105,7 @@ export function initControls(camera, domElement, colliders) {
         const dy = Number(event.movementY) || 0;
         event.preventDefault();
         event.stopImmediatePropagation();
+        if (state.lookLocked) return;
         if (nowMs() < suppressPointerLookUntil) return;
         const normalized = normalizeLookDelta(dx, dy, POINTER_LOCK_MAX_LOOK_STEP, POINTER_LOCK_HARD_SPIKE);
         if (normalized) {
@@ -119,10 +122,14 @@ export function initControls(camera, domElement, colliders) {
         });
     }
 
+    function isRoomPanoramaModeActive() {
+        return document.body.classList.contains('room-panorama-active');
+    }
+
     function syncEntryPrompt() {
         const prompt = document.getElementById('click-to-play');
         if (!prompt) return;
-        if (!state.isLocked && !isOverlayOpen() && !resumeAfterOverlay && !resumeInProgress) {
+        if (!state.isLocked && !isOverlayOpen() && !isRoomPanoramaModeActive() && !resumeAfterOverlay && !resumeInProgress) {
             prompt.classList.remove('hidden');
         } else {
             prompt.classList.add('hidden');
@@ -197,6 +204,7 @@ export function initControls(camera, domElement, colliders) {
     const clickToPlay = document.getElementById('click-to-play');
     clickToPlay.addEventListener('click', (e) => {
         e.stopPropagation();
+        if (isRoomPanoramaModeActive()) return;
         if (!state.useTouchControls) {
             if (pointerLockSupported) {
                 controls.lock();
@@ -207,6 +215,7 @@ export function initControls(camera, domElement, colliders) {
     });
 
     document.addEventListener('click', (e) => {
+        if (isRoomPanoramaModeActive()) return;
         if (!state.isLocked && !state.useTouchControls && !resumeAfterOverlay && !resumeInProgress) {
             const inOverlay = overlayIds.some(id => {
                 const el = document.getElementById(id);
@@ -356,6 +365,12 @@ export function initControls(camera, domElement, colliders) {
         clearMovementState();
     }
 
+    function setLookLocked(locked) {
+        state.lookLocked = Boolean(locked);
+        resetTouchInputState();
+        suppressPointerLook(locked ? 500 : POINTER_LOCK_SUPPRESS_MS);
+    }
+
     function applyLookDelta(deltaX, deltaY, sensitivity) {
         lookEuler.setFromQuaternion(controls.object.quaternion);
         lookEuler.y -= deltaX * sensitivity;
@@ -366,6 +381,7 @@ export function initControls(camera, domElement, colliders) {
     }
 
     function rotateView(deltaX, deltaY) {
+        if (state.lookLocked) return false;
         const normalized = normalizeLookDelta(deltaX, deltaY, MANUAL_LOOK_MAX_STEP, MANUAL_LOOK_HARD_SPIKE);
         if (!normalized) return false;
         applyLookDelta(normalized.x, normalized.y, 0.002);
@@ -420,7 +436,7 @@ export function initControls(camera, domElement, colliders) {
     }
 
     function resumeControlMode() {
-        if (!resumeAfterOverlay || isOverlayOpen()) {
+        if (!resumeAfterOverlay || isOverlayOpen() || isRoomPanoramaModeActive()) {
             syncEntryPrompt();
             return false;
         }
@@ -449,7 +465,11 @@ export function initControls(camera, domElement, colliders) {
         return requestPointerLockForResume();
     }
 
-    function forceEnterControlMode() {
+    function forceEnterControlMode(options = {}) {
+        if (isRoomPanoramaModeActive() && !options.allowDuringPanorama) {
+            syncEntryPrompt();
+            return false;
+        }
         blurActiveOverlayElement();
         if (state.useTouchControls) {
             enterControlMode();
@@ -480,6 +500,7 @@ export function initControls(camera, domElement, colliders) {
         setColliders,
         resolveCameraCollisions,
         setMovementLocked,
+        setLookLocked,
         rotateView,
         releaseControlMode,
         resumeControlMode,

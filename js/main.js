@@ -34,6 +34,13 @@ import {
     consumeDreamPaintingTextureFile,
     rollbackPendingDreamRevision
 } from './dream_system.js';
+import {
+    enterRoomPanorama,
+    exitRoomPanorama,
+    initRoomPanorama,
+    isRoomPanoramaActive,
+    updateRoomPanorama
+} from './room_panorama.js';
 
 let scene, camera, renderer;
 let controlsModule, charData;
@@ -223,6 +230,15 @@ async function init() {
         onFurnitureChanged: handleDreamFurnitureChanged,
         onFurnitureCreated: startDreamFurnitureCinematic
     });
+    initRoomPanorama({
+        scene,
+        camera,
+        renderer,
+        controlsModule,
+        getCharacterRoot: () => charData?.root || null,
+        fadeToBlack,
+        fadeFromBlack
+    });
     initPainting();
     refreshCharacterRoomScope(true);
     updateGameHud(true);
@@ -294,6 +310,11 @@ async function init() {
 }
 
 function onKeyDown(e) {
+    if (isRoomPanoramaActive()) {
+        if (e.code === 'Escape' || e.code === 'KeyE') exitRoomPanorama();
+        return;
+    }
+
     if (dreamCinematic) {
         if (e.code === 'KeyE') skipDreamFurnitureCinematic();
         return;
@@ -310,6 +331,10 @@ function onKeyDown(e) {
 
     if ((e.code === 'Digit1' || e.code === 'Numpad1') && !isTypingInEditableElement()) {
         const lookedDreamFurniture = getLookingDreamFurniture(camera);
+        if (controlsModule?.state?.isLocked && isLookingAtDreamTerminal(camera)) {
+            enterRoomPanorama();
+            return;
+        }
         if (hasEditableDreamPainting()) {
             requestDreamPaintingTextureUpload();
             return;
@@ -840,16 +865,17 @@ function animate() {
     updateWindowSky();
     updateDreamDoor(delta);
     updateDreamFurnitureCinematic(delta);
+    updateRoomPanorama();
 
     if (controlsModule) {
-        if (!isSleeping && !dreamCinematic) {
+        if (!isSleeping && !dreamCinematic && !isRoomPanoramaActive()) {
             controlsModule.update(delta);
             constrainPendingRevisionPlayer();
         }
     }
 
     if (charData) {
-        if (!isSleeping && !dreamCinematic) {
+        if (!isSleeping && !dreamCinematic && !isRoomPanoramaActive()) {
             if (!startupInteractionStarted) {
                 updateBlink(charData, delta);
             } else if (startupWelcomePending) {
@@ -878,6 +904,10 @@ function updateInteractionPrompt() {
         if (dreamPaintingPrompt) dreamPaintingPrompt.classList.add('hidden');
     };
     if (isDreamRevisionPending()) {
+        hideActionPrompts();
+        return;
+    }
+    if (isRoomPanoramaActive()) {
         hideActionPrompts();
         return;
     }
@@ -919,6 +949,10 @@ function updateInteractionPrompt() {
         } else if (lookDreamTerminal) {
             paintingPrompt.innerHTML = '按 <kbd>E</kbd> 打开造梦终端';
             paintingPrompt.classList.remove('hidden');
+            if (dreamPaintingPrompt) {
+                dreamPaintingPrompt.innerHTML = '按 <kbd>1</kbd> 拍摄房间';
+                dreamPaintingPrompt.classList.remove('hidden');
+            }
         } else if (lookDreamFurniture) {
             const dreamFurnitureId = getLookingDreamFurniture(camera);
             const furnitureName = getDreamFurnitureLabel(dreamFurnitureId);

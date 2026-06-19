@@ -23,6 +23,13 @@ function makeCollider(minX, minY, minZ, maxX, maxY, maxZ) {
     );
 }
 
+function markPanoramaObject(object, layer, wall = '') {
+    if (!object) return object;
+    object.userData.panoramaLayer = layer;
+    if (wall) object.userData.panoramaWall = wall;
+    return object;
+}
+
 export function createRoom(scene) {
     const colliders = [];
     const group = new THREE.Group();
@@ -33,6 +40,7 @@ export function createRoom(scene) {
     floor.rotation.x = -Math.PI / 2;
     floor.position.y = 0;
     floor.receiveShadow = true;
+    markPanoramaObject(floor, 'floor');
     group.add(floor);
 
     const wallMat = new THREE.MeshStandardMaterial({ color: 0xFAF0E6, roughness: 0.9, side: THREE.DoubleSide });
@@ -40,18 +48,21 @@ export function createRoom(scene) {
     const backWall = new THREE.Mesh(new THREE.PlaneGeometry(6, 3), wallMat);
     backWall.position.set(0, 1.5, -2.5);
     backWall.receiveShadow = true;
+    markPanoramaObject(backWall, 'wall', 'north');
     group.add(backWall);
 
     const frontWall = new THREE.Mesh(new THREE.PlaneGeometry(6, 3), wallMat);
     frontWall.position.set(0, 1.5, 2.5);
     frontWall.rotation.y = Math.PI;
     frontWall.receiveShadow = true;
+    markPanoramaObject(frontWall, 'wall', 'south');
     group.add(frontWall);
 
     const leftWall = new THREE.Mesh(new THREE.PlaneGeometry(5, 3), wallMat);
     leftWall.position.set(-3, 1.5, 0);
     leftWall.rotation.y = Math.PI / 2;
     leftWall.receiveShadow = true;
+    markPanoramaObject(leftWall, 'wall', 'west');
     group.add(leftWall);
 
     const logoTexture = new THREE.TextureLoader().load('src/snowbreak_logo.png');
@@ -63,6 +74,7 @@ export function createRoom(scene) {
     const logoPlane = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.2), logoMat);
     logoPlane.position.set(-2.99, 1.8, 0);
     logoPlane.rotation.y = Math.PI / 2;
+    markPanoramaObject(logoPlane, 'wallDecor', 'west');
     group.add(logoPlane);
 
     // Coordinate convention: the original 6m x 5m bedroom occupies X [-3, 3], Z [-2.5, 2.5].
@@ -88,6 +100,7 @@ export function createRoom(scene) {
         const wall = new THREE.Mesh(new THREE.BoxGeometry(sharedWallThickness, height, length), wallMat);
         wall.position.set(sharedWallCenterX, yMin + height / 2, (zMin + zMax) / 2);
         wall.receiveShadow = true;
+        markPanoramaObject(wall, 'wall', 'shared');
         group.add(wall);
     }
 
@@ -197,6 +210,7 @@ export function createRoom(scene) {
     const ceiling = new THREE.Mesh(ceilGeo, ceilMat);
     ceiling.rotation.x = Math.PI / 2;
     ceiling.position.y = 3;
+    markPanoramaObject(ceiling, 'ceiling');
     group.add(ceiling);
 
     // Window
@@ -211,23 +225,29 @@ export function createRoom(scene) {
     });
     const window1 = new THREE.Mesh(winGeo, winMat);
     window1.position.set(0, 1.8, -2.49);
+    markPanoramaObject(window1, 'wallDecor', 'north');
     group.add(window1);
 
     const frameMat = new THREE.MeshStandardMaterial({ color: 0xf0f0f0, roughness: 0.3 });
     const frameH = new THREE.Mesh(new THREE.BoxGeometry(2, 0.05, 0.05), frameMat);
     frameH.position.set(0, 2.4, -2.48);
+    markPanoramaObject(frameH, 'wallDecor', 'north');
     group.add(frameH);
     const frameH2 = frameH.clone();
     frameH2.position.y = 1.2;
+    markPanoramaObject(frameH2, 'wallDecor', 'north');
     group.add(frameH2);
     const frameV1 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.25, 0.05), frameMat);
     frameV1.position.set(-0.975, 1.8, -2.48);
+    markPanoramaObject(frameV1, 'wallDecor', 'north');
     group.add(frameV1);
     const frameV2 = frameV1.clone();
     frameV2.position.x = 0.975;
+    markPanoramaObject(frameV2, 'wallDecor', 'north');
     group.add(frameV2);
     const frameVMid = new THREE.Mesh(new THREE.BoxGeometry(0.03, 1.2, 0.05), frameMat);
     frameVMid.position.set(0, 1.8, -2.48);
+    markPanoramaObject(frameVMid, 'wallDecor', 'north');
     group.add(frameVMid);
 
     // Bed
@@ -365,6 +385,7 @@ export function createRoom(scene) {
     dreamFloor.rotation.x = -Math.PI / 2;
     dreamFloor.position.set(8, 0.002, 0);
     dreamFloor.receiveShadow = true;
+    markPanoramaObject(dreamFloor, 'floor');
     dreamGroup.add(dreamFloor);
 
     const dreamCeiling = new THREE.Mesh(
@@ -373,20 +394,24 @@ export function createRoom(scene) {
     );
     dreamCeiling.rotation.x = Math.PI / 2;
     dreamCeiling.position.set(8, 3, 0);
+    markPanoramaObject(dreamCeiling, 'ceiling');
     dreamGroup.add(dreamCeiling);
 
     const dreamBackWall = new THREE.Mesh(new THREE.PlaneGeometry(10, 3), wallMat);
     dreamBackWall.position.set(8, 1.5, -3);
+    markPanoramaObject(dreamBackWall, 'wall', 'north');
     dreamGroup.add(dreamBackWall);
 
     const dreamFrontWall = new THREE.Mesh(new THREE.PlaneGeometry(10, 3), wallMat);
     dreamFrontWall.position.set(8, 1.5, 3);
     dreamFrontWall.rotation.y = Math.PI;
+    markPanoramaObject(dreamFrontWall, 'wall', 'south');
     dreamGroup.add(dreamFrontWall);
 
     const dreamRightWall = new THREE.Mesh(new THREE.PlaneGeometry(6, 3), wallMat);
     dreamRightWall.position.set(13, 1.5, 0);
     dreamRightWall.rotation.y = -Math.PI / 2;
+    markPanoramaObject(dreamRightWall, 'wall', 'east');
     dreamGroup.add(dreamRightWall);
 
     const dreamWindowMat = new THREE.MeshStandardMaterial({
@@ -399,22 +424,28 @@ export function createRoom(scene) {
     });
     const dreamWindow = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.15), dreamWindowMat);
     dreamWindow.position.set(8.3, 1.78, -2.99);
+    markPanoramaObject(dreamWindow, 'wallDecor', 'north');
     dreamGroup.add(dreamWindow);
     const dreamWindowFrameMat = new THREE.MeshStandardMaterial({ color: 0xe8edf6, roughness: 0.42 });
     const dwTop = new THREE.Mesh(new THREE.BoxGeometry(2.35, 0.05, 0.05), dreamWindowFrameMat);
     dwTop.position.set(8.3, 2.38, -2.96);
+    markPanoramaObject(dwTop, 'wallDecor', 'north');
     dreamGroup.add(dwTop);
     const dwBottom = dwTop.clone();
     dwBottom.position.y = 1.18;
+    markPanoramaObject(dwBottom, 'wallDecor', 'north');
     dreamGroup.add(dwBottom);
     const dwLeft = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.25, 0.05), dreamWindowFrameMat);
     dwLeft.position.set(7.15, 1.78, -2.96);
+    markPanoramaObject(dwLeft, 'wallDecor', 'north');
     dreamGroup.add(dwLeft);
     const dwRight = dwLeft.clone();
     dwRight.position.x = 9.45;
+    markPanoramaObject(dwRight, 'wallDecor', 'north');
     dreamGroup.add(dwRight);
     const dwMid = new THREE.Mesh(new THREE.BoxGeometry(0.04, 1.2, 0.05), dreamWindowFrameMat);
     dwMid.position.set(8.3, 1.78, -2.955);
+    markPanoramaObject(dwMid, 'wallDecor', 'north');
     dreamGroup.add(dwMid);
 
     const dreamTerminalGroup = new THREE.Group();
@@ -569,6 +600,7 @@ export function createRoom(scene) {
     const painting = new THREE.Mesh(paintGeo, paintMat);
     painting.position.set(0, 1.6, 2.48);
     painting.rotation.y = Math.PI;
+    markPanoramaObject(painting, 'wallDecor', 'south');
     group.add(painting);
 
     const labelCanvas = document.createElement('canvas');
@@ -584,20 +616,25 @@ export function createRoom(scene) {
     const paintingLabel = new THREE.Mesh(new THREE.PlaneGeometry(paintW * 0.6, 0.05), labelMat);
     paintingLabel.position.set(0, 1.6 - paintH / 2 + 0.06, 2.49);
     paintingLabel.rotation.y = Math.PI;
+    markPanoramaObject(paintingLabel, 'wallDecor', 'south');
     group.add(paintingLabel);
 
     const pfMat = new THREE.MeshStandardMaterial({ color: 0x3a2a1a, roughness: 0.5 });
     const pfT = new THREE.Mesh(new THREE.BoxGeometry(paintW + 0.08, 0.04, 0.03), pfMat);
     pfT.position.set(0, 1.6 + paintH / 2, 2.48);
+    markPanoramaObject(pfT, 'wallDecor', 'south');
     group.add(pfT);
     const pfB = pfT.clone();
     pfB.position.y = 1.6 - paintH / 2;
+    markPanoramaObject(pfB, 'wallDecor', 'south');
     group.add(pfB);
     const pfL = new THREE.Mesh(new THREE.BoxGeometry(0.04, paintH + 0.08, 0.03), pfMat);
     pfL.position.set(-paintW / 2, 1.6, 2.48);
+    markPanoramaObject(pfL, 'wallDecor', 'south');
     group.add(pfL);
     const pfR = pfL.clone();
     pfR.position.x = paintW / 2;
+    markPanoramaObject(pfR, 'wallDecor', 'south');
     group.add(pfR);
 
     // Wardrobe
@@ -629,6 +666,7 @@ export function createRoom(scene) {
 
     // Door (decorative, left side of painting wall)
     const doorGroup = new THREE.Group();
+    markPanoramaObject(doorGroup, 'wallDecor', 'south');
     const doorWidth = 0.9;
     const doorHeight = 2.0;
     const doorX = -2.2;

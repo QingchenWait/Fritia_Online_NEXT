@@ -767,6 +767,10 @@ function deployRecord(record) {
     group.name = record.name;
     group.userData.dreamFurnitureId = record.id;
     group.userData.anchor = isWallFurniture(record) ? 'wall' : 'floor';
+    if (isWallFurniture(record)) {
+        group.userData.panoramaLayer = 'wallDecor';
+        group.userData.panoramaWall = record.pose?.wall || '';
+    }
     group.userData.interactionCenter = new THREE.Vector3(
         record.pose.position.x,
         isWallFurniture(record) ? record.pose.position.y : Math.min(1.4, spec.dimensions.height * 0.65),

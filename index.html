@@ -36,6 +36,24 @@
         <button class="sleep-btn" id="btn-wake">按 <kbd>E</kbd> 起床</button>
     </div>
 
+    <div id="room-panorama-ui" class="hidden" aria-label="全景拍照模式">
+        <div class="room-panorama-top">
+            <div class="room-panorama-title">ROOM PANORAMA</div>
+            <div class="room-panorama-hint">滚轮或双指缩放 · E / Esc 退出</div>
+        </div>
+        <button class="room-panorama-side left" id="room-panorama-prev" aria-label="切换到左侧视角">‹</button>
+        <button class="room-panorama-side right" id="room-panorama-next" aria-label="切换到右侧视角">›</button>
+        <div class="room-panorama-bottom">
+            <button id="room-panorama-capture" aria-label="拍摄并下载全景截图">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M7.5 5.5 9 3.8h6l1.5 1.7H20a2 2 0 0 1 2 2v10.2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7.5a2 2 0 0 1 2-2h3.5Zm4.5 11a4.2 4.2 0 1 0 0-8.4 4.2 4.2 0 0 0 0 8.4Zm0-1.7a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z"/>
+                </svg>
+                <span>拍摄房间</span>
+            </button>
+            <button id="room-panorama-close" aria-label="退出全景拍照模式">退出</button>
+        </div>
+    </div>
+
     <input type="file" id="painting-upload" accept="image/*" style="display:none">
 
     <div id="model-selector" class="hidden">
