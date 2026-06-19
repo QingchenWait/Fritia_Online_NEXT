@@ -57,6 +57,48 @@ const FALLBACK_FURNITURE_LINES = [
     '每次经过这里，心情都会变好。',
     '这是只属于我们的造梦角落吧。'
 ];
+const DREAM_FURNITURE_TEMPLATES = [
+    {
+        title: '🕑 挂在墙上的时钟',
+        description: '一个挂在墙上的圆形机械时钟，黄色边框，乳白色表盘，细长指针。'
+    },
+    {
+        title: '🌙 月光阅读沙发',
+        description: '一张适合两个人并肩坐下的沙发，低矮柔软，浅粉和奶白配色，靠背有一条蓝色的灯带。'
+    },
+    {
+        title: '🖼️ 可定制图片的挂画',
+        description: '一张悬挂在墙上的大型挂画，9:16 比例，带有深红色的外边框。'
+    },
+    {
+        title: '🖥️ 双人电竞桌',
+        description: '一张宽阔的电竞桌，带有四个桌腿，桌面为棕色，桌面上并排摆放着两台电脑。'
+    },
+    {
+        title: '💡 心愿落地灯',
+        description: '一盏细杆落地灯，顶部是圆台形的灯罩，发出温暖柔光，底座稳定。'
+    },
+    {
+        title: '🪞 落地镜',
+        description: '一面表面光滑的透明方形落地镜，带有金色边框。'
+    },
+    {
+        title: '🧸 多层展示柜',
+        description: '一个带有三个透明格子的展示柜，圆角玻璃门，内部有淡金色小灯。'
+    },
+    {
+        title: '🪴 圣诞树',
+        description: '一棵绿色的圣诞树，周围环绕着几个红色和黄色的彩灯。'
+    },
+    {
+        title: '🧱 卧室隔断墙',
+        description: '一面宽阔的隔断墙，宽度接近房间宽度，高度接近房间高度，右侧带有一个能容纳人通过的门框。'
+    },
+    {
+        title: '🛏️ 双人床',
+        description: '一张带有床头靠背的双人床，带有粉色的床垫和白色的枕头。'
+    }
+];
 
 let scene;
 let camera;
@@ -870,6 +912,7 @@ export function initDreamSystem(options) {
     els.panel = document.getElementById('dream-terminal-panel');
     els.close = document.getElementById('dream-terminal-close');
     els.description = document.getElementById('dream-furniture-description');
+    els.templateStrip = document.getElementById('dream-template-strip');
     els.placement = document.getElementById('dream-placement-input');
     els.create = document.getElementById('dream-create-button');
     els.progress = document.getElementById('dream-progress');
@@ -913,8 +956,8 @@ export function initDreamSystem(options) {
     document.getElementById('dream-object-placement')?.addEventListener('click', openPlacementEditPanel);
     document.getElementById('dream-object-close')?.addEventListener('click', closeDreamFurnitureEditor);
     document.getElementById('dream-object-delete')?.addEventListener('click', handleDeleteFurniture);
-    els.revisionConfirm?.addEventListener('click', confirmPendingDreamRevision);
-    els.revisionRollback?.addEventListener('click', rollbackPendingDreamRevision);
+    els.revisionConfirm?.addEventListener('click', () => dispatchRevisionAction('Digit1'));
+    els.revisionRollback?.addEventListener('click', () => dispatchRevisionAction('Digit2'));
     bindRotateHold('dream-object-rotate-left', -ROTATE_STEP);
     bindRotateHold('dream-object-rotate-right', ROTATE_STEP);
     bindObjectLookDrag();
@@ -923,6 +966,38 @@ export function initDreamSystem(options) {
 
     loadFurniture();
     refreshRuntimeFurniture();
+}
+
+function sampleDreamFurnitureTemplates(count = 3) {
+    const pool = [...DREAM_FURNITURE_TEMPLATES];
+    const picked = [];
+    while (pool.length > 0 && picked.length < count) {
+        const index = Math.floor(Math.random() * pool.length);
+        picked.push(pool.splice(index, 1)[0]);
+    }
+    return picked;
+}
+
+function renderDreamFurnitureTemplates() {
+    if (!els.templateStrip) return;
+    els.templateStrip.textContent = '';
+    for (const template of sampleDreamFurnitureTemplates(3)) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'dream-template-btn';
+        button.textContent = template.title;
+        button.title = template.description;
+        button.addEventListener('click', () => applyDreamFurnitureTemplate(template));
+        els.templateStrip.appendChild(button);
+    }
+}
+
+function applyDreamFurnitureTemplate(template) {
+    if (!els.description || !template) return;
+    els.description.value = template.description;
+    els.description.focus();
+    els.description.setSelectionRange?.(els.description.value.length, els.description.value.length);
+    setStatus(`已填入模板：${template.title}`, 'ok');
 }
 
 function bindObjectLookDrag() {
@@ -1055,6 +1130,7 @@ function bindRotateHold(id, amount) {
 
 export function openDreamPanel() {
     renderBalance();
+    renderDreamFurnitureTemplates();
     updateProgress(0, '等待输入家具愿望');
     setStatus('');
     els.panel?.classList.remove('hidden');
@@ -1869,6 +1945,17 @@ function hideRevisionConfirmBar() {
     document.body?.classList.remove('dream-revision-pending');
 }
 
+function dispatchRevisionAction(code) {
+    document.dispatchEvent(new CustomEvent('fritia-action', { detail: { code } }));
+}
+
+function restoreControlAfterRevision() {
+    controlsModule?.setMovementLocked?.(false);
+    controlsModule?.setLookLocked?.(false);
+    controlsModule?.resolveCameraCollisions?.();
+    controlsModule?.forceEnterControlMode?.();
+}
+
 export function confirmPendingDreamRevision() {
     if (!pendingRevision) return;
     const record = furnitureRecords.find(item => item.id === pendingRevision.furnitureId);
@@ -1880,6 +1967,7 @@ export function confirmPendingDreamRevision() {
     }
     pendingRevision = null;
     hideRevisionConfirmBar();
+    restoreControlAfterRevision();
     showDreamScreenToast('家具样式已确认。', 'ok');
 }
 
@@ -1894,6 +1982,7 @@ export function rollbackPendingDreamRevision() {
     addMoney(DREAM_REVISION_REFUND, 'dream_furniture_revision_refund');
     pendingRevision = null;
     hideRevisionConfirmBar();
+    restoreControlAfterRevision();
     showDreamScreenToast(`已回退样式，并返还 ${formatMoney(DREAM_REVISION_REFUND)}。`, 'warn');
 }
 

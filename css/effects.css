@@ -43,7 +43,10 @@
    隐藏也能完整播放。详见 main.js#ignitePrompt。
    按钮自身 transform 用于居中，故辉光只动 box-shadow。
    ============================================================= */
-.kbd-prompt.igniting {
+.kbd-prompt.igniting,
+.sleep-btn.igniting,
+#room-panorama-close.igniting,
+.dream-revision-action.igniting {
     animation: ignite-glow 0.5s var(--ease-out);
 }
 

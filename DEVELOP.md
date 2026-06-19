@@ -112,9 +112,9 @@ npm run dev
 主要函数：
 
 - `init()`：主初始化流程。按顺序初始化 `game_state`、`scene`、`room`、`character`、`controls`、对话系统、礼物系统、成就系统和造梦系统。
-- `onKeyDown(e)`：全局键盘交互。`E` 处理门、终端、家具、礼物、床、约会、挂画、衣柜；`F` 处理角色互动和摸头；`1/2` 处理造梦家具样式修改确认/回退；看向造梦终端时 `1` 进入房间全景拍照模式。
+- `onKeyDown(e)`：全局键盘交互。`E` 处理门、终端、家具、礼物、床、约会、挂画、衣柜；`F` 处理角色互动和摸头；`1/2` 处理造梦家具样式修改确认/回退；看向造梦终端时 `1` 进入房间全景拍照模式；全景模式内 `E` / `Esc` / `1` 退出。
 - `animate()`：主循环。更新游戏时间、控制器、角色、门动画、房间作用域、窗户天空色、交互提示并渲染场景。
-- 开局欢迎闸门：加载完成但玩家尚未点击 `#click-to-play` 前，角色只保留眨眼，不切换 waypoint、不随机移动；首次点击后先执行挥手欢迎，挥手结束再恢复正常行动。
+- 开局欢迎闸门：加载完成但玩家尚未点击 `#click-to-play` 前，角色只保留眨眼，不切换 waypoint、不随机移动；首次点击后先执行面向玩家镜头的挥手欢迎，挥手结束再恢复正常行动。
 - `updateInteractionPrompt()`：复用 `#painting-prompt` 和 `#interaction-prompt` 显示当前可用交互；造梦家具显示 `按 E 管理 [家具名]`。
 - `hasClearLineOfSight(targetPoint, targetDistance)`：按 E 交互视线遮挡判断。玩家视角到目标点之间如果被当前碰撞体阻挡，则不显示也不触发按 E 管理/交互。睡眠模式的 `按 E 起床` 不走这个规则。
 - `isLookingAtTerminal()` / `isLookingAtDreamTerminal()` / `isLookingAtDreamDoor()` / `isLookingAtPainting()` 等：各类准星交互检测。
@@ -250,7 +250,7 @@ overlay 管理列表：
 - `loadCharacter(scene, waypoints, colliders, onProgress)`：加载默认 PMX，返回角色运行态 `cd`。
 - `updateCharacter(cd, delta)`：每帧更新角色状态机。
 - `updateBlink(cd, delta)`：眨眼 morph 更新。
-- `startWaving(cd)`：触发挥手。
+- `startWaving(cd, options)`：触发挥手；`options.getLookTarget` 可选用于让欢迎动作期间身体和头部实时朝向目标点。
 - `applyIdlePose(cd)`：应用站立姿势。
 - `applySleepingPose(cd)`：应用睡眠姿势。
 - `forceStandUp(cd)`：强制从坐下状态起身。
@@ -559,6 +559,7 @@ localStorage key：`fritia_achievements`
 关键内部逻辑：
 
 - `handleCreateFurniture()`：制造家具主流程。
+- `renderDreamFurnitureTemplates()`：每次打开造梦终端时，从内置家具愿望模板中随机抽取 3 个显示在 `#dream-template-strip`；点击模板只填入 `#dream-furniture-description`，不自动制造。
 - `findSafePlacement(group, spec, placementText, excludeId)`：本地寻找安全摆放点。
 - `findSafeWallPlacement(group, spec, placementText, excludeId)`：悬挂式家具专用摆放逻辑，只在墙面上寻找位置，并保存 `pose.position.y`、`pose.wall` 和 `pose.anchor`。
 - `hasExplicitWallMountIntent(text)`：本地判断玩家是否明确要求墙挂/悬挂；未命中时禁止新家具变成悬挂式。
@@ -578,6 +579,8 @@ localStorage key：`fritia_achievements`
 - `getFallbackFurnitureLine()`：LLM 失败或跳过时选择本地兜底台词。
 
 制造家具阶段：
+
+打开造梦终端时，家具愿望输入框下方会随机显示 3 个预置模板胶囊按钮；点击后填入对应家具描述。
 
 1. 检查余额与 API 设置。
 2. 正在解析家具愿望。
@@ -617,10 +620,10 @@ localStorage key：`fritia_achievements`
 - 悬挂式家具无法样式修改；编辑 overlay 会禁用样式输入框和“样式变更”按钮，并显示提示。
 - 普通家具样式修改会强制保留原 `anchor/category`，不能通过 LLM 变成悬挂式家具；但允许新增贴在普通家具竖直表面的挂件组件。
 - 成功后退出 overlay，进入主界面预览状态。
-- 显示 `[1] 确认` 和 `[2] 回退`。
+- 显示 `按 1 确认` 和 `按 2 回退`，按钮沿用场景按键提示圆角矩形样式；确认键帽为绿色，回退键帽为红色，触发时播放按键提示星光特效。
 - 未确认/回退前，玩家可走动但不能触发其他交互，并被限制在造梦空间内。
-- 按 `[1] 确认` 后，该家具 `revisionCount` 加 `1`，并通过 `recordDreamFurnitureRevision()` 刷新“完美主义”成就统计。
-- 回退恢复修改前 spec，并返还 `50` 数据金。
+- 按 `[1] 确认` 后，该家具 `revisionCount` 加 `1`，通过 `recordDreamFurnitureRevision()` 刷新“完美主义”成就统计，并主动恢复操作模式。
+- 回退恢复修改前 spec，返还 `50` 数据金，并主动恢复操作模式。
 
 家具台词：
 
@@ -637,6 +640,7 @@ localStorage key：`fritia_achievements`
 - 看向造梦终端时，`#dream-painting-prompt` 会显示 `按 1 拍摄房间`。
 - `Digit1` / `Numpad1` 或触控该提示按钮进入全景拍照模式。
 - 全景模式固定相机到新旧房间整体地图斜上方，暂停玩家移动、角色行动和普通交互。
+- 顶部 `ROOM PANORAMA` 标识为紧凑宽度，窄屏时靠右显示以避开左上角状态栏；退出提示统一放在底部 `#room-panorama-close`，显示为 `按 E 退出`。按 `1` 也可退出全景，但不会点亮 `按 E 退出` 按钮。
 - 进入、退出、切换视角复用 `fadeToBlack()` / `fadeFromBlack()` 黑屏缓入缓出。
 - 模式内左/右按钮调用 `switchPanoramaView(direction)` 切换四个斜上方视角。
 - 支持鼠标滚轮缩放；触控屏支持双指缩放。缩放只改变全景相机到目标点的距离，不修改玩家相机或世界坐标。`#room-panorama-ui` 会接管整屏 pointer/wheel/touch 事件，避免输入穿透到底层画布。
@@ -669,7 +673,7 @@ DOM ID：
 5. 鼠标滚轮或双指手势应能放大/缩小房间全景。
 6. 拍照模式中鼠标不应处于普通操作模式，准星不可见。
 7. 点击拍摄按钮应下载 PNG，截图中不包含 HTML 按钮。
-8. 按 `E`、`Escape` 或点击退出按钮后，应黑屏恢复原玩家视角和操作模式。
+8. 按 `E`、`Escape`、`1` 或点击底部 `按 E 退出` 按钮后，应黑屏恢复原玩家视角和操作模式；按 `1` 退出时不应触发 `按 E 退出` 按钮星光；窄屏下顶部 `ROOM PANORAMA` 标识不应遮挡左上角状态栏。
 
 ## DOM ID 清单
 
@@ -761,6 +765,7 @@ DOM ID：
 - `#dream-terminal-close`
 - `#dream-balance`
 - `#dream-furniture-description`
+- `#dream-template-strip`
 - `#dream-placement-input`
 - `#dream-create-button`
 - `#dream-progress`
@@ -927,6 +932,7 @@ DOM ID：
 - **保持不变**三处（视觉零改动，规则原样保留在 `base.css`/`responsive.css`）：`#top-bar`、`#game-status`、`#dream-object-controls`（造梦家具快捷圆形按钮）。
 - `body.dream-revision-pending` 会禁用普通交互提示和非确认/回退 UI。
 - 按键提示按钮统一加 `.kbd-prompt`；触发（按键或触控）时由 `main.js#ignitePrompt()` 播放「点燃」光效（辉光 + 火花 `src/_ui/spark.svg`）。
+- 每个可触发提示通过 `data-prompt-key` 标记当前对应键位，`main.js#igniteForKey()` 只点亮键位匹配且可见的元素；例如仅有 `按 F 与芙提雅对话` 可见时，按 `E` 不应触发该按钮光效。
 - **重构 HTML 时必须保留所有 `id` 和 JS 动态读写/生成的 class**（清单见 `UI_STYLE.md` 第 7 节），否则功能损坏。
 
 ## 资源约定

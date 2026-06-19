@@ -76,7 +76,7 @@ export function initRoomPanorama(options = {}) {
     els.next?.addEventListener('click', () => switchPanoramaView(1));
     els.capture?.addEventListener('click', captureRoomPanorama);
     els.close?.addEventListener('click', () => {
-        document.dispatchEvent(new CustomEvent('fritia-action', { detail: { code: 'Escape' } }));
+        document.dispatchEvent(new CustomEvent('fritia-action', { detail: { code: 'KeyE' } }));
     });
     els.panel?.addEventListener('click', stopPanoramaPropagation);
     els.panel?.addEventListener('pointerdown', stopPanoramaPropagation);

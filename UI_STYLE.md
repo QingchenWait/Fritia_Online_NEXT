@@ -95,6 +95,7 @@ src/_ui/                UI 美术资源（原创手绘 SVG，详见 src/_ui/READ
 - 字段：`.otome-panel` 内的 `input/textarea` 自动套用统一样式；标签用 `.otome-field-label`，行距用 `.otome-field`。
 - 卡片：`.otome-card`（中性）/ `.otome-card--rose`（玫瑰强调）。
 - 小药丸：`.otome-chip`（金，余额）/ `.otome-chip--rose`。
+- 模板建议：造梦终端的 `.dream-template-btn` 使用胶囊圆角、小高度、半透明亮面按钮样式，只承载 emoji + 简短模板标题；点击后填入文本框，不直接触发主操作。
 - 分隔：`.otome-divider`（爱心金线）。
 - 头部角标花纹与对角金角标由 `.otome-panel` 的伪元素自动绘制，无需额外标签。
 
@@ -107,11 +108,11 @@ src/_ui/                UI 美术资源（原创手绘 SVG，详见 src/_ui/READ
 
 ## 5. 按键提示「点燃」effect
 
-- 提示按钮统一加 `.kbd-prompt` class（如 `#interaction-prompt / #painting-prompt / #dream-painting-prompt`）。
+- 提示按钮统一加 `.kbd-prompt` class（如 `#interaction-prompt / #painting-prompt / #dream-painting-prompt`），并用 `data-prompt-key` 标记当前真实键位。
 - 触发（物理按键或触控点击均经 `onKeyDown`）时，`js/main.js#ignitePrompt()` 会：
   1. 给可见的对应提示加 `.igniting`（按钮自身金/玫瑰辉光）；
   2. 在按钮中心生成独立 `.ignite-burst`（扩散光环 + `src/_ui/spark.svg` 四角星火花），即使按钮随即隐藏也能完整播放。
-- 按键→提示映射见 `igniteForKey()`（F→对话/摸头，E→交互/起床，1→替换图片）。
+- 按键→提示映射见 `igniteForKey()`（F→对话/摸头，E→交互/起床/全景退出，1→替换图片/样式确认，2→样式回退）；只允许点亮键位匹配的可见提示，避免按 E 误触发 F 提示。全景内按 `1` 可退出，但不点亮 `按 E 退出`。
 - 动画与样式在 `css/effects.css`（`ignite-glow / ignite-ring / ignite-spark`）。
 
 ---

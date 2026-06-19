@@ -144,6 +144,64 @@ function addRot(bone, x, y, z) {
     bone.rotation.z += z;
 }
 
+const _lookTargetPos = new THREE.Vector3();
+const _headWorldPos = new THREE.Vector3();
+const _headLookDir = new THREE.Vector3();
+const _headParentQuat = new THREE.Quaternion();
+
+function resolveLookTarget(getLookTarget) {
+    if (typeof getLookTarget !== 'function') return null;
+    const target = getLookTarget();
+    if (!target) return null;
+    if (target.isVector3) return target;
+    if (Number.isFinite(target.x) && Number.isFinite(target.y) && Number.isFinite(target.z)) {
+        return _lookTargetPos.set(target.x, target.y, target.z);
+    }
+    return null;
+}
+
+function faceRootToward(cd, targetPos, delta = 0, options = {}) {
+    if (!cd?.root || !targetPos) return;
+    const dx = targetPos.x - cd.root.position.x;
+    const dz = targetPos.z - cd.root.position.z;
+    if (Math.hypot(dx, dz) <= 0.01) return;
+    const targetAngle = Math.atan2(dx, dz);
+    cd.faceDirection = targetAngle;
+    if (options.immediate) {
+        cd.root.rotation.y = targetAngle;
+        cd.faceDirection = targetAngle;
+        return;
+    }
+    const factor = delta > 0 ? 1 - Math.exp(-(options.lerpSpeed ?? 8.0) * delta) : 1;
+    cd.root.rotation.y = lerpAngle(cd.root.rotation.y, targetAngle, factor);
+    cd.faceDirection = cd.root.rotation.y;
+}
+
+function applyHeadLookAt(cd, targetPos, delta, options = {}) {
+    const headBone = cd?.boneRef?.head;
+    if (!headBone || !headBone.parent || !targetPos) return false;
+
+    forceUpdate(cd);
+    headBone.getWorldPosition(_headWorldPos);
+    _headLookDir.subVectors(targetPos, _headWorldPos);
+    if (_headLookDir.lengthSq() <= 0.01) return false;
+
+    headBone.parent.getWorldQuaternion(_headParentQuat).invert();
+    _headLookDir.applyQuaternion(_headParentQuat).normalize();
+
+    const yaw = Math.atan2(-_headLookDir.x, _headLookDir.z);
+    const pitch = Math.atan2(-_headLookDir.y, Math.sqrt(_headLookDir.x * _headLookDir.x + _headLookDir.z * _headLookDir.z));
+    const yawLimit = options.yawLimit ?? 0.7;
+    const pitchLimit = options.pitchLimit ?? 0.6;
+    const clampedYaw = Math.max(-yawLimit, Math.min(yawLimit, yaw));
+    const clampedPitch = Math.max(-pitchLimit, Math.min(pitchLimit, pitch));
+    const factor = options.immediate ? 1 : 1 - Math.exp(-(options.lerpSpeed ?? 5.0) * delta);
+
+    headBone.rotation.y += (clampedYaw - headBone.rotation.y) * factor;
+    headBone.rotation.x += (clampedPitch - headBone.rotation.x) * factor;
+    return true;
+}
+
 function resetAllBones(cd) {
     for (const bone of cd.bones) {
         bone.rotation.set(0, 0, 0);
@@ -359,13 +417,21 @@ function updateBreathing(cd) {
     forceUpdate(cd);
 }
 
-export function startWaving(cd) {
+export function startWaving(cd, options = {}) {
     if (!cd || !cd.hasAnimation) return;
     cd.wavingTimer = 0;
     cd.wavingDuration = 2.5;
+    cd.wavingLookTargetGetter = typeof options.getLookTarget === 'function' ? options.getLookTarget : null;
     cd.state = STATES.WAVING;
     resetAllBones(cd);
     applyIdlePose(cd);
+    const lookTarget = resolveLookTarget(cd.wavingLookTargetGetter);
+    if (lookTarget) {
+        faceRootToward(cd, lookTarget, 0, { immediate: true });
+        if (applyHeadLookAt(cd, lookTarget, 0, { immediate: true })) {
+            forceUpdate(cd);
+        }
+    }
 }
 
 function updateWaving(cd, delta) {
@@ -378,6 +444,7 @@ function updateWaving(cd, delta) {
         cd.state = STATES.IDLE;
         cd.stateTimer = 0;
         cd.idleDuration = 2.0;
+        cd.wavingLookTargetGetter = null;
         applyIdlePose(cd);
         forceUpdate(cd);
         return;
@@ -411,6 +478,12 @@ function updateWaving(cd, delta) {
     const breathe = Math.sin(performance.now() * 0.001 * 1.5) * 0.008;
     const sp = cd.boneRef.spine2 || cd.boneRef.spine;
     if (sp) sp.rotation.x = breathe;
+
+    const lookTarget = resolveLookTarget(cd.wavingLookTargetGetter);
+    if (lookTarget) {
+        faceRootToward(cd, lookTarget, delta, { immediate: true });
+        applyHeadLookAt(cd, lookTarget, delta);
+    }
 
     forceUpdate(cd);
 }
@@ -1473,30 +1546,7 @@ function updateInteracting(cd, delta) {
 
     if (cd.getPlayerPos && cd.boneRef.head) {
         const playerPos = cd.getPlayerPos();
-        const headBone = cd.boneRef.head;
-
-        const headWorldPos = new THREE.Vector3();
-        headBone.getWorldPosition(headWorldPos);
-
-        const toPlayer = new THREE.Vector3().subVectors(playerPos, headWorldPos);
-
-        if (toPlayer.length() > 0.1) {
-            const invParentQuat = new THREE.Quaternion();
-            headBone.parent.getWorldQuaternion(invParentQuat).invert();
-            const localDir = toPlayer.clone().applyQuaternion(invParentQuat).normalize();
-
-            const yaw = Math.atan2(-localDir.x, localDir.z);
-            const pitch = Math.atan2(-localDir.y, Math.sqrt(localDir.x * localDir.x + localDir.z * localDir.z));
-
-            const clampedYaw = Math.max(-0.7, Math.min(0.7, yaw));
-            const clampedPitch = Math.max(-0.6, Math.min(0.6, pitch));
-
-            const lerpSpeed = 5.0;
-            const factor = 1 - Math.exp(-lerpSpeed * delta);
-            headBone.rotation.y += (clampedYaw - headBone.rotation.y) * factor;
-            headBone.rotation.x += (clampedPitch - headBone.rotation.x) * factor;
-        }
-
+        applyHeadLookAt(cd, playerPos, delta);
         forceUpdate(cd);
     }
 }

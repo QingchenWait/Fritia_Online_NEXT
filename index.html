@@ -37,14 +37,14 @@
     <div id="fade-overlay"></div>
 
     <div id="sleep-ui" class="hidden">
-        <button class="sleep-btn" id="btn-pet">按 <kbd>F</kbd> 摸头</button>
-        <button class="sleep-btn" id="btn-wake">按 <kbd>E</kbd> 起床</button>
+        <button class="sleep-btn" id="btn-pet" data-prompt-key="KeyF">按 <kbd>F</kbd> 摸头</button>
+        <button class="sleep-btn" id="btn-wake" data-prompt-key="KeyE">按 <kbd>E</kbd> 起床</button>
     </div>
 
     <div id="room-panorama-ui" class="hidden" aria-label="全景拍照模式">
         <div class="room-panorama-top">
             <div class="room-panorama-title">ROOM PANORAMA</div>
-            <div class="room-panorama-hint">滚轮或双指缩放 · E / Esc 退出</div>
+            <div class="room-panorama-hint">滚轮或双指缩放</div>
         </div>
         <button class="room-panorama-side left" id="room-panorama-prev" aria-label="切换到左侧视角">‹</button>
         <button class="room-panorama-side right" id="room-panorama-next" aria-label="切换到右侧视角">›</button>
@@ -55,7 +55,7 @@
                 </svg>
                 <span>拍摄房间</span>
             </button>
-            <button id="room-panorama-close" class="btn btn--ghost" aria-label="退出全景拍照模式">退出</button>
+            <button id="room-panorama-close" class="btn btn--ghost" data-prompt-key="KeyE" aria-label="按 E 退出全景拍照模式">按 <kbd>E</kbd> 退出</button>
         </div>
     </div>
 
@@ -97,13 +97,13 @@
             <div id="money-display">数据金 | 🪙 40,000</div>
             <div id="salary-toast" class="hidden"></div>
         </div>
-        <div id="interaction-prompt" class="kbd-prompt hidden" role="button" tabindex="0">
+        <div id="interaction-prompt" class="kbd-prompt hidden" data-prompt-key="KeyF" role="button" tabindex="0">
             按 <kbd>F</kbd> 与芙提雅对话
         </div>
-        <div id="painting-prompt" class="kbd-prompt hidden" role="button" tabindex="0">
+        <div id="painting-prompt" class="kbd-prompt hidden" data-prompt-key="KeyE" role="button" tabindex="0">
             按 <kbd>E</kbd> 更换挂画
         </div>
-        <div id="dream-painting-prompt" class="kbd-prompt hidden" role="button" tabindex="0">
+        <div id="dream-painting-prompt" class="kbd-prompt hidden" data-prompt-key="Digit1" role="button" tabindex="0">
             按 <kbd>1</kbd> 替换图片
         </div>
         <div id="achievement-toast-host"></div>
@@ -143,10 +143,10 @@
             </button>
         </div>
         <div id="dream-revision-confirm-bar" class="hidden" aria-live="polite">
-            <button id="dream-revision-confirm" class="dream-revision-action confirm">
+            <button id="dream-revision-confirm" class="dream-revision-action confirm" data-prompt-key="Digit1">
                 <kbd>1</kbd><span>确认</span>
             </button>
-            <button id="dream-revision-rollback" class="dream-revision-action rollback">
+            <button id="dream-revision-rollback" class="dream-revision-action rollback" data-prompt-key="Digit2">
                 <kbd>2</kbd><span>回退</span>
             </button>
         </div>
@@ -387,6 +387,7 @@
                     <section class="otome-card dream-wish-console">
                         <div class="otome-section-label">家具愿望</div>
                         <textarea id="dream-furniture-description" maxlength="520" placeholder="例如：一张适合两个人靠坐的星光阅读沙发，带柔软靠背和淡紫色灯带。"></textarea>
+                        <div id="dream-template-strip" class="dream-template-strip" aria-label="家具愿望模板"></div>
                         <div class="dream-hint-strip">
                             <span><b>提示：</b>若 LLM 返回输出错误，请重试几次。<br>※ 家具形态为复杂几何体。构造家具所使用的泰坦物质，均经过彻底无害化处理。</span>
                         </div>

@@ -299,7 +299,7 @@ async function init() {
         playStartupVoice();
         setTimeout(() => {
             if (charData) {
-                startWaving(charData);
+                startWaving(charData, { getLookTarget: () => camera.position });
                 startupWelcomeStarted = true;
             } else {
                 startupWelcomePending = false;
@@ -312,7 +312,7 @@ async function init() {
 function onKeyDown(e) {
     igniteForKey(e.code);
     if (isRoomPanoramaActive()) {
-        if (e.code === 'Escape' || e.code === 'KeyE') exitRoomPanorama();
+        if (e.code === 'Escape' || e.code === 'KeyE' || e.code === 'Digit1' || e.code === 'Numpad1') exitRoomPanorama();
         return;
     }
 
@@ -693,6 +693,7 @@ function startDreamFurnitureCinematic(record, runtimeItem) {
     const prompt = document.getElementById('interaction-prompt');
     if (prompt) {
         prompt.innerHTML = '按 <kbd>E</kbd> 跳过展示';
+        prompt.dataset.promptKey = 'KeyE';
         prompt.classList.remove('hidden');
     }
     const paintingPrompt = document.getElementById('painting-prompt');
@@ -929,6 +930,7 @@ function updateInteractionPrompt() {
 
     if (nearChar) {
         prompt.innerHTML = '按 <kbd>F</kbd> 与芙提雅对话';
+        prompt.dataset.promptKey = 'KeyF';
         prompt.classList.remove('hidden');
     } else {
         prompt.classList.add('hidden');
@@ -1011,47 +1013,56 @@ function initPromptButtons() {
     const paintingPrompt = document.getElementById('painting-prompt');
     const dreamPaintingPrompt = document.getElementById('dream-painting-prompt');
 
-    function handlePromptTap(e, keyCode) {
+    function handlePromptTap(e, promptEl, fallbackCode) {
         e.preventDefault();
         e.stopPropagation();
+        const keyCode = promptEl?.dataset?.promptKey || fallbackCode;
         onKeyDown({ code: keyCode });
     }
 
     prompt.addEventListener('click', (e) => {
         if (prompt.classList.contains('hidden')) return;
-        handlePromptTap(e, 'KeyF');
+        handlePromptTap(e, prompt, 'KeyF');
     });
     prompt.addEventListener('touchend', (e) => {
         if (prompt.classList.contains('hidden')) return;
-        handlePromptTap(e, 'KeyF');
+        handlePromptTap(e, prompt, 'KeyF');
     }, { passive: false });
 
     paintingPrompt.addEventListener('click', (e) => {
         if (paintingPrompt.classList.contains('hidden')) return;
-        handlePromptTap(e, 'KeyE');
+        handlePromptTap(e, paintingPrompt, 'KeyE');
     });
     paintingPrompt.addEventListener('touchend', (e) => {
         if (paintingPrompt.classList.contains('hidden')) return;
-        handlePromptTap(e, 'KeyE');
+        handlePromptTap(e, paintingPrompt, 'KeyE');
     }, { passive: false });
 
     dreamPaintingPrompt?.addEventListener('click', (e) => {
         if (dreamPaintingPrompt.classList.contains('hidden')) return;
-        handlePromptTap(e, 'Digit1');
+        handlePromptTap(e, dreamPaintingPrompt, 'Digit1');
     });
     dreamPaintingPrompt?.addEventListener('touchend', (e) => {
         if (dreamPaintingPrompt.classList.contains('hidden')) return;
-        handlePromptTap(e, 'Digit1');
+        handlePromptTap(e, dreamPaintingPrompt, 'Digit1');
     }, { passive: false });
 }
 
 /* ===== 按键提示「点燃」效果 =====
    触控点击提示按钮会经 handlePromptTap → onKeyDown，物理按键也走 onKeyDown，
    因此只需在 onKeyDown 顶部按键位点亮当前可见的对应提示，触控/按键统一覆盖。 */
-function firstVisiblePrompt(ids) {
+function normalizePromptKey(code) {
+    if (code === 'Numpad1') return 'Digit1';
+    if (code === 'Numpad2') return 'Digit2';
+    return code;
+}
+
+function firstVisiblePromptForKey(ids, code) {
+    const expected = normalizePromptKey(code);
     for (const id of ids) {
         const el = document.getElementById(id);
-        if (el && el.getClientRects().length > 0) return el;
+        const promptKey = normalizePromptKey(el?.dataset?.promptKey || '');
+        if (el && promptKey === expected && el.getClientRects().length > 0) return el;
     }
     return null;
 }
@@ -1073,11 +1084,15 @@ function ignitePrompt(el) {
 function igniteForKey(code) {
     let el = null;
     if (code === 'KeyF') {
-        el = firstVisiblePrompt(['interaction-prompt', 'btn-pet']);
+        el = firstVisiblePromptForKey(['interaction-prompt', 'btn-pet'], code);
     } else if (code === 'KeyE') {
-        el = firstVisiblePrompt(['painting-prompt', 'interaction-prompt', 'btn-wake']);
+        el = firstVisiblePromptForKey(['painting-prompt', 'interaction-prompt', 'btn-wake', 'room-panorama-close'], code);
     } else if (code === 'Digit1' || code === 'Numpad1') {
-        el = firstVisiblePrompt(['dream-painting-prompt']);
+        if (!isRoomPanoramaActive()) {
+            el = firstVisiblePromptForKey(['dream-revision-confirm', 'dream-painting-prompt'], code);
+        }
+    } else if (code === 'Digit2' || code === 'Numpad2') {
+        el = firstVisiblePromptForKey(['dream-revision-rollback'], code);
     }
     if (el) ignitePrompt(el);
 }
