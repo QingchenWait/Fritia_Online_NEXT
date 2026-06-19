@@ -79,6 +79,53 @@
         </div>
     </div>
 
+    <div id="dance-panel" class="ui-overlay hidden">
+        <div class="otome-panel otome-panel--lg dance-panel-shell">
+            <div class="otome-panel__head dance-panel-head">
+                <div class="otome-panel__icon"><img src="src/_ui/icon_dance.svg" alt=""></div>
+                <div class="otome-panel__titles">
+                    <span class="otome-panel__kicker">WARM GATHERING LIVE</span>
+                    <h2 class="otome-panel__title">舞曲选择</h2>
+                    <p class="otome-panel__sub">导入本地 VMD 动作，可选择一段音频，并指定舞台上的芙提雅模型。</p>
+                </div>
+                <button id="dance-close" class="otome-panel__close" aria-label="关闭舞曲选择">
+                    <img src="src/_ui/icon_close.svg" alt="">
+                </button>
+            </div>
+            <div class="otome-panel__body dance-panel-body">
+                <input type="file" id="dance-vmd-file" accept=".vmd" hidden>
+                <input type="file" id="dance-audio-file" accept="audio/*" hidden>
+                <section class="dance-stage-card" aria-label="舞台状态">
+                    <div class="dance-stage-card__label">STAGE POSITION</div>
+                    <div class="dance-stage-card__title">X 0.00 · Z 35.05</div>
+                    <div class="dance-stage-card__sub">动作序列优先，舞蹈中允许四周移动与穿模。</div>
+                </section>
+                <div class="dance-loadout-grid">
+                    <button id="dance-vmd-pick" class="dance-file-card" type="button">
+                        <span class="dance-file-card__kicker">MOTION</span>
+                        <span class="dance-file-card__title">导入 VMD 动作</span>
+                        <span id="dance-vmd-name" class="dance-file-card__meta">未选择 VMD</span>
+                    </button>
+                    <button id="dance-audio-pick" class="dance-file-card" type="button">
+                        <span class="dance-file-card__kicker">AUDIO</span>
+                        <span class="dance-file-card__title">选择伴奏音频</span>
+                        <span id="dance-audio-name" class="dance-file-card__meta">可选音频</span>
+                    </button>
+                </div>
+                <section class="dance-model-section" aria-label="选择芙提雅模型">
+                    <div class="otome-section-label">舞台模型</div>
+                    <div id="dance-model-list" class="dance-model-list"></div>
+                </section>
+                <div id="dance-status" class="dance-status" data-tone="info" aria-live="polite">导入 VMD 动作后即可开场。</div>
+            </div>
+            <div class="otome-panel__foot dance-panel-foot">
+                <button id="dance-start-btn" class="btn btn--primary" type="button" disabled>
+                    <span>开始跳舞</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div id="touch-controls">
         <div class="touch-joystick" id="joystick-move">
             <div class="joystick-knob" id="joystick-move-knob"></div>
@@ -148,6 +195,14 @@
             </button>
             <button id="dream-revision-rollback" class="dream-revision-action rollback" data-prompt-key="Digit2">
                 <kbd>2</kbd><span>回退</span>
+            </button>
+        </div>
+        <div id="dance-curtain-bar" class="hidden" aria-live="polite">
+            <button id="dance-replay" class="dream-revision-action confirm" data-prompt-key="Digit1">
+                <kbd>1</kbd><span>再来一次</span>
+            </button>
+            <button id="dance-curtain" class="dream-revision-action curtain" data-prompt-key="Digit2">
+                <kbd>2</kbd><span>喝彩谢幕</span>
             </button>
         </div>
         <div id="dream-screen-toast" class="hidden" aria-live="polite"></div>

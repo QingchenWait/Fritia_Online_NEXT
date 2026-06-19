@@ -50,6 +50,7 @@ fritia_online_v3/
 │   ├── dream_llm.js
 │   ├── dream_system.js
 │   ├── room_panorama.js
+│   ├── dance_system.js
 │   ├── game_state.js
 │   ├── gift_system.js
 │   ├── main.js
@@ -120,6 +121,7 @@ npm run dev
 - `animate()`：主循环。更新游戏时间、控制器、角色、门动画、房间作用域、窗户天空色、交互提示并渲染场景。
 - 开局欢迎闸门：加载完成但玩家尚未点击 `#click-to-play` 前，角色只保留眨眼，不切换 waypoint、不随机移动；首次点击后先执行面向玩家镜头的挥手欢迎，挥手结束再恢复正常行动。
 - `updateInteractionPrompt()`：复用 `#painting-prompt` 和 `#interaction-prompt` 显示当前可用交互；造梦家具显示 `按 E 管理 [家具名]`。
+- 暖调闲聚舞台：看向 `BarDanceInvisiblePlane` 时显示 `按 E 观看跳舞`，打开 `#dance-panel`；舞蹈流程中 `updateDanceSystem(delta)` 接管 VMD 动作，暂停角色日常 AI，但玩家移动/视角仍由 `controls.js` 正常更新。
 - `hasClearLineOfSight(targetPoint, targetDistance)`：按 E 交互视线遮挡判断。玩家视角到目标点之间如果被当前碰撞体阻挡，则不显示也不触发按 E 管理/交互。睡眠模式的 `按 E 起床` 不走这个规则。
 - `isLookingAtTerminal()` / `isLookingAtDreamTerminal()` / `isLookingAtDreamDoor()` / `isLookingAtPainting()` 等：各类准星交互检测。
 - `toggleDreamDoor()`：切换造梦空间推拉门开关状态，并刷新玩家/角色碰撞作用域。
@@ -130,6 +132,7 @@ npm run dev
 - `getActivePlayerColliders()`：当前玩家碰撞体。门关闭时包含 `dreamDoorCollider`，门打开时移除。
 - `getActiveBedroomCharacterColliders()` / `getActiveDreamCharacterColliders()`：角色在不同房间的导航碰撞体。
 - `enterBarScene()` / `exitBarScene()`：通过黑屏转场进入/离开暖调闲聚；切换旧房间组显示、scene background/fog、玩家碰撞体和芙提雅导航作用域。
+- `exitBarScene()` 在舞蹈流程未结束前会被拦截；出口提示保留但置灰且不携带 `data-prompt-key`，避免点击或按 E 触发返回。
 - `exportData()`：导出设置、游戏状态、日常对话、约会对话、成就、礼物、造梦家具、挂画。
 - `handleImportFile(e)`：导入 JSON，兼容旧存档，导入后刷新 HUD、成就、礼物、造梦家具。
 
@@ -212,6 +215,7 @@ npm run dev
 - 地图默认隐藏；进入暖调闲聚时显示，返回卧室时隐藏。
 - 自动扫描地图三角面生成运行时 AABB 碰撞盒，并通过 `userData.walkableHeight` / `surfaceYAt` / `ignoreZones` 标记低台阶、平台和楼梯坡面。
 - 提供不可见出口交互平面；酒吧内看向出口显示 `按 E 返回卧室`。
+- 提供不可见舞台互动平面 `BarDanceInvisiblePlane`：范围固定为 `X=-4.0~4.0`、`Y=0.0~4.5`、`Z=32.5`，只用于准星命中检测，不加入碰撞体。
 
 导出：
 
@@ -220,12 +224,32 @@ npm run dev
 - `getBarBounds()` / `getBarWaypoints()` / `getBarPlayerColliders()` / `getBarCharacterColliders()`：供 `main.js` 切换玩家与角色作用域。
 - `getBarSpawn()`：返回玩家出生相机位置、看向点和芙提雅出生点；默认优先使用地图 X/Z 中央，若被碰撞体占用会搜索附近可站立点。
 - `getBarExitInteractionMesh()`：返回出口不可见交互平面。
+- `getBarDanceInteractionMesh()`：返回舞台不可见交互平面。
 
 运行约定：
 
-- `currentPlayerRoomId === "bar"` 时，旧房间/造梦房间普通交互检测会被禁用，仅保留角色对话和酒吧出口。
+- `currentPlayerRoomId === "bar"` 时，旧房间/造梦房间普通交互检测会被禁用，仅保留角色对话、舞台跳舞入口和酒吧出口。
 - 玩家控制器和角色导航都识别 `walkableHeight`，低平台/台阶作为脚下高度而不是水平阻挡。
 - 可设置 `localStorage.setItem('fritia_bar_debug_colliders','1')` 开启酒吧碰撞盒调试显示。
+
+## 舞蹈系统：`js/dance_system.js`
+
+职责：
+
+- 管理暖调闲聚舞台的 `#dance-panel` 舞曲选择浮层。
+- 使用 `MMDLoader.loadAnimation()` 加载玩家临时导入的本地 `.vmd` 文件，使用 `MMDAnimationHelper` 播放到当前选择的芙提雅 PMX 模型上。
+- 可临时导入本地音频文件并随 VMD 同步开始；VMD 播放结束时立即停止音频。
+- 舞蹈开始时把芙提雅放置到 `X=0, Z=35.6`，并使用 `js/dance_system.js` 顶部的 `DANCE_STAGE_Y_OFFSET` 作为舞蹈显示层脚底目标 Y；该值当前为 `0.62`，可独立手动微调。
+- 舞蹈坐标与普通行动坐标隔离：VMD helper 每帧只在 `danceCoordinate.rawPosition` 上解算，显示时再临时加上舞蹈 Y 偏移；退出流程时丢弃 `danceCoordinate`，再由酒吧普通碰撞/导航重新计算角色站立高度。
+- 播放期间 VMD 优先，角色可按动作序列四周移动并允许穿模；角色 `mesh.scale` 锁定为进入舞蹈时的游戏预设缩放，不改 VMD 骨骼动作解算。
+- VMD 结束后显示 `#dance-curtain-bar`，按 `1` 或点左侧按钮重播，按 `2`、点右侧按钮或 5 秒无操作则结束舞蹈流程。
+
+运行约定：
+
+- VMD 文件、音频文件、object URL、AnimationClip 和 Audio 实例只保存在内存中，不写入 `localStorage`，也不进入导出/导入 JSON。
+- 每次重新打开 `#dance-panel` 都会清空上次临时选择的 VMD/音频文件状态和文件名显示。
+- 舞蹈流程中玩家移动和视角不锁定；角色日常 AI、F 对话和酒吧返回宿舍会被暂停，返回宿舍提示置灰。
+- 关闭 `#dance-panel` 时派发 `fritia-overlay-closed`，并已加入 `controls.js` overlay 管理列表。
 
 ## 控制系统：`js/controls.js`
 
@@ -254,6 +278,7 @@ overlay 管理列表：
 - `settings-panel`
 - `history-panel`
 - `model-selector`
+- `dance-panel`
 - `sleep-ui`
 - `date-panel`
 - `gift-terminal-panel`
@@ -859,6 +884,20 @@ DOM ID：
 - `#btn-pet`
 - `#btn-wake`
 
+暖调闲聚舞蹈：
+
+- `#dance-panel`
+- `#dance-vmd-file`
+- `#dance-audio-file`
+- `#dance-vmd-pick`
+- `#dance-audio-pick`
+- `#dance-model-list`
+- `#dance-start-btn`
+- `#dance-status`
+- `#dance-curtain-bar`
+- `#dance-replay`
+- `#dance-curtain`
+
 换装和挂画：
 
 - `#model-selector`
@@ -989,6 +1028,7 @@ DOM ID：
 - 看向书桌：打开约会。
 - 看向旧房间南侧门：前往暖调闲聚。
 - 暖调闲聚中看向出口平面：返回卧室。
+- 暖调闲聚中看向舞台平面：打开舞曲选择；舞蹈流程未结束前返回卧室置灰不可用。
 - 看向挂画：上传图片。
 - 看向衣柜：换装。
 
@@ -1036,6 +1076,10 @@ Escape：
 4. 酒吧内接近芙提雅仍可按 F 对话。
 5. 酒吧内看向出口区域提示 `按 E 返回卧室`，按 E 黑屏回到旧房间南侧门附近。
 6. 返回卧室后，购物终端、礼物收藏柜、造梦门、书桌约会、睡觉、换装、挂画仍可正常触发。
+7. 酒吧内看向 `X=-4.0~4.0, Y=0.0~4.5, Z=32.5` 舞台平面，提示 `按 E 观看跳舞`，按 E 打开 `#dance-panel`。
+8. 在舞曲选择中导入本地 `.vmd`，可选导入音频并选择芙提雅模型；点击开始后浮层关闭，玩家仍可 WASD 移动和转动视角，芙提雅从 `X=0, Z=35.6` 且脚底目标 Y 为 `DANCE_STAGE_Y_OFFSET` 的位置开始播放 VMD。
+9. 舞蹈期间看向出口时 `按 E 返回宿舍` 灰色不可点击，按 E 不返回，也不触发提示星光；VMD 结束时音频停止。
+10. VMD 结束后显示绿色 `1 再来一次` 和粉色 `2 喝彩谢幕`；按 1 或点左侧按钮重播，按 2、点右侧按钮或等待 5 秒后结束舞蹈流程，移除舞台 Y 偏移并恢复角色自由行动。
 
 旧功能回归：
 

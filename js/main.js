@@ -46,6 +46,7 @@ import {
     ensureBarScene,
     getBarBounds,
     getBarCharacterColliders,
+    getBarDanceInteractionMesh,
     getBarExitInteractionMesh,
     getBarPlayerColliders,
     getBarSpawn,
@@ -53,6 +54,17 @@ import {
     isPointInBarBounds,
     setBarSceneVisible
 } from './bar_scene.js';
+import {
+    closeDancePanel,
+    finishDanceFlow,
+    initDanceSystem,
+    isDanceChoiceVisible,
+    isDanceFlowActive,
+    isDanceOverlayVisible,
+    openDancePanel,
+    replayDance,
+    updateDanceSystem
+} from './dance_system.js';
 
 let scene, camera, renderer;
 let controlsModule, charData;
@@ -268,6 +280,17 @@ async function init() {
         fadeToBlack,
         fadeFromBlack
     });
+    initDanceSystem({
+        scene,
+        controlsModule,
+        getCharacterData: () => charData,
+        getCurrentModelPath: () => currentModelPath,
+        getModels: () => [DEFAULT_MODEL, ...ALTERABLE_MODELS],
+        swapToModel: swapToDanceModel,
+        placeCharacterAtStage,
+        applyIdlePose,
+        onDanceFinished: restoreCharacterAfterDance
+    });
     initPainting();
     refreshCharacterRoomScope(true);
     updateGameHud(true);
@@ -341,6 +364,16 @@ async function init() {
 function onKeyDown(e) {
     igniteForKey(e.code);
     if (barTransitionInProgress) return;
+    if (isDanceChoiceVisible()) {
+        if (e.code === 'Digit1' || e.code === 'Numpad1') {
+            replayDance();
+            return;
+        }
+        if (e.code === 'Digit2' || e.code === 'Numpad2') {
+            finishDanceFlow();
+            return;
+        }
+    }
     if (isRoomPanoramaActive()) {
         if (e.code === 'Escape' || e.code === 'KeyE' || e.code === 'Digit1' || e.code === 'Numpad1') exitRoomPanorama();
         return;
@@ -377,10 +410,12 @@ function onKeyDown(e) {
     }
 
     if (e.code === 'KeyF') {
+        if (isDanceFlowActive()) return;
         if (isDialogueVisible()) return;
         if (isDatePanelVisible()) return;
         if (isGiftOverlayVisible()) return;
         if (isDreamOverlayVisible()) return;
+        if (isDanceOverlayVisible()) return;
 
         if (isSleeping) {
             petFritiaHead();
@@ -403,9 +438,14 @@ function onKeyDown(e) {
         if (isDatePanelVisible()) return;
         if (isGiftOverlayVisible()) return;
         if (isDreamOverlayVisible()) return;
+        if (isDanceOverlayVisible()) return;
         if (controlsModule && controlsModule.state.isLocked) {
             if (isSleeping) {
                 exitSleepMode();
+            } else if (isBarSceneActive && isLookingAtBarDancePlane()) {
+                openDancePanel();
+            } else if (isDanceFlowActive() && isLookingAtBarExit()) {
+                return;
             } else if (isLookingAtBarExit()) {
                 exitBarScene();
             } else if (!isBarSceneActive && isLookingAtDreamDoor()) {
@@ -452,6 +492,10 @@ function onKeyDown(e) {
         }
         if (isDatePanelVisible()) {
             closeDatePanel();
+            return;
+        }
+        if (isDanceOverlayVisible()) {
+            closeDancePanel();
             return;
         }
         if (isDialogueVisible()) {
@@ -883,6 +927,7 @@ async function enterBarScene() {
 }
 
 async function exitBarScene() {
+    if (isDanceFlowActive()) return;
     if (barTransitionInProgress) return;
     barTransitionInProgress = true;
     controlsModule?.setMovementLocked?.(true);
@@ -1069,7 +1114,9 @@ function animate() {
 
     if (charData) {
         if (!isSleeping && !dreamCinematic && !isRoomPanoramaActive()) {
-            if (!startupInteractionStarted) {
+            if (isDanceFlowActive()) {
+                updateDanceSystem(delta);
+            } else if (!startupInteractionStarted) {
                 updateBlink(charData, delta);
             } else if (startupWelcomePending) {
                 updateCharacter(charData, delta);
@@ -1093,7 +1140,10 @@ function updateInteractionPrompt() {
     const dreamPaintingPrompt = document.getElementById('dream-painting-prompt');
     const hideActionPrompts = () => {
         prompt.classList.add('hidden');
-        if (paintingPrompt) paintingPrompt.classList.add('hidden');
+        if (paintingPrompt) {
+            paintingPrompt.classList.add('hidden');
+            paintingPrompt.classList.remove('is-disabled');
+        }
         if (dreamPaintingPrompt) dreamPaintingPrompt.classList.add('hidden');
     };
     if (isDreamRevisionPending()) {
@@ -1104,7 +1154,7 @@ function updateInteractionPrompt() {
         hideActionPrompts();
         return;
     }
-    if (isSleeping || isInteracting || isDialogueVisible() || isDatePanelVisible() || isGiftOverlayVisible() || isDreamOverlayVisible()) {
+    if (isSleeping || isInteracting || isDialogueVisible() || isDatePanelVisible() || isGiftOverlayVisible() || isDreamOverlayVisible() || isDanceOverlayVisible()) {
         hideActionPrompts();
         return;
     }
@@ -1119,7 +1169,7 @@ function updateInteractionPrompt() {
     const lookPaint = isLookingAtPainting();
     const lookWardrobe = isLookingAtWardrobe();
 
-    if (nearChar) {
+    if (nearChar && !isDanceFlowActive()) {
         prompt.innerHTML = '按 <kbd>F</kbd> 与芙提雅对话';
         prompt.dataset.promptKey = 'KeyF';
         prompt.classList.remove('hidden');
@@ -1130,6 +1180,7 @@ function updateInteractionPrompt() {
     if (paintingPrompt) {
         dreamPaintingPrompt?.classList.add('hidden');
         const lookBarExit = isLookingAtBarExit();
+        const lookBarDance = isLookingAtBarDancePlane();
         const lookDreamDoor = isLookingAtDreamDoor();
         const lookBed = isLookingAtBed();
         const lookDesk = isLookingAtDesk();
@@ -1138,8 +1189,13 @@ function updateInteractionPrompt() {
         const lookDreamFurniture = !isBarSceneActive && isLookingAtDreamFurniture(camera);
         const lookTerminal = isLookingAtTerminal();
         const lookCollectionCabinet = isLookingAtCollectionCabinet();
-        if (lookBarExit) {
-            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 返回卧室';
+        paintingPrompt.classList.remove('is-disabled');
+        if (lookBarDance && !isDanceFlowActive()) {
+            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 观看跳舞';
+            paintingPrompt.dataset.promptKey = 'KeyE';
+            paintingPrompt.classList.remove('hidden');
+        } else if (lookBarExit) {
+            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 返回宿舍';
             paintingPrompt.dataset.promptKey = 'KeyE';
             paintingPrompt.classList.remove('hidden');
         } else if (lookDreamDoor) {
@@ -1201,6 +1257,11 @@ function updateInteractionPrompt() {
         } else {
             paintingPrompt.classList.add('hidden');
         }
+        if (lookBarExit && isDanceFlowActive() && !paintingPrompt.classList.contains('hidden')) {
+            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 返回宿舍';
+            delete paintingPrompt.dataset.promptKey;
+            paintingPrompt.classList.add('is-disabled');
+        }
     }
 
     stackPromptButtons(prompt, paintingPrompt, dreamPaintingPrompt);
@@ -1224,6 +1285,7 @@ function initPromptButtons() {
     function handlePromptTap(e, promptEl, fallbackCode) {
         e.preventDefault();
         e.stopPropagation();
+        if (promptEl?.classList?.contains('is-disabled')) return;
         const keyCode = promptEl?.dataset?.promptKey || fallbackCode;
         onKeyDown({ code: keyCode });
     }
@@ -1297,10 +1359,10 @@ function igniteForKey(code) {
         el = firstVisiblePromptForKey(['painting-prompt', 'interaction-prompt', 'btn-wake', 'room-panorama-close'], code);
     } else if (code === 'Digit1' || code === 'Numpad1') {
         if (!isRoomPanoramaActive()) {
-            el = firstVisiblePromptForKey(['dream-revision-confirm', 'dream-painting-prompt'], code);
+            el = firstVisiblePromptForKey(['dance-replay', 'dream-revision-confirm', 'dream-painting-prompt'], code);
         }
     } else if (code === 'Digit2' || code === 'Numpad2') {
-        el = firstVisiblePromptForKey(['dream-revision-rollback'], code);
+        el = firstVisiblePromptForKey(['dance-curtain', 'dream-revision-rollback'], code);
     }
     if (el) ignitePrompt(el);
 }
@@ -1394,6 +1456,58 @@ async function selectModel(model) {
     }
 }
 
+async function swapToDanceModel(modelPath) {
+    if (!modelPath || modelPath === currentModelPath || isSwapping) return;
+    isSwapping = true;
+    const previousModelPath = currentModelPath;
+
+    try {
+        setSittingEnabled(charData, !isSmallTeacherModel(modelPath));
+        await swapModel(scene, charData, modelPath);
+        currentModelPath = modelPath;
+        setSittingEnabled(charData, !isSmallTeacherModel(currentModelPath));
+        recordModelUsed(modelPath);
+    } catch (err) {
+        setSittingEnabled(charData, !isSmallTeacherModel(previousModelPath));
+        console.error('Dance model swap failed:', err);
+        throw err;
+    } finally {
+        isSwapping = false;
+    }
+}
+
+function placeCharacterAtStage(pose = {}) {
+    if (!charData?.root) return;
+    const x = Number.isFinite(pose.x) ? pose.x : 0;
+    const z = Number.isFinite(pose.z) ? pose.z : 35.6;
+    setCharacterNavigationScope(charData, {
+        roomId: BAR_ROOM_ID,
+        bounds: getBarBounds(),
+        waypoints: [],
+        colliders: []
+    });
+    forceCharacterIntoRoom(charData, BAR_ROOM_ID, {
+        x,
+        z,
+        rotationY: Number.isFinite(pose.rotationY) ? pose.rotationY : 0
+    });
+}
+
+function restoreCharacterAfterDance(pose = {}) {
+    if (!charData?.root) return;
+    setCharacterNavigationScope(charData, {
+        roomId: BAR_ROOM_ID,
+        bounds: getBarBounds(),
+        waypoints: getBarWaypoints(),
+        colliders: getBarCharacterColliders()
+    });
+    forceCharacterIntoRoom(charData, BAR_ROOM_ID, {
+        x: Number.isFinite(pose.x) ? pose.x : 0,
+        z: Number.isFinite(pose.z) ? pose.z : 35.6,
+        rotationY: Number.isFinite(pose.rotationY) ? pose.rotationY : 0
+    });
+}
+
 function applyPaintingTexture(src) {
     if (!paintingMesh) return;
     const img = new Image();
@@ -1472,6 +1586,18 @@ function isLookingAtBarExit() {
     raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
     raycaster.far = 12;
     const hits = raycaster.intersectObject(exitMesh, true);
+    raycaster.far = oldFar;
+    return hits.length > 0;
+}
+
+function isLookingAtBarDancePlane() {
+    if (!isBarSceneActive || !camera) return false;
+    const danceMesh = getBarDanceInteractionMesh();
+    if (!danceMesh) return false;
+    const oldFar = raycaster.far;
+    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+    raycaster.far = 40;
+    const hits = raycaster.intersectObject(danceMesh, true);
     raycaster.far = oldFar;
     return hits.length > 0;
 }

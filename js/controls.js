@@ -82,6 +82,7 @@ export function initControls(camera, domElement, colliders) {
         'settings-panel',
         'history-panel',
         'model-selector',
+        'dance-panel',
         'sleep-ui',
         'date-panel',
         'gift-terminal-panel',

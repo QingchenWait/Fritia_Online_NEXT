@@ -6,6 +6,7 @@
 
 /* ===== 浮层层级（沿用既有关系） ===== */
 #model-selector      { z-index: 65; }
+#dance-panel         { z-index: 78; }
 #settings-panel      { z-index: 70; }
 #gift-terminal-panel,
 #gift-collection-panel { z-index: 74; }
@@ -58,6 +59,18 @@
 
 .kbd-prompt:hover { border-color: rgba(244,184,200,0.6); }
 .kbd-prompt:active { background: rgba(229,138,166,0.4); transform: translateX(-50%) translateY(1px); }
+.kbd-prompt.is-disabled {
+    cursor: not-allowed;
+    color: rgba(255,255,255,0.58);
+    background: rgba(58,54,59,0.62);
+    border-color: rgba(255,255,255,0.16);
+    box-shadow: 0 10px 26px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.06);
+}
+.kbd-prompt.is-disabled:hover { border-color: rgba(255,255,255,0.16); }
+.kbd-prompt.is-disabled kbd {
+    background: linear-gradient(135deg, #85808a, #5c5860);
+    box-shadow: none;
+}
 
 .kbd-prompt kbd {
     display: inline-block;
@@ -136,6 +149,239 @@
     color: #fff;
     background: var(--grad-rose);
 }
+
+/* =============================================================
+   暖调闲聚：舞曲选择 / 舞蹈谢幕
+   ============================================================= */
+.dance-panel-shell {
+    width: min(880px, 95vw);
+    color: #f8eef4;
+    background:
+        linear-gradient(160deg, rgba(45,28,36,0.96), rgba(74,42,50,0.92)),
+        var(--panel-bg);
+    border-color: rgba(230,193,120,0.58);
+    box-shadow:
+        0 28px 80px rgba(0,0,0,0.42),
+        0 0 36px rgba(229,138,166,0.18),
+        inset 0 0 0 1px rgba(255,255,255,0.12);
+}
+.dance-panel-shell::before,
+.dance-panel-shell::after { opacity: 0.55; }
+.dance-panel-head {
+    background:
+        linear-gradient(135deg, rgba(94,51,69,0.95), rgba(53,31,42,0.92)),
+        var(--grad-blush);
+    border-bottom-color: rgba(230,193,120,0.32);
+}
+.dance-panel-shell .otome-panel__title {
+    background: linear-gradient(135deg, #fff7fb, #ffd1df 42%, #f0c779);
+    -webkit-background-clip: text;
+    background-clip: text;
+}
+.dance-panel-shell .otome-panel__sub,
+.dance-panel-shell .otome-section-label { color: rgba(255,238,245,0.78); }
+.dance-panel-body {
+    display: grid;
+    grid-template-columns: minmax(240px, 0.86fr) minmax(320px, 1.14fr);
+    gap: 16px;
+    background:
+        linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(255,255,255,0.045) 1px, transparent 1px);
+    background-size: 34px 34px;
+}
+.dance-stage-card,
+.dance-file-card,
+.dance-model-section,
+.dance-status {
+    border: 1px solid rgba(244,184,200,0.22);
+    border-radius: var(--r-md);
+    background: rgba(34,18,27,0.42);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 18px 38px rgba(0,0,0,0.20);
+}
+.dance-stage-card {
+    min-height: 178px;
+    grid-row: span 2;
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    overflow: hidden;
+    position: relative;
+}
+.dance-stage-card::before {
+    content: "";
+    position: absolute;
+    inset: 14px;
+    border-radius: var(--r-md);
+    background:
+        radial-gradient(circle at 50% 34%, rgba(230,193,120,0.35), transparent 22%),
+        linear-gradient(145deg, rgba(229,138,166,0.16), rgba(255,255,255,0.03));
+    border: 1px solid rgba(230,193,120,0.18);
+    pointer-events: none;
+}
+.dance-stage-card__label,
+.dance-file-card__kicker {
+    position: relative;
+    z-index: 1;
+    color: #e6c178;
+    font-size: 0.72rem;
+    letter-spacing: 0.16em;
+}
+.dance-stage-card__title {
+    position: relative;
+    z-index: 1;
+    margin-top: 8px;
+    font-size: 1.2rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: #fff7fb;
+}
+.dance-stage-card__sub {
+    position: relative;
+    z-index: 1;
+    margin-top: 8px;
+    color: rgba(255,238,245,0.72);
+    font-size: 0.84rem;
+    line-height: 1.55;
+}
+.dance-loadout-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+.dance-file-card {
+    min-height: 126px;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: space-between;
+    color: #fff7fb;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: transform var(--t-fast) var(--ease-out), border-color var(--t-fast), background var(--t-fast), box-shadow var(--t-fast);
+}
+.dance-file-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(230,193,120,0.62);
+    background: rgba(88,45,61,0.48);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 20px 46px rgba(0,0,0,0.26), 0 0 22px rgba(229,138,166,0.18);
+}
+.dance-file-card__title {
+    margin-top: 10px;
+    font-size: 1.02rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+.dance-file-card__meta {
+    width: 100%;
+    margin-top: 14px;
+    padding-top: 12px;
+    color: rgba(255,238,245,0.68);
+    border-top: 1px solid rgba(255,255,255,0.10);
+    font-size: 0.82rem;
+}
+.dance-model-section {
+    grid-column: 2;
+    padding: 18px;
+}
+.dance-model-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+.dance-model-card {
+    min-height: 58px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 13px;
+    border-radius: var(--r-sm);
+    border: 1px solid rgba(255,255,255,0.14);
+    color: rgba(255,238,245,0.84);
+    background: rgba(255,255,255,0.07);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color var(--t-fast), background var(--t-fast), transform var(--t-fast) var(--ease-out);
+}
+.dance-model-card:hover {
+    transform: translateY(-1px);
+    border-color: rgba(244,184,200,0.48);
+    background: rgba(255,255,255,0.11);
+}
+.dance-model-card.active {
+    color: #fff;
+    border-color: rgba(230,193,120,0.75);
+    background: linear-gradient(135deg, rgba(229,138,166,0.38), rgba(230,193,120,0.20));
+}
+.dance-model-card__mark {
+    width: 12px;
+    height: 12px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.42);
+    box-shadow: inset 0 0 0 3px rgba(34,18,27,0.8);
+}
+.dance-model-card.active .dance-model-card__mark {
+    background: #e6c178;
+    box-shadow: 0 0 12px rgba(230,193,120,0.58);
+}
+.dance-model-card__name {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-weight: 650;
+    line-height: 1.25;
+}
+.dance-status {
+    grid-column: 1 / -1;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    padding: 10px 15px;
+    color: rgba(255,238,245,0.78);
+    font-size: 0.86rem;
+}
+.dance-status[data-tone="busy"] { color: #f0c779; border-color: rgba(230,193,120,0.46); }
+.dance-status[data-tone="error"] { color: #ffb4c7; border-color: rgba(216,96,122,0.52); }
+.dance-panel-foot {
+    background: rgba(27,15,22,0.58);
+    border-top-color: rgba(230,193,120,0.22);
+}
+#dance-start-btn:disabled {
+    cursor: not-allowed;
+    filter: grayscale(0.35);
+    opacity: 0.5;
+    box-shadow: none;
+}
+
+#dance-curtain-bar {
+    position: fixed;
+    left: 50%;
+    bottom: 18%;
+    z-index: 124;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    transform: translateX(-50%);
+    pointer-events: auto;
+}
+.dream-revision-action.curtain kbd {
+    background: linear-gradient(135deg, #e58aa6, #c75c80);
+    box-shadow: 0 0 8px rgba(229,138,166,0.5);
+}
+#dance-replay {
+    border-color: rgba(95,174,126,0.48);
+    background: linear-gradient(135deg, rgba(62,128,88,0.62), rgba(30,58,44,0.72));
+}
+#dance-curtain {
+    border-color: rgba(229,138,166,0.56);
+    background: linear-gradient(135deg, rgba(199,92,128,0.62), rgba(91,43,65,0.72));
+}
+#dance-replay:hover { border-color: rgba(124,209,154,0.72); }
+#dance-curtain:hover { border-color: rgba(255,189,207,0.78); }
 
 /* =============================================================
    全景拍照模式（统一按钮尺寸/配色）

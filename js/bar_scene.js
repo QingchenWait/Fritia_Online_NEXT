@@ -40,6 +40,11 @@ const BAR_EXIT_PLANE_MAX_X = 1.3;
 const BAR_EXIT_PLANE_MIN_Y = 1.072;
 const BAR_EXIT_PLANE_MAX_Y = 5.072;
 const BAR_EXIT_PLANE_Z = 54.0;
+const BAR_DANCE_PLANE_MIN_X = -4.0;
+const BAR_DANCE_PLANE_MAX_X = 4.0;
+const BAR_DANCE_PLANE_MIN_Y = 0.0;
+const BAR_DANCE_PLANE_MAX_Y = 4.5;
+const BAR_DANCE_PLANE_Z = 32.5;
 
 let barScenePromise = null;
 let barSceneData = null;
@@ -622,6 +627,31 @@ function createExitMarker() {
     return { interactionMesh };
 }
 
+function createDanceMarker() {
+    const interactionMesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(
+            BAR_DANCE_PLANE_MAX_X - BAR_DANCE_PLANE_MIN_X,
+            BAR_DANCE_PLANE_MAX_Y - BAR_DANCE_PLANE_MIN_Y
+        ),
+        new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0,
+            depthWrite: false,
+            side: THREE.DoubleSide
+        })
+    );
+    interactionMesh.name = 'BarDanceInvisiblePlane';
+    interactionMesh.position.set(
+        (BAR_DANCE_PLANE_MIN_X + BAR_DANCE_PLANE_MAX_X) * 0.5,
+        (BAR_DANCE_PLANE_MIN_Y + BAR_DANCE_PLANE_MAX_Y) * 0.5,
+        BAR_DANCE_PLANE_Z
+    );
+    interactionMesh.userData.interactionCenter = new THREE.Vector3(0, 1.6, BAR_DANCE_PLANE_Z);
+
+    return { interactionMesh };
+}
+
 function createBarLights() {
     const group = new THREE.Group();
     group.name = 'BarSceneLights';
@@ -780,6 +810,8 @@ async function loadBarSceneInternal(scene) {
 
     const exit = createExitMarker();
     group.add(exit.interactionMesh);
+    const dance = createDanceMarker();
+    group.add(dance.interactionMesh);
 
     scene.add(group);
     hideResidualMmdToonObjects(scene);
@@ -808,6 +840,7 @@ async function loadBarSceneInternal(scene) {
         playerColliders: colliders,
         characterColliders: colliders,
         exitInteractionMesh: exit.interactionMesh,
+        danceInteractionMesh: dance.interactionMesh,
         spawn
     };
     return barSceneData;
@@ -861,6 +894,10 @@ export function getBarBounds() {
 
 export function getBarExitInteractionMesh() {
     return barSceneData?.exitInteractionMesh || null;
+}
+
+export function getBarDanceInteractionMesh() {
+    return barSceneData?.danceInteractionMesh || null;
 }
 
 export function getBarSpawn() {

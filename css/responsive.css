@@ -108,6 +108,13 @@
     /* 样式修改确认条 */
     #dream-revision-confirm-bar { bottom: 16%; width: calc(100vw - 28px); gap: 10px; }
     .dream-revision-action { min-width: 0; flex: 1; padding: 10px 12px; }
+    .dance-panel-body { grid-template-columns: 1fr; gap: 12px; }
+    .dance-stage-card { grid-row: auto; min-height: 132px; padding: 18px; }
+    .dance-loadout-grid { grid-template-columns: 1fr; }
+    .dance-file-card { min-height: 102px; }
+    .dance-model-section { grid-column: auto; }
+    .dance-model-list { grid-template-columns: 1fr; }
+    #dance-curtain-bar { bottom: 16%; width: calc(100vw - 28px); gap: 10px; }
 
     /* 保留区域：家具圆形浮层移动端布局（原样迁移） */
     .dream-object-btn { width: 38px; height: 38px; }
