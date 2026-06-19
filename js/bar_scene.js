@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { MMDLoader } from 'three/addons/loaders/MMDLoader.js';
+import { attachBarColliderSpatialIndex, createBarColliderSpatialIndex } from './bar_performance.js';
 
 export const BAR_ROOM_ID = 'bar';
 
@@ -557,13 +558,17 @@ function createCollidersFromMapGeometry(mapMesh, mapBox) {
                 walkableHeight: WALKABLE_STEP_HEIGHT + 0.16
             }))
     ];
+    const spatialIndex = createBarColliderSpatialIndex(colliders);
+    attachBarColliderSpatialIndex(colliders, spatialIndex);
 
     console.info('[BarScene] generated geometry colliders', {
         solidTriangles: solidBoxes.length,
         walkableTriangles: walkableBoxes.length,
         solidColliders: solidMerged.length,
         walkableColliders: walkableMerged.length,
-        totalColliders: colliders.length
+        totalColliders: colliders.length,
+        spatialCells: spatialIndex.cellCount,
+        spatialCellSize: spatialIndex.cellSize
     });
 
     return colliders;

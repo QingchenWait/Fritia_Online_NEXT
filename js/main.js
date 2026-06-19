@@ -65,6 +65,7 @@ import {
     replayDance,
     updateDanceSystem
 } from './dance_system.js';
+import { createBarInteractionProbe } from './bar_performance.js';
 
 let scene, camera, renderer;
 let controlsModule, charData;
@@ -113,6 +114,7 @@ let dreamCinematic = null;
 let sleepCamPos = new THREE.Vector3();
 let sleepCamQuat = new THREE.Quaternion();
 const raycaster = new THREE.Raycaster();
+const barInteractionProbe = createBarInteractionProbe();
 const occlusionRay = new THREE.Ray();
 const lookDirection = new THREE.Vector3();
 const lookTarget = new THREE.Vector3();
@@ -440,13 +442,14 @@ function onKeyDown(e) {
         if (isDreamOverlayVisible()) return;
         if (isDanceOverlayVisible()) return;
         if (controlsModule && controlsModule.state.isLocked) {
+            const barLook = isBarSceneActive ? getBarInteractionLookState(true) : null;
             if (isSleeping) {
                 exitSleepMode();
-            } else if (isBarSceneActive && isLookingAtBarDancePlane()) {
+            } else if (barLook?.dance && !isDanceFlowActive()) {
                 openDancePanel();
-            } else if (isDanceFlowActive() && isLookingAtBarExit()) {
+            } else if (isDanceFlowActive() && barLook?.exit) {
                 return;
-            } else if (isLookingAtBarExit()) {
+            } else if (barLook?.exit || isLookingAtBarExit()) {
                 exitBarScene();
             } else if (!isBarSceneActive && isLookingAtDreamDoor()) {
                 toggleDreamDoor();
@@ -1166,6 +1169,11 @@ function updateInteractionPrompt() {
 
     const charPos = getCharacterPosition(charData);
     const nearChar = controlsModule.isNearCharacter(charPos);
+    if (isBarSceneActive) {
+        updateBarInteractionPrompt(prompt, paintingPrompt, dreamPaintingPrompt, nearChar);
+        stackPromptButtons(prompt, paintingPrompt, dreamPaintingPrompt);
+        return;
+    }
     const lookPaint = isLookingAtPainting();
     const lookWardrobe = isLookingAtWardrobe();
 
@@ -1265,6 +1273,36 @@ function updateInteractionPrompt() {
     }
 
     stackPromptButtons(prompt, paintingPrompt, dreamPaintingPrompt);
+}
+
+function updateBarInteractionPrompt(prompt, paintingPrompt, dreamPaintingPrompt, nearChar) {
+    if (nearChar && !isDanceFlowActive()) {
+        prompt.innerHTML = '按 <kbd>F</kbd> 与芙提雅对话';
+        prompt.dataset.promptKey = 'KeyF';
+        prompt.classList.remove('hidden');
+    } else {
+        prompt.classList.add('hidden');
+    }
+
+    if (!paintingPrompt) return;
+    dreamPaintingPrompt?.classList.add('hidden');
+    paintingPrompt.classList.remove('is-disabled');
+    const look = getBarInteractionLookState();
+    if (look.dance && !isDanceFlowActive()) {
+        paintingPrompt.innerHTML = '按 <kbd>E</kbd> 观看跳舞';
+        paintingPrompt.dataset.promptKey = 'KeyE';
+        paintingPrompt.classList.remove('hidden');
+    } else if (look.exit) {
+        paintingPrompt.innerHTML = '按 <kbd>E</kbd> 返回宿舍';
+        paintingPrompt.dataset.promptKey = 'KeyE';
+        paintingPrompt.classList.remove('hidden');
+        if (isDanceFlowActive()) {
+            delete paintingPrompt.dataset.promptKey;
+            paintingPrompt.classList.add('is-disabled');
+        }
+    } else {
+        paintingPrompt.classList.add('hidden');
+    }
 }
 
 function stackPromptButtons(...prompts) {
@@ -1579,27 +1617,22 @@ function isLookingAtDreamDoor() {
 }
 
 function isLookingAtBarExit() {
-    if (!isBarSceneActive || !camera) return false;
-    const exitMesh = getBarExitInteractionMesh();
-    if (!exitMesh) return false;
-    const oldFar = raycaster.far;
-    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
-    raycaster.far = 12;
-    const hits = raycaster.intersectObject(exitMesh, true);
-    raycaster.far = oldFar;
-    return hits.length > 0;
+    return getBarInteractionLookState().exit;
 }
 
 function isLookingAtBarDancePlane() {
-    if (!isBarSceneActive || !camera) return false;
-    const danceMesh = getBarDanceInteractionMesh();
-    if (!danceMesh) return false;
-    const oldFar = raycaster.far;
-    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
-    raycaster.far = 40;
-    const hits = raycaster.intersectObject(danceMesh, true);
-    raycaster.far = oldFar;
-    return hits.length > 0;
+    return getBarInteractionLookState().dance;
+}
+
+function getBarInteractionLookState(force = false) {
+    return barInteractionProbe({
+        active: isBarSceneActive,
+        camera,
+        raycaster,
+        exitMesh: getBarExitInteractionMesh(),
+        danceMesh: getBarDanceInteractionMesh(),
+        force
+    });
 }
 
 function getDreamDoorPromptText() {

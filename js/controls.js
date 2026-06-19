@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+import { getBarCollisionCandidates } from './bar_performance.js';
 
 function isTouchDevice() {
     return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
@@ -281,7 +282,8 @@ export function initControls(camera, domElement, colliders) {
 
     function getWalkableSurfaceY(pos, radius) {
         let surfaceY = 0;
-        for (const box of state.colliders) {
+        const candidates = getBarCollisionCandidates(state.colliders, pos, radius);
+        for (const box of candidates) {
             const walkableHeight = Number(box?.userData?.walkableHeight);
             if (!Number.isFinite(walkableHeight) || box.max.y > walkableHeight) continue;
             if (!overlapsFootprint(pos, radius, box)) continue;
@@ -317,7 +319,8 @@ export function initControls(camera, domElement, colliders) {
         const footY = getWalkableSurfaceY(pos, radius);
         const bodyMinY = footY + PLAYER_FOOT_CLEARANCE;
         const bodyMaxY = footY + PLAYER_EYE_HEIGHT;
-        for (const box of state.colliders) {
+        const candidates = getBarCollisionCandidates(state.colliders, pos, radius);
+        for (const box of candidates) {
             if (!blocksFootPath(box)) continue;
             if (isPointInIgnoreZone(pos, box)) continue;
             if (overlapsFootprint(pos, radius, box) &&
@@ -334,7 +337,8 @@ export function initControls(camera, domElement, colliders) {
 
         for (let i = 0; i < 8; i++) {
             let resolvedThisPass = false;
-            for (const box of state.colliders) {
+            const candidates = getBarCollisionCandidates(state.colliders, camera.position, radius);
+            for (const box of candidates) {
                 if (!blocksFootPath(box)) continue;
                 if (isPointInIgnoreZone(camera.position, box)) continue;
                 const footY = getWalkableSurfaceY(camera.position, radius);

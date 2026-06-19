@@ -51,6 +51,7 @@ fritia_online_v3/
 │   ├── dream_system.js
 │   ├── room_panorama.js
 │   ├── dance_system.js
+│   ├── bar_performance.js
 │   ├── game_state.js
 │   ├── gift_system.js
 │   ├── main.js
@@ -230,7 +231,22 @@ npm run dev
 
 - `currentPlayerRoomId === "bar"` 时，旧房间/造梦房间普通交互检测会被禁用，仅保留角色对话、舞台跳舞入口和酒吧出口。
 - 玩家控制器和角色导航都识别 `walkableHeight`，低平台/台阶作为脚下高度而不是水平阻挡。
+- 酒吧 colliders 创建后会挂载 `barSpatialIndex`，只供酒吧场景下的玩家/角色碰撞候选查询使用；旧卧室和造梦空间仍走原本的线性碰撞路径。
 - 可设置 `localStorage.setItem('fritia_bar_debug_colliders','1')` 开启酒吧碰撞盒调试显示。
+
+## 暖调闲聚性能优化：`js/bar_performance.js`
+
+职责：
+
+- `createBarColliderSpatialIndex(colliders)`：按 X/Z 网格为酒吧 AABB 碰撞体建立空间索引，避免每帧遍历完整 PMX 碰撞体数组。
+- `attachBarColliderSpatialIndex(colliders, index)`：把索引以不可枚举属性挂到酒吧 colliders 数组上；非酒吧数组没有该属性，原功能不受影响。
+- `getBarCollisionCandidates(colliders, position, radius)`：玩家和芙提雅每次按当前位置实时查询附近碰撞候选，支持角色被瞬移到舞台等位置后立即按新位置查询。
+- `createBarInteractionProbe()`：酒吧出口/舞台准星检测降频缓存，默认约 90ms 刷新；按键触发时强制刷新，避免缓存延迟影响交互。
+
+运行约定：
+
+- 该模块只服务暖调闲聚，不改变旧卧室、造梦空间、造梦家具和普通 UI 的碰撞逻辑。
+- 角色寻路的 A* 格子站立高度/阻挡结果缓存只在 colliders 带 `barSpatialIndex` 时启用，且只存在于单次寻路调用内。
 
 ## 舞蹈系统：`js/dance_system.js`
 

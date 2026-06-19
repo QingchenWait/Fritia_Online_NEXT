@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { MMDLoader } from 'three/addons/loaders/MMDLoader.js';
+import { getBarCollisionCandidates } from './bar_performance.js';
 
 const MODEL_PATH = 'src/_fritia_3d_model/驰掣-毛绒派对.pmx';
 const TARGET_HEIGHT = 1.55;
@@ -788,7 +789,8 @@ function isPointInColliderIgnoreZone(pos, collider) {
 function getGroundYAt(cd, pos, radius = CHARACTER_COLLISION_RADIUS) {
     let groundY = getNavigationFloorY(cd);
     if (!Array.isArray(cd?.colliders)) return groundY;
-    for (const collider of cd.colliders) {
+    const candidates = getBarCollisionCandidates(cd.colliders, pos, radius);
+    for (const collider of candidates) {
         if (!isWalkableCollider(collider)) continue;
         if (!overlapsCharacterFootprint(pos, collider, radius)) continue;
         const dynamicGroundY = typeof collider.userData?.surfaceYAt === 'function'
@@ -820,7 +822,8 @@ function setCharacterCollisionBox(cd, pos) {
 function checkCollision(cd, pos) {
     if (!cd.colliders || cd.colliders.length === 0) return false;
     setCharacterCollisionBox(cd, pos);
-    for (const col of cd.colliders) {
+    const candidates = getBarCollisionCandidates(cd.colliders, pos, CHARACTER_COLLISION_RADIUS);
+    for (const col of candidates) {
         if (isWalkableCollider(col)) continue;
         if (isPointInColliderIgnoreZone(pos, col)) continue;
         if (_charBox.intersectsBox(col)) return true;
@@ -955,13 +958,34 @@ function buildPathAroundColliders(cd, start, target) {
         x: clampIndex(Math.round((pos.x - bounds.minX) / PATH_GRID_STEP), width),
         z: clampIndex(Math.round((pos.z - bounds.minZ) / PATH_GRID_STEP), depth)
     });
-    const toPos = (x, z) => new THREE.Vector3(
-        bounds.minX + x * PATH_GRID_STEP,
-        getStandingRootY(cd, { x: bounds.minX + x * PATH_GRID_STEP, z: bounds.minZ + z * PATH_GRID_STEP }),
-        bounds.minZ + z * PATH_GRID_STEP
-    );
     const keyOf = (x, z) => `${x},${z}`;
-    const isBlocked = (x, z) => checkCollision(cd, toPos(x, z));
+    const useBarPathCache = Boolean(cd.colliders?.barSpatialIndex);
+    const positionCache = useBarPathCache ? new Map() : null;
+    const blockedCache = useBarPathCache ? new Map() : null;
+    const makePos = (x, z) => {
+        const worldX = bounds.minX + x * PATH_GRID_STEP;
+        const worldZ = bounds.minZ + z * PATH_GRID_STEP;
+        return new THREE.Vector3(
+            worldX,
+            getStandingRootY(cd, { x: worldX, z: worldZ }),
+            worldZ
+        );
+    };
+    const toPos = useBarPathCache ? (x, z) => {
+        const key = keyOf(x, z);
+        const cached = positionCache.get(key);
+        if (cached) return cached;
+        const pos = makePos(x, z);
+        positionCache.set(key, pos);
+        return pos;
+    } : makePos;
+    const isBlocked = useBarPathCache ? (x, z) => {
+        const key = keyOf(x, z);
+        if (blockedCache.has(key)) return blockedCache.get(key);
+        const blocked = checkCollision(cd, toPos(x, z));
+        blockedCache.set(key, blocked);
+        return blocked;
+    } : (x, z) => checkCollision(cd, toPos(x, z));
     const startCell = toCell(start);
     const preferredGoalCell = toCell(target);
     const goalCell = findNearestFreeCell(preferredGoalCell, isBlocked, width, depth);
