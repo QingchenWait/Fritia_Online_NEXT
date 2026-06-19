@@ -525,11 +525,12 @@ export function createRoom(scene) {
 
     // Bookshelf
     const shelfGroup = new THREE.Group();
-    const shelfBase = makeBox(0.8, 1.4, 0.35, 0x4A3520, -2.6, 0.7, 1.5);
+    const shelfZ = 1.3;
+    const shelfBase = makeBox(0.8, 1.4, 0.35, 0x4A3520, -2.6, 0.7, shelfZ);
     shelfGroup.add(shelfBase);
-    const shelf1 = makeBox(0.72, 0.03, 0.3, 0x5C4033, -2.6, 0.45, 1.5);
+    const shelf1 = makeBox(0.72, 0.03, 0.3, 0x5C4033, -2.6, 0.45, shelfZ);
     shelfGroup.add(shelf1);
-    const shelf2 = makeBox(0.72, 0.03, 0.3, 0x5C4033, -2.6, 0.9, 1.5);
+    const shelf2 = makeBox(0.72, 0.03, 0.3, 0x5C4033, -2.6, 0.9, shelfZ);
     shelfGroup.add(shelf2);
     const bookColors = [0x8B0000, 0x006400, 0x00008B, 0x8B4513, 0x4B0082, 0xB8860B];
     for (let row = 0; row < 2; row++) {
@@ -538,7 +539,7 @@ export function createRoom(scene) {
             const bookH = 0.15 + Math.random() * 0.1;
             const book = makeBox(0.08 + Math.random() * 0.04, bookH, 0.2,
                 bookColors[i % bookColors.length],
-                -2.85 + i * 0.14, baseY + bookH / 2, 1.5, false);
+                -2.85 + i * 0.14, baseY + bookH / 2, shelfZ, false);
             shelfGroup.add(book);
         }
     }
@@ -559,11 +560,11 @@ export function createRoom(scene) {
         new THREE.PlaneGeometry(0.48, 0.12),
         new THREE.MeshStandardMaterial({ map: cabinetLabelTex, transparent: true })
     );
-    cabinetLabel.position.set(-2.6, 1.18, 1.715);
+    cabinetLabel.position.set(-2.6, 1.18, shelfZ + 0.215);
     shelfGroup.add(cabinetLabel);
-    shelfGroup.userData.interactionCenter = new THREE.Vector3(-2.6, 0.85, 1.5);
+    shelfGroup.userData.interactionCenter = new THREE.Vector3(-2.6, 0.85, shelfZ);
     group.add(shelfGroup);
-    colliders.push(makeAABB(-2.6, 0, 1.5, 0.45, 0.75, 0.22));
+    colliders.push(makeAABB(-2.6, 0, shelfZ, 0.45, 0.75, 0.22));
 
     // Wall collisions mirror the visual wall blocks. The shared wall uses the same thick
     // segments as the mesh above, keeping the door opening physically passable.
@@ -664,40 +665,53 @@ export function createRoom(scene) {
 
     const paintingZone = new THREE.Vector3(0, 0, 1.8);
 
-    // Door (decorative, left side of painting wall)
+    // Date door (decorative, left side of painting wall). Visual style matches the dream-room sliding door,
+    // but it remains a static date trigger and does not alter the south wall thickness.
     const doorGroup = new THREE.Group();
     markPanoramaObject(doorGroup, 'wallDecor', 'south');
-    const doorWidth = 0.9;
-    const doorHeight = 2.0;
+    const doorWidth = sharedDoor.width;
+    const doorHeight = dreamDoorHeight;
     const doorX = -2.2;
-    const doorFrameMat = new THREE.MeshStandardMaterial({ color: 0x8B7355, roughness: 0.6 });
-    const doorFrameL = new THREE.Mesh(new THREE.BoxGeometry(0.08, doorHeight + 0.2, 0.1), doorFrameMat);
-    doorFrameL.position.set(doorX - doorWidth / 2 - 0.04, (doorHeight + 0.2) / 2, 2.47);
+    const doorZ = 2.48;
+    const dateDoorFrameZ = 2.455;
+    const dateDoorFrameThickness = 0.035;
+    const dateDoorFrameDepth = 0.07;
+    const doorFrameL = new THREE.Mesh(new THREE.BoxGeometry(dateDoorFrameDepth, doorHeight, dateDoorFrameThickness), sharedDoorFrameMat);
+    doorFrameL.position.set(doorX - doorWidth / 2 - 0.04, doorHeight / 2, dateDoorFrameZ);
     doorGroup.add(doorFrameL);
-    const doorFrameR = new THREE.Mesh(new THREE.BoxGeometry(0.08, doorHeight + 0.2, 0.1), doorFrameMat);
-    doorFrameR.position.set(doorX + doorWidth / 2 + 0.04, (doorHeight + 0.2) / 2, 2.47);
+    const doorFrameR = doorFrameL.clone();
+    doorFrameR.position.x = doorX + doorWidth / 2 + 0.04;
     doorGroup.add(doorFrameR);
-    const doorFrameT = new THREE.Mesh(new THREE.BoxGeometry(doorWidth + 0.16, 0.08, 0.1), doorFrameMat);
-    doorFrameT.position.set(doorX, doorHeight + 0.1, 2.47);
+    const doorFrameT = new THREE.Mesh(new THREE.BoxGeometry(doorWidth + 0.18, 0.07, dateDoorFrameThickness), sharedDoorFrameMat);
+    doorFrameT.position.set(doorX, doorHeight + 0.035, dateDoorFrameZ);
     doorGroup.add(doorFrameT);
 
-    const doorMat = new THREE.MeshStandardMaterial({ color: 0xA0522D, roughness: 0.7 });
-    const doorPanel = new THREE.Mesh(new THREE.BoxGeometry(doorWidth, doorHeight, 0.06), doorMat);
-    doorPanel.position.set(doorX, doorHeight / 2, 2.48);
+    const doorPanel = new THREE.Mesh(new THREE.BoxGeometry(doorWidth, doorHeight, 0.07), dreamDoorMat);
+    doorPanel.position.set(doorX, doorHeight / 2, doorZ);
+    doorPanel.castShadow = true;
+    doorPanel.receiveShadow = true;
+    doorPanel.userData.interactionCenter = new THREE.Vector3(doorX, 1.2, doorZ);
     doorGroup.add(doorPanel);
 
-    const doorDecorMat = new THREE.MeshStandardMaterial({ color: 0x8B6914, roughness: 0.5 });
-    const doorDecor1 = new THREE.Mesh(new THREE.BoxGeometry(doorWidth * 0.7, doorHeight * 0.4, 0.02), doorDecorMat);
-    doorDecor1.position.set(doorX, doorHeight * 0.6, 2.52);
-    doorGroup.add(doorDecor1);
-    const doorDecor2 = new THREE.Mesh(new THREE.BoxGeometry(doorWidth * 0.7, doorHeight * 0.3, 0.02), doorDecorMat);
-    doorDecor2.position.set(doorX, doorHeight * 0.25, 2.52);
-    doorGroup.add(doorDecor2);
-
-    const doorHandleMat = new THREE.MeshStandardMaterial({ color: 0xD4AF37, roughness: 0.3, metalness: 0.8 });
-    const doorKnob = new THREE.Mesh(new THREE.SphereGeometry(0.06, 16, 16), doorHandleMat);
-    doorKnob.position.set(doorX + doorWidth / 2 - 0.15, doorHeight * 0.5, 2.6);
-    doorGroup.add(doorKnob);
+    for (const xOffset of [-0.5, -0.36, -0.22, -0.08, 0.06, 0.2, 0.34, 0.48]) {
+        const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.012, doorHeight * 0.9, 0.014), stripeMat);
+        stripe.position.set(xOffset, 0, -0.043);
+        doorPanel.add(stripe);
+    }
+    const dateDoorGoldLine = new THREE.Mesh(new THREE.BoxGeometry(0.018, doorHeight * 0.72, 0.016), goldLineMat);
+    dateDoorGoldLine.position.set(-0.24, -0.1, -0.045);
+    doorPanel.add(dateDoorGoldLine);
+    const dateDoorLogo = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.34, 0.34),
+        new THREE.MeshStandardMaterial({
+            map: dreamDoorLogoTex,
+            transparent: true,
+            roughness: 0.35,
+            side: THREE.DoubleSide
+        })
+    );
+    dateDoorLogo.position.set(0, 0.58, -0.047);
+    doorPanel.add(dateDoorLogo);
 
     group.add(doorGroup);
     const doorMesh = doorPanel;
