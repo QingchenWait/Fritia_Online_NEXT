@@ -920,17 +920,29 @@
 .bartending-lane input,
 .bartending-note-field textarea {
     color: #fff7fb;
+    -webkit-text-fill-color: #fff7fb;
     background: rgba(255,255,255,0.10) !important;
     border-color: rgba(244,184,200,0.24);
 }
 .bartending-lane input:focus,
 .bartending-note-field textarea:focus {
     color: #fff7fb;
+    -webkit-text-fill-color: #fff7fb;
     background: rgba(255,255,255,0.14) !important;
     border-color: rgba(230,193,120,0.56);
     box-shadow: 0 0 0 3px rgba(230,193,120,0.12);
 }
-.bartending-lane input::placeholder,
+.bartending-lane input.has-custom-value:not(:focus) {
+    color: #fff2d6;
+    -webkit-text-fill-color: #fff2d6;
+    border-color: rgba(230,193,120,0.40);
+    background: rgba(230,193,120,0.10) !important;
+}
+.bartending-lane input::placeholder {
+    color: rgba(206,198,204,0.56);
+    -webkit-text-fill-color: rgba(206,198,204,0.56);
+    opacity: 1;
+}
 .bartending-note-field textarea::placeholder {
     color: rgba(255,237,244,0.42);
 }

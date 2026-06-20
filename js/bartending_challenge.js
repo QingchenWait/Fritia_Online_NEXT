@@ -191,6 +191,7 @@ function bindEvents() {
     })) {
         input?.addEventListener('input', () => {
             state.customDraft[category] = input.value.trim();
+            syncCustomInputState(category);
             renderIngredientSelection();
             renderSelectedSlots();
         });
@@ -285,6 +286,7 @@ function selectIngredient(category, value) {
     state.customDraft[category] = null;
     const input = getCustomInput(category);
     if (input) input.value = '';
+    syncCustomInputState(category);
     renderIngredientSelection();
     renderSelectedSlots();
 }
@@ -317,6 +319,7 @@ function resetGameState() {
     if (els.baseCustom) els.baseCustom.value = '';
     if (els.flavorCustom) els.flavorCustom.value = '';
     if (els.garnishCustom) els.garnishCustom.value = '';
+    syncAllCustomInputStates();
     if (els.noteInput) els.noteInput.value = '';
     resetIngredientLaneCollapse();
     setStatus('选择三种材料后开始特调。', 'info');
@@ -441,6 +444,7 @@ function commitCustomIngredient(category) {
     const value = String(input?.value || '').trim();
     state.custom[category] = value;
     state.customDraft[category] = null;
+    syncCustomInputState(category);
     renderIngredientSelection();
     renderSelectedSlots();
 }
@@ -457,6 +461,18 @@ function getRoundIngredients() {
 function commitAllCustomIngredients() {
     for (const category of Object.keys(INGREDIENTS)) {
         commitCustomIngredient(category);
+    }
+}
+
+function syncCustomInputState(category) {
+    const input = getCustomInput(category);
+    if (!input) return;
+    input.classList.toggle('has-custom-value', Boolean(String(input.value || '').trim()));
+}
+
+function syncAllCustomInputStates() {
+    for (const category of Object.keys(INGREDIENTS)) {
+        syncCustomInputState(category);
     }
 }
 
@@ -659,6 +675,7 @@ function buildBartendingRequestBody({ ingredients, note, hp, drinksConsumed, set
                     '分析员选择的三种材料只是灵感来源，不是决定结果的唯一因素。不要因为相同材料组合就反复生成相同或稳定偏好的结果。',
                     '调酒过程必须展现出琴诺可爱、害羞、胆小慌张、充满奇思妙想的个性。琴诺每次都会使用完全不同且不可预测的调酒方式。不要使用占卜类行为。不要让调酒过程看起来像是现实中专业调酒师的操作指导。',
                     '材料本身只用作琴诺的调酒参考，琴诺的临场动作、摇杯节奏、过滤方式、装饰处理、误解方式和突发灵感，必须比材料本身更能影响最终好坏。',
+                    '前端提供的预设动作只作为格式参考，用来说明动作描述的夸张程度、长度和叙事口吻。你必须另写全新的临场动作，禁止直接复述、近似改写或把预设动作原样写进 processText。',
                     '输出内容必须是虚构游戏语境。不要输出现实可复现的危险配方、真实毒物、真实伤害指导或具体危险配比。',
                     '结果要有不确定性：不要每次都是黑暗料理，也不要每次都是好酒；同一材料组合重复请求时，也应因为调配动作不同而出现明显差异。',
                     'previewText 只能写生成的酒品的外观和气味，尽量使用客观的风格描述，避免使用带有明显正面或负面含义的形容词 (例如“可怕的味道”)，也不得提前暴露 HP、黑暗料理、实际使用的材料、危险、好坏或饮用结果。',
@@ -676,7 +693,7 @@ function buildBartendingRequestBody({ ingredients, note, hp, drinksConsumed, set
                     `装饰：${ingredients.garnish}`,
                     `玩家备注：${note || '无'}`,
                     `本轮随机调配倾向：${mixing.intentLabel}`,
-                    `本轮琴诺关键动作：${mixing.action}`,
+                    `本轮预设动作格式参考（仅参考句式长度、夸张程度和叙事口吻，禁止直接复述或同义改写）：${mixing.action}`,
                     `本轮随机种子：${mixing.seed}`,
                     '',
                     '你必须只输出严格 JSON。字段协议如下。字段名固定，但不要复用协议说明里的占位文字，也不要把某个危险等级或 HP 变化固定成默认值：',
@@ -690,14 +707,15 @@ function buildBartendingRequestBody({ ingredients, note, hp, drinksConsumed, set
                     '',
                     '平衡倾向：',
                     '1. 本轮随机调配倾向来自前端。你要优先遵循这个倾向，但仍允许少量意外反转。',
-                    '2. 材料只提供风味和视觉线索，不能让固定材料组合稳定变成好酒；调配动作必须明显改变最终结果。',
-                    '3. 琴诺会参考分析员玩家给出的材料，但不一定正确理解；她的临场动作可以让正常材料变成黑暗料理，也可以把奇怪材料意外调好。不要使用占卜类行为',
-                    '4. previewText 的前台描述必须具有很大的迷惑性，积极描述也可以对应黑暗料理。',
-                    '5. isDarkCuisine=true 表示饮用后扣血，hpDelta 应为负数。',
-                    '6. isDarkCuisine=false 表示饮用后回血，hpDelta 应为正数。',
-                    '7. darkLevel 为 1 到 5 的整数，越高越偏离正常观念。',
-                    '8. hpDelta 为整数，可能为正数或负数。darkLevel 数值越高，hpDelta 的绝对值通常更大。darkLevel 1 的饮品可能只有轻微效果（例如 ±10 HP），darkLevel 5 的饮品可能有极端效果（例如 -40 HP 或 +30 HP）。同一 darkLevel 下，hpDelta 数值也应有一定随机性，不要每次都固定在某几个数值上。',
-                    '9. tags 为 2 到 5 个短标签。',
+                    '2. 预设动作只是格式参考；processText 必须生成新的琴诺临场动作，不要复制、拼接或轻微改写预设动作。',
+                    '3. 材料只提供风味和视觉线索，不能让固定材料组合稳定变成好酒；调配动作必须明显改变最终结果。',
+                    '4. 琴诺会参考分析员玩家给出的材料，但不一定正确理解；她的临场动作可以让正常材料变成黑暗料理，也可以把奇怪材料意外调好。不要使用占卜类行为',
+                    '5. previewText 的前台描述必须具有很大的迷惑性，积极描述也可以对应黑暗料理。',
+                    '6. isDarkCuisine=true 表示饮用后扣血，hpDelta 应为负数。',
+                    '7. isDarkCuisine=false 表示饮用后回血，hpDelta 应为正数。回血的效果应小于同级别扣血的效果。',
+                    '8. darkLevel 为 1 到 5 的整数，越高越偏离正常观念。',
+                    '9. hpDelta 为整数，可能为正数或负数。darkLevel 数值越高，hpDelta 的绝对值通常更大。darkLevel 1 的饮品可能只有轻微效果（例如 ±10 HP），darkLevel 5 的饮品可能有极端效果（例如 -40 HP 或 +30 HP）。同一 darkLevel 下，hpDelta 数值也应有一定随机性，不要每次都固定在某几个数值上。',
+                    '10. tags 为 2 到 5 个短标签。',
                     '只输出 JSON，不要输出其他内容。'
                 ].join('\n')
             }
@@ -706,7 +724,7 @@ function buildBartendingRequestBody({ ingredients, note, hp, drinksConsumed, set
 }
 
 function chooseMixingDirection() {
-    const isDarkIntent = Math.random() < 0.6;
+    const isDarkIntent = Math.random() < 0.7;
     const actions = isDarkIntent ? MIX_ACTION_DARK : MIX_ACTION_GOOD;
     return {
         intent: isDarkIntent ? 'dark' : 'good',
@@ -895,7 +913,7 @@ function clampHpDelta({ hpDelta, isDarkCuisine, darkLevel, currentHp }) {
 
     value = Math.abs(value || randomInt(8, 25));
     let heal = Math.max(8, Math.min(25, value));
-    if (currentHp >= HIGH_HP_THRESHOLD) heal = Math.min(heal, 15);
+    if (currentHp >= HIGH_HP_THRESHOLD) heal = Math.min(heal, 10);
     return heal;
 }
 
@@ -903,7 +921,7 @@ function createFallbackResult(ingredients, options = {}) {
     const mixing = chooseMixingDirection();
     const weirdCount = countWeirdIngredients(ingredients);
     const roll = Math.random();
-    const darkBias = mixing.intent === 'dark' ? 0.6 : 0.26;
+    const darkBias = mixing.intent === 'dark' ? 0.7 : 0.26;
     const disaster = roll < 0.04 + weirdCount * 0.012 && mixing.intent === 'dark';
     const isDarkCuisine = disaster || roll < Math.min(0.82, darkBias + weirdCount * 0.035);
     const darkLevel = isDarkCuisine
