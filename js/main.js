@@ -6,7 +6,7 @@ import { loadCharacter, updateCharacter, getCharacterPosition, startInteraction,
 import { initDialogue, showDialogue, hideDialogue, isDialogueVisible, getConversationHistory, importConversationHistory, setDialogueSceneContext } from './dialogue.js';
 import { initDateDialogue, openDatePanel, closeDatePanel, isDatePanelVisible, getDateConversationHistory, importDateConversationHistory, getDateLocations } from './date_dialogue.js';
 import { initSettings } from './settings.js';
-import { addAffinity, exportGameState, formatGameDateTime, getAffinity, getGameTimeInfo, getMoney, importGameState, initGameState, recordHeadPat, recordModelUsed, updateGameTime } from './game_state.js';
+import { addAffinity, exportGameState, formatGameDateTime, getAffinity, getBarAdmissionProgress, getGameTimeInfo, getMoney, importGameState, initGameState, recordHeadPat, recordModelUsed, recordSleepModeEntered, updateGameTime } from './game_state.js';
 import { closeGiftCollection, closeGiftTerminal, initGiftSystem, isGiftOverlayVisible, openGiftCollection, openGiftTerminal, renderGiftCollection } from './gift_system.js?v=20260618-gift-stream';
 import { closeAchievementsPanel, evaluateAchievements, exportAchievements, flushStartupAchievementToasts, importAchievements, initAchievements, isAchievementsPanelVisible, refreshAchievementsFromImport } from './achievements.js';
 import {
@@ -134,6 +134,7 @@ let previousSceneFog = null;
 let previousSceneBackground = null;
 let hasStoredRoomAtmosphere = false;
 let isSleeping = false;
+let barAdmissionPanelVisible = false;
 let isDreamDoorOpen = false;
 let dreamDoorAnimating = false;
 let dreamDoorAnimationTime = 0;
@@ -159,6 +160,13 @@ const cinematicCandidate = new THREE.Vector3();
 const cinematicSide = new THREE.Vector3();
 
 const clock = new THREE.Clock();
+const loadingResourceProgress = {
+    entries: new Map(),
+    live: new Map(),
+    observer: null,
+    displayedLoaded: 0,
+    displayedTotal: 0
+};
 
 async function setLoadingText(text) {
     const el = document.getElementById('loading-text');
@@ -170,8 +178,96 @@ function setLoadingProgress(pct) {
     if (bar) bar.style.width = `${Math.min(100, pct)}%`;
 }
 
+function formatLoadingMegabytes(bytes) {
+    return `${(Math.max(0, bytes) / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function getResourceEntrySize(entry) {
+    if (!entry) return 0;
+    const candidates = [
+        entry.encodedBodySize,
+        entry.transferSize
+    ].map(Number).filter(value => Number.isFinite(value) && value > 0);
+    return candidates.length > 0 ? Math.min(...candidates) : 0;
+}
+
+function updateLoadingSizeText() {
+    const el = document.getElementById('loading-size-text');
+    if (!el) return;
+    let loaded = 0;
+    let total = 0;
+    for (const size of loadingResourceProgress.entries.values()) {
+        loaded += size;
+        total += size;
+    }
+    for (const item of loadingResourceProgress.live.values()) {
+        if (item.url && loadingResourceProgress.entries.has(item.url)) continue;
+        loaded += Math.max(0, Number(item.loaded) || 0);
+        total += Math.max(0, Number(item.total) || 0);
+    }
+    total = Math.max(total, loaded);
+    loadingResourceProgress.displayedLoaded = Math.max(loadingResourceProgress.displayedLoaded, loaded);
+    loadingResourceProgress.displayedTotal = Math.max(loadingResourceProgress.displayedTotal, total);
+    loaded = loadingResourceProgress.displayedLoaded;
+    total = loadingResourceProgress.displayedTotal;
+    el.textContent = `${formatLoadingMegabytes(loaded)} / ${formatLoadingMegabytes(total)}`;
+}
+
+function collectLoadedResourceSizes() {
+    if (typeof performance === 'undefined' || typeof performance.getEntriesByType !== 'function') {
+        updateLoadingSizeText();
+        return;
+    }
+    for (const entry of performance.getEntriesByType('resource')) {
+        const size = getResourceEntrySize(entry);
+        if (size > 0) loadingResourceProgress.entries.set(entry.name, size);
+    }
+    updateLoadingSizeText();
+}
+
+function startLoadingResourceMonitor() {
+    collectLoadedResourceSizes();
+    if (typeof PerformanceObserver === 'undefined') return;
+    try {
+        loadingResourceProgress.observer = new PerformanceObserver((list) => {
+            for (const entry of list.getEntries()) {
+                const size = getResourceEntrySize(entry);
+                if (size > 0) loadingResourceProgress.entries.set(entry.name, size);
+            }
+            updateLoadingSizeText();
+        });
+        loadingResourceProgress.observer.observe({ type: 'resource', buffered: true });
+    } catch {}
+}
+
+function stopLoadingResourceMonitor() {
+    collectLoadedResourceSizes();
+    try {
+        loadingResourceProgress.observer?.disconnect();
+    } catch {}
+    loadingResourceProgress.observer = null;
+    loadingResourceProgress.live.clear();
+    updateLoadingSizeText();
+}
+
+function trackLiveLoadingResource(id, progressEvent) {
+    if (!progressEvent?.lengthComputable) return;
+    loadingResourceProgress.live.set(id, {
+        url: progressEvent.target?.responseURL || progressEvent.target?.url || '',
+        loaded: Number(progressEvent.loaded) || 0,
+        total: Number(progressEvent.total) || 0
+    });
+    updateLoadingSizeText();
+}
+
+function finishLiveLoadingResource(id) {
+    loadingResourceProgress.live.delete(id);
+    collectLoadedResourceSizes();
+}
+
 async function init() {
     const canvas = document.getElementById('game-canvas');
+    startLoadingResourceMonitor();
     initGameState();
 
     await setLoadingText('初始化场景...');
@@ -215,11 +311,15 @@ async function init() {
     setLoadingProgress(35);
 
     try {
-        charData = await loadCharacter(scene, room.waypoints, room.colliders, (pct) => {
+        const fritiaModelLoadId = 'startup:fritia-model';
+        charData = await loadCharacter(scene, room.waypoints, room.colliders, (pct, event) => {
             setLoadingProgress(35 + pct * 0.5);
+            trackLiveLoadingResource(fritiaModelLoadId, event);
         });
+        finishLiveLoadingResource(fritiaModelLoadId);
         setLoadingProgress(85);
     } catch (err) {
+        finishLiveLoadingResource('startup:fritia-model');
         console.error('Character load failed:', err);
         await setLoadingText('模型加载失败，将使用占位体...');
         await new Promise(r => setTimeout(r, 1000));
@@ -271,8 +371,13 @@ async function init() {
     await setLoadingText('加载暖调闲聚地图...');
     setLoadingProgress(92);
     try {
-        barSceneData = await ensureBarScene(scene);
+        const barMapLoadId = 'startup:bar-map';
+        barSceneData = await ensureBarScene(scene, {
+            onProgress: (event) => trackLiveLoadingResource(barMapLoadId, event)
+        });
+        finishLiveLoadingResource(barMapLoadId);
     } catch (err) {
+        finishLiveLoadingResource('startup:bar-map');
         console.error('[BarScene] 暖调闲聚地图加载失败:', err);
         barSceneData = null;
     }
@@ -381,6 +486,7 @@ async function init() {
 
     await setLoadingText('准备就绪！');
     setLoadingProgress(100);
+    stopLoadingResourceMonitor();
 
     await new Promise(r => setTimeout(r, 500));
     const loadingScreen = document.getElementById('loading-screen');
@@ -440,6 +546,11 @@ function onKeyDown(e) {
         } else if (e.code === 'Digit2' || e.code === 'Numpad2') {
             rollbackPendingDreamRevision();
         }
+        return;
+    }
+
+    if (barAdmissionPanelVisible) {
+        if (e.code === 'KeyE') closeBarAdmissionPanel();
         return;
     }
 
@@ -541,7 +652,7 @@ function onKeyDown(e) {
                 openDatePanel();
                 controlsModule.releaseControlMode({ resumeOnClose: true });
             } else if (isLookingAtDoor()) {
-                enterBarScene();
+                tryEnterBarSceneWithAdmission();
             } else if (isLookingAtPainting()) {
                 document.getElementById('painting-upload').click();
             } else if (isLookingAtWardrobe()) {
@@ -1210,6 +1321,7 @@ function animate() {
     updateDreamDoor(delta);
     updateDreamFurnitureCinematic(delta);
     updateRoomPanorama();
+    updateBarAdmissionPanelPosition();
 
     if (controlsModule) {
         if (!isSleeping && !dreamCinematic && !isRoomPanoramaActive()) {
@@ -1261,6 +1373,18 @@ function updateInteractionPrompt() {
     }
     if (isRoomPanoramaActive()) {
         hideActionPrompts();
+        return;
+    }
+    if (barAdmissionPanelVisible) {
+        prompt.classList.add('hidden');
+        dreamPaintingPrompt?.classList.add('hidden');
+        if (paintingPrompt) {
+            paintingPrompt.classList.remove('is-disabled');
+            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 关闭';
+            paintingPrompt.dataset.promptKey = 'KeyE';
+            paintingPrompt.classList.remove('hidden');
+        }
+        stackPromptButtons(prompt, paintingPrompt, dreamPaintingPrompt);
         return;
     }
     if (isSleeping || isInteracting || isDialogueVisible() || isDatePanelVisible() || isGiftOverlayVisible() || isDreamOverlayVisible() || isDanceOverlayVisible() || isInvitePanelVisible() || isBartendingChallengeVisible() || isGuestInteracting() || isUtilityOverlayVisible()) {
@@ -1365,7 +1489,7 @@ function updateInteractionPrompt() {
             paintingPrompt.dataset.promptKey = 'KeyE';
             paintingPrompt.classList.remove('hidden');
         } else if (lookDoor) {
-            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 前往暖调闲聚';
+            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 进入暖调闲聚';
             paintingPrompt.dataset.promptKey = 'KeyE';
             paintingPrompt.classList.remove('hidden');
         } else {
@@ -1824,6 +1948,92 @@ function getInteractionPoint(target, out) {
     return out;
 }
 
+function getBarAdmissionAnchor(out = new THREE.Vector3()) {
+    if (doorMesh?.userData?.interactionCenter) {
+        out.copy(doorMesh.userData.interactionCenter);
+    } else if (doorMesh) {
+        doorMesh.getWorldPosition(out);
+        out.y += 1.2;
+    } else {
+        out.set(0, 1.35, -2.95);
+    }
+    return out;
+}
+
+function ensureBarAdmissionPanel() {
+    let panel = document.getElementById('bar-admission-panel');
+    if (panel) return panel;
+    panel = document.createElement('div');
+    panel.id = 'bar-admission-panel';
+    panel.className = 'bar-admission-panel hidden';
+    panel.setAttribute('aria-live', 'polite');
+    document.body.appendChild(panel);
+    return panel;
+}
+
+function renderBarAdmissionPanel() {
+    const panel = ensureBarAdmissionPanel();
+    const progress = getBarAdmissionProgress();
+    panel.innerHTML = `
+        <div class="bar-admission-panel__title">完成以下任务获取入场券</div>
+        <div class="bar-admission-panel__list">
+            ${progress.tasks.map(task => `
+                <div class="bar-admission-panel__task${task.complete ? ' complete' : ''}">
+                    <span>${escapeHtml(task.label)}</span>
+                    <strong>${Math.min(task.value, task.target)}/${task.target}</strong>
+                </div>
+            `).join('')}
+        </div>
+    `;
+    updateBarAdmissionPanelPosition();
+    return panel;
+}
+
+function showBarAdmissionPanel() {
+    barAdmissionPanelVisible = true;
+    const panel = renderBarAdmissionPanel();
+    panel.classList.remove('hidden');
+    updateInteractionPrompt();
+}
+
+function closeBarAdmissionPanel() {
+    barAdmissionPanelVisible = false;
+    document.getElementById('bar-admission-panel')?.classList.add('hidden');
+    updateInteractionPrompt();
+}
+
+function updateBarAdmissionPanelPosition() {
+    if (!barAdmissionPanelVisible || !camera) return;
+    const panel = document.getElementById('bar-admission-panel');
+    if (!panel || panel.classList.contains('hidden')) return;
+    const anchor = getBarAdmissionAnchor(new THREE.Vector3());
+    const ndc = anchor.project(camera);
+    if (ndc.z < -1 || ndc.z > 1) {
+        panel.classList.add('is-offscreen');
+        return;
+    }
+    panel.classList.remove('is-offscreen');
+    const x = (ndc.x * 0.5 + 0.5) * window.innerWidth;
+    const y = (-ndc.y * 0.5 + 0.5) * window.innerHeight;
+    panel.style.left = `${Math.max(16, Math.min(window.innerWidth - 16, x))}px`;
+    panel.style.top = `${Math.max(16, Math.min(window.innerHeight - 16, y))}px`;
+}
+
+function tryEnterBarSceneWithAdmission() {
+    const progress = getBarAdmissionProgress();
+    if (progress.complete) {
+        enterBarScene();
+        return;
+    }
+    showBarAdmissionPanel();
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = String(text ?? '');
+    return div.innerHTML;
+}
+
 function hasClearLineOfSightToObject(target) {
     getInteractionPoint(target, lookTarget);
     return hasClearLineOfSight(lookTarget, lookTarget.distanceTo(camera.position));
@@ -1872,6 +2082,7 @@ async function enterSleepMode() {
     await fadeToBlack();
 
     isSleeping = true;
+    recordSleepModeEntered();
 
     sleepCamPos.copy(camera.position);
     sleepCamQuat.copy(camera.quaternion);

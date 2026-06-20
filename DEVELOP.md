@@ -122,10 +122,11 @@ npm run dev
 主要函数：
 
 - `init()`：主初始化流程。按顺序初始化 `game_state`、`scene`、`room`、`character`、`controls`、对话系统、礼物系统、成就系统和造梦系统。
-- `onKeyDown(e)`：全局键盘交互。`E` 处理门、终端、家具、礼物、床、约会、挂画、衣柜、暖调闲聚舞台/邀请/调酒挑战；`F` 处理角色互动和摸头；`1/2` 处理造梦家具样式修改确认/回退；看向造梦终端时 `1` 进入房间全景拍照模式；全景模式内 `E` / `Esc` / `1` 退出。
-- `animate()`：主循环。更新游戏时间、控制器、角色、门动画、房间作用域、窗户天空色、交互提示并渲染场景。
+- `startLoadingResourceMonitor()` / `trackLiveLoadingResource()`：加载页资源体积统计。通过浏览器 Resource Timing 读取已完成资源传输大小，并叠加角色 PMX、暖调闲聚地图 PMX 的 XHR 实时进度，在 `#loading-size-text` 显示 `XX.XX MB / XX.XX MB`；总量显示单调不下降，避免 Resource Timing 和实时 XHR 切换时跳动。
+- `onKeyDown(e)`：全局键盘交互。`E` 处理门、终端、家具、礼物、床、约会、挂画、衣柜、暖调闲聚准入/舞台/邀请/调酒挑战；`F` 处理角色互动和摸头；`1/2` 处理造梦家具样式修改确认/回退；看向造梦终端时 `1` 进入房间全景拍照模式；全景模式内 `E` / `Esc` / `1` 退出。
+- `animate()`：主循环。更新游戏时间、控制器、角色、门动画、房间作用域、窗户天空色、交互提示、暖调闲聚准入浮窗投影并渲染场景。
 - 开局欢迎闸门：加载完成但玩家尚未点击 `#click-to-play` 前，角色只保留眨眼，不切换 waypoint、不随机移动；首次点击后先执行面向玩家镜头的挥手欢迎，挥手结束再恢复正常行动。
-- `updateInteractionPrompt()`：复用 `#painting-prompt` 和 `#interaction-prompt` 显示当前可用交互；造梦家具显示 `按 E 管理 [家具名]`。
+- `updateInteractionPrompt()`：复用 `#painting-prompt` 和 `#interaction-prompt` 显示当前可用交互；造梦家具显示 `按 E 管理 [家具名]`；暖调闲聚准入浮窗显示时改为 `按 E 关闭`。
 - 暖调闲聚舞台：看向 `BarDanceInvisiblePlane` 时显示 `按 E 观看跳舞`，打开 `#dance-panel`；舞蹈流程中 `updateDanceSystem(delta)` 接管 VMD 动作，暂停角色日常 AI，但玩家移动/视角仍由 `controls.js` 正常更新。
 - 暖调闲聚调酒：看向 `BarBartendingChallengeInvisibleBox` 时显示 `按 E 请琴诺帮忙调酒`，打开 `#bartending-challenge-panel` 并释放控制模式；Escape 或关闭按钮退出并派发 `fritia-overlay-closed`。
 - `hasClearLineOfSight(targetPoint, targetDistance)`：按 E 交互视线遮挡判断。玩家视角到目标点之间如果被当前碰撞体阻挡，则不显示也不触发按 E 管理/交互。睡眠模式的 `按 E 起床` 不走这个规则。
@@ -137,6 +138,7 @@ npm run dev
 - `refreshCharacterRoomScope(force)`：玩家进入新旧房间时，切换芙提雅导航作用域；优先让角色通过门步行进入对应房间，失败时才瞬移。
 - `getActivePlayerColliders()`：当前玩家碰撞体。门关闭时包含 `dreamDoorCollider`，门打开时移除。
 - `getActiveBedroomCharacterColliders()` / `getActiveDreamCharacterColliders()`：角色在不同房间的导航碰撞体。
+- `tryEnterBarSceneWithAdmission()`：旧房间南侧门的暖调闲聚准入检查。需要完成 3 次日常对话、1 次约会、1 次睡觉模式、送出 1 件礼物和制造 1 件造梦家具；未完成时在门位置投影 `#bar-admission-panel`，隐藏进入提示并显示 `按 E 关闭`，全部完成后直接调用 `enterBarScene()`。
 - `enterBarScene()` / `exitBarScene()`：通过黑屏转场进入/离开暖调闲聚；切换旧房间组显示、scene background/fog、玩家碰撞体和芙提雅导航作用域。
 - `exitBarScene()` 在舞蹈流程未结束前会被拦截；出口提示保留但置灰且不携带 `data-prompt-key`，避免点击或按 E 触发返回。
 - `exportData()`：导出设置、游戏状态、日常对话、约会对话、成就、礼物、造梦家具、挂画。
@@ -312,7 +314,7 @@ LLM JSON 协议：
 - 没有 API Key 时提示玩家先去设置填写；API 请求失败、空输出、非 JSON、字段类型异常都不会卡死，按 fallback 继续。
 - 重复点击 `开始特调` 会被禁用，避免并发请求。
 - `#bartending-challenge-panel` 已加入 `controls.js` overlay 管理列表；关闭时派发 `fritia-overlay-closed`，恢复控制模式。
-- 窄屏/移动端下 `#bartending-challenge-panel` 自身允许纵向滚动，材料列表取消内部固定高度且保持每行 2 个材料；右侧组合槽在 980px 以下改为稳定网格布局，避免绝对定位挤压错乱；600px 以下可点击 `基酒/调味/装饰` 标题折叠对应材料栏。
+- 窄屏/移动端下 `#bartending-challenge-panel` 自身允许纵向滚动，材料列表取消内部固定高度且保持每行 2 个材料；600px~980px 改为稳定单列流式布局，右侧结果栏位于材料栏下方，组合槽使用静态网格，避免右栏压到左栏；600px 以下目标标签固定排在标题说明下方，且可点击 `基酒/调味/装饰` 标题折叠对应材料栏。
 
 ## 暖调闲聚访客系统：`js/bar_guest_system.js`
 
@@ -444,6 +446,8 @@ localStorage key：`fritia_game_state`
 - `addMoney(amount, reason)`：增加数据金，HUD 可显示 `+amount`。
 - `recordGiftEstimate(amount)` / `recordDialogueInteraction(type, assistantText, locationId)` / `recordModelUsed(path)` / `recordHeadPat()`：统计数据。
 - `recordDreamFurnitureRevision(count)`：记录单件造梦家具已确认的最大样式修改次数，用于“完美主义”成就。
+- `recordSleepModeEntered()` / `recordDanceWatched()` / `recordBartendingChallengeWin()`：分别记录睡眠模式进入次数、暖调闲聚舞蹈完整观看次数和琴诺调酒挑战胜利次数。
+- `getBarAdmissionProgress()`：返回暖调闲聚入场券任务进度；任务为 3 次日常对话、1 次约会、1 次睡觉模式、1 件已送礼物和 1 件造梦家具。
 - `addGift(gift)` / `getGifts()` / `mergeGifts(gifts)`：礼物库存。
 - `exportGameState()` / `importGameState(data, options)`：存档导入导出。
 
@@ -451,6 +455,7 @@ localStorage key：`fritia_game_state`
 
 - 旧存档缺少 `stats`、`gifts`、`dreamFurniture` 等字段时使用默认值。
 - `readDreamFurnitureSnapshot()` 会读取 `fritia_dream_furniture` 快照，方便导出兼容。
+- `stats` 新增 `sleepModeCount`、`danceWatchCount`、`bartendingChallengeWins`；初始化时会从现有日常/约会历史折算对话统计，导入旧存档时按最大值合并。
 
 ## 设置系统：`js/settings.js`
 
@@ -553,8 +558,10 @@ localStorage key：`fritia_achievements`
 - 成就卡片显示在最顶层，覆盖普通 overlay；`#achievement-toast-host` 初始化时会从 `#hud` 提升到 `document.body` 直下，并使用极高 `z-index` 和独立 stacking context，避免被 overlay 的高斯模糊背景遮住。
 - 解锁时播放 `src/_voices/achievement_complete.mp3`。
 - 成就状态包含 `unlocked` 和 `notified`，导入时按时间戳合并。
+- 成就悬浮窗口每次打开时只刷新一次列表内容；后台 `evaluateAchievements()` 仍正常实时评估解锁和 toast，但不会在面板已打开时每秒重绘列表，避免闪烁。
 - “布置爱巢”位于“比翼双飞”后方，读取 `fritia_dream_furniture` 当前记录数，造梦空间内自制家具达到 `5` 件时解锁，图标 `src/_logos/ach_dream_love_nest.svg`。
 - “完美主义”位于“布置爱巢”后方，读取家具记录的 `revisionCount` 和 `stats.maxDreamFurnitureRevisionCount`，同一件造梦家具确认样式修改达到 `3` 次时解锁，图标 `src/_logos/ach_dream_perfectionist.svg`。
+- “华丽入场”“霓裳羽衣”“安全撤离”位于“干什么！”后方；分别读取暖调闲聚入场券任务完成数、`stats.danceWatchCount` 和 `stats.bartendingChallengeWins`，图标分别为 `src/_logos/ach_bar_admission_ticket.svg`、`src/_logos/ach_neon_dancer.svg`、`src/_logos/ach_safe_evacuate.svg`。
 
 ## 造梦系统总览
 
@@ -826,11 +833,12 @@ DOM ID：
 基础：
 
 - `#game-canvas`
-- `#loading-screen`, `#loading-progress`, `#loading-text`
+- `#loading-screen`, `#loading-progress`, `#loading-text`, `#loading-size-text`
 - `#fade-overlay`
 - `#hud`, `#crosshair`, `#game-status`
 - `#game-time-display`, `#affinity-display`, `#affinity-value`, `#money-display`, `#salary-toast`
 - `#interaction-prompt`, `#painting-prompt`
+- `#bar-admission-panel`：运行时创建，锚定在旧房间南侧门位置的暖调闲聚准入任务小浮窗。
 - `#click-to-play`
 
 顶部按钮：
@@ -1057,7 +1065,7 @@ DOM ID：
 ## localStorage Key
 
 - `fritia-settings`：API 设置。
-- `fritia_game_state`：游戏时间、数据金、好感、统计、礼物。
+- `fritia_game_state`：游戏时间、数据金、好感、统计、礼物；`stats` 包含入场券/成就用的 `sleepModeCount`、`danceWatchCount`、`bartendingChallengeWins`。
 - `fritia_chat_history`：日常对话历史。
 - `fritia_date_history`：约会对话历史。
 - `fritia_bar_conversation_history`：暖调闲聚访客对话历史。
@@ -1169,7 +1177,7 @@ DOM ID：
 - `src/_queries/system_prompt.txt`：芙提雅核心人格设定，日常对话和家具台词都应使用。
 - `src/_queries/date_prompt.txt`：约会系统提示词。
 - `src/_logos/dream_*.svg`：造梦终端、家具编辑、推拉门等图标。
-- `src/_logos/achievement_*.svg`, `src/_logos/ach_*.svg`：成就系统图标。
+- `src/_logos/achievement_*.svg`, `src/_logos/ach_*.svg`：成就系统图标；暖调闲聚新增成就图标使用 Google Noto Color Emoji 风格 SVG。
 - `src/_voices/achievement_complete.mp3`：成就解锁音效。
 - `src/_voices/talk_*.mp3`：日常互动语音。
 - `src/_voices/Cherno_welcome_*.wav`：琴诺专用 F 对话欢迎语，进入琴诺对话时随机播放。
@@ -1187,7 +1195,7 @@ DOM ID：
 - 看向礼物收藏柜：打开礼物收藏。
 - 看向床：进入睡眠。
 - 看向书桌：打开约会。
-- 看向旧房间南侧门：前往暖调闲聚。
+- 看向旧房间南侧门：进入暖调闲聚；如果入场券任务未完成，则在门位置显示准入任务浮窗，提示切换为 `按 E 关闭`，再次按 E 或触摸提示关闭浮窗。
 - 暖调闲聚中看向出口平面：返回卧室。
 - 暖调闲聚中看向舞台平面：打开舞曲选择；舞蹈流程未结束前返回卧室置灰不可用。
 - 看向挂画：上传图片。
@@ -1231,38 +1239,40 @@ Escape：
 
 暖调闲聚：
 
-1. 看向旧房间南侧门，提示应为 `按 E 前往暖调闲聚`。
-2. 按 E 后黑屏转场进入暖调闲聚，旧卧室/造梦空间组隐藏，玩家和芙提雅都出现在酒吧地图内。
-3. 酒吧内 WASD 可移动，高物体阻挡；低台阶、低平台和出口楼梯不会把玩家或芙提雅卡住。
-4. 酒吧内接近芙提雅仍可按 F 对话。
-5. 酒吧内看向出口区域提示 `按 E 返回卧室`，按 E 黑屏回到旧房间南侧门附近。
-6. 返回卧室后，购物终端、礼物收藏柜、造梦门、书桌约会、睡觉、换装、挂画仍可正常触发。
-7. 酒吧内看向 `X=-4.0~4.0, Y=0.0~4.5, Z=32.5` 舞台平面，提示 `按 E 观看跳舞`，按 E 打开 `#dance-panel`。
-8. 在舞曲选择中导入本地 `.vmd`，可选导入音频并选择芙提雅模型；点击开始后浮层关闭，玩家仍可 WASD 移动和转动视角，芙提雅从 `X=0, Z=35.6` 且脚底目标 Y 为 `DANCE_STAGE_Y_OFFSET` 的位置开始播放 VMD。
-9. 舞蹈期间看向出口时 `按 E 返回宿舍` 灰色不可点击，按 E 不返回，也不触发提示星光；VMD 结束时音频停止。
-10. VMD 结束后显示绿色 `1 再来一次` 和粉色 `2 喝彩谢幕`；按 1 或点左侧按钮重播，按 2、点右侧按钮或等待 5 秒后结束舞蹈流程，移除舞台 Y 偏移并恢复角色自由行动。
-11. 酒吧内看向 `X=-1.0~1.0, Y=0.67~1.07, Z=46.5~49.1` 邀请体，提示 `按 E 邀请其他人入场`，按 E 打开 `#bar-guest-panel`。
-12. 在邀请面板中可直接选择内置芬妮入场；首次邀请芬妮后会写入内置访客保留状态，退出并重新进入酒吧、刷新页面或导入导出存档后仍会自动加载；导入 PMX 和人格文档后可临时邀请，保存后加入候选列表，删除按钮可删除自定义角色但不能删除芬妮。
-13. 每次进入酒吧时，琴诺应自动出现在 `X=7.2, Y=0.668, Z=42.01`，不会移动；玩家接近时身体和头部看向玩家镜头，离开判定范围后身体平滑转回初始朝向，按 F 可互动，对话框和发送按钮为紫色主题，并随机播放一段 `Cherno_welcome_*.wav` 欢迎语。
-14. 酒吧内看向 `X=6.8~8.3, Y=0.65~2.85, Z=40~45` 调酒挑战体，提示 `按 E 请琴诺帮忙调酒`，按 E 打开 `#bartending-challenge-panel` 并释放控制模式。
-15. 调酒挑战未配置 API Key 时，点击 `开始特调` 显示设置提示，不跳转、不弹 alert、不进入卡死状态。
-16. 调酒挑战中选择预置材料或填写自定义材料后开始特调；LLM 返回前按钮禁用并显示加载动画。
-17. 调酒挑战 LLM 输出非法、空输出或 API 请求失败时，应使用本地 fallback 结果继续显示杯前观察。
-18. 饮用前只显示外观和气味；点击 `闭眼喝下` 后才揭示 HP 变化、是否黑暗料理、酒名、约 100 字过程和 tags。
-19. 点击 `这杯先放过我` 不改变 HP、不增加已饮用杯数，可无限跳过；本杯仍会揭示调制结果，黑暗料理显示 `危险回避`，正常饮品显示 `错失良机`，再点 `下一杯` 回到材料选择。
-20. HP ≤ 0 时显示失败文案；喝满 8 杯且 HP > 0 时显示成功文案；点击重新挑战重置为 HP 100。
-21. 调酒挑战进行中点击右上关闭或按 Escape，会关闭浮层、丢弃本局状态、恢复控制模式；请求仍在进行时应中断或忽略结果。
-22. 访客只在酒吧内移动和对话；离开酒吧后临时访客卸载，已保存访客和已保留的内置访客下次进入酒吧自动加载。
-23. 酒吧内芙提雅对话和访客对话都显示在历史面板的“暖调闲聚”页；芙提雅在卧室/造梦空间的对话仍显示在“日常对话”页。
-24. 导出生成 `.zip`，包含 `save.json` 与自定义访客资源；导入 ZIP 后可恢复自定义访客并在酒吧重新加载；调酒挑战不新增导出字段。
+1. 看向旧房间南侧门，提示应为 `按 E 进入暖调闲聚`。
+2. 未完成入场券任务时按 E 不转场，门位置显示 `完成以下任务获取入场券` 小浮窗；任务进度显示 3 次日常对话、1 次约会、1 次睡觉、1 件礼物和 1 件造梦家具，完成项为绿色，未完成项为灰色，此时提示切换为 `按 E 关闭`，按 E 或触摸提示后关闭浮窗并恢复进入提示。
+3. 完成全部入场券任务后按 E 黑屏转场进入暖调闲聚，旧卧室/造梦空间组隐藏，玩家和芙提雅都出现在酒吧地图内。
+4. 酒吧内 WASD 可移动，高物体阻挡；低台阶、低平台和出口楼梯不会把玩家或芙提雅卡住。
+5. 酒吧内接近芙提雅仍可按 F 对话。
+6. 酒吧内看向出口区域提示 `按 E 返回卧室`，按 E 黑屏回到旧房间南侧门附近。
+7. 返回卧室后，购物终端、礼物收藏柜、造梦门、书桌约会、睡觉、换装、挂画仍可正常触发。
+8. 酒吧内看向 `X=-4.0~4.0, Y=0.0~4.5, Z=32.5` 舞台平面，提示 `按 E 观看跳舞`，按 E 打开 `#dance-panel`。
+9. 在舞曲选择中导入本地 `.vmd`，可选导入音频并选择芙提雅模型；点击开始后浮层关闭，玩家仍可 WASD 移动和转动视角，芙提雅从 `X=0, Z=35.6` 且脚底目标 Y 为 `DANCE_STAGE_Y_OFFSET` 的位置开始播放 VMD。
+10. 舞蹈期间看向出口时 `按 E 返回宿舍` 灰色不可点击，按 E 不返回，也不触发提示星光；VMD 结束时音频停止，并为“霓裳羽衣”计入 1 次完整观看。
+11. VMD 结束后显示绿色 `1 再来一次` 和粉色 `2 喝彩谢幕`；按 1 或点左侧按钮重播，按 2、点右侧按钮或等待 5 秒后结束舞蹈流程，移除舞台 Y 偏移并恢复角色自由行动。
+12. 酒吧内看向 `X=-1.0~1.0, Y=0.67~1.07, Z=46.5~49.1` 邀请体，提示 `按 E 邀请其他人入场`，按 E 打开 `#bar-guest-panel`。
+13. 在邀请面板中可直接选择内置芬妮入场；首次邀请芬妮后会写入内置访客保留状态，退出并重新进入酒吧、刷新页面或导入导出存档后仍会自动加载；导入 PMX 和人格文档后可临时邀请，保存后加入候选列表，删除按钮可删除自定义角色但不能删除芬妮。
+14. 每次进入酒吧时，琴诺应自动出现在 `X=7.2, Y=0.668, Z=42.01`，不会移动；玩家接近时身体和头部看向玩家镜头，离开判定范围后身体平滑转回初始朝向，按 F 可互动，对话框和发送按钮为紫色主题，并随机播放一段 `Cherno_welcome_*.wav` 欢迎语。
+15. 酒吧内看向 `X=6.8~8.3, Y=0.65~2.85, Z=40~45` 调酒挑战体，提示 `按 E 请琴诺帮忙调酒`，按 E 打开 `#bartending-challenge-panel` 并释放控制模式。
+16. 调酒挑战未配置 API Key 时，点击 `开始特调` 显示设置提示，不跳转、不弹 alert、不进入卡死状态。
+17. 调酒挑战中选择预置材料或填写自定义材料后开始特调；LLM 返回前按钮禁用并显示加载动画。
+18. 调酒挑战 LLM 输出非法、空输出或 API 请求失败时，应使用本地 fallback 结果继续显示杯前观察。
+19. 饮用前只显示外观和气味；点击 `闭眼喝下` 后才揭示 HP 变化、是否黑暗料理、酒名、约 100 字过程和 tags。
+20. 点击 `这杯先放过我` 不改变 HP、不增加已饮用杯数，可无限跳过；本杯仍会揭示调制结果，黑暗料理显示 `危险回避`，正常饮品显示 `错失良机`，再点 `下一杯` 回到材料选择。
+21. HP ≤ 0 时显示失败文案；喝满 8 杯且 HP > 0 时显示成功文案，并为“安全撤离”计入 1 次胜利；点击重新挑战重置为 HP 100。
+22. 调酒挑战进行中点击右上关闭或按 Escape，会关闭浮层、丢弃本局状态、恢复控制模式；请求仍在进行时应中断或忽略结果。
+23. 访客只在酒吧内移动和对话；离开酒吧后临时访客卸载，已保存访客和已保留的内置访客下次进入酒吧自动加载。
+24. 酒吧内芙提雅对话和访客对话都显示在历史面板的“暖调闲聚”页；芙提雅在卧室/造梦空间的对话仍显示在“日常对话”页。
+25. 导出生成 `.zip`，包含 `save.json` 与自定义访客资源；导入 ZIP 后可恢复自定义访客并在酒吧重新加载；调酒挑战不新增导出字段。
 
 旧功能回归：
 
 1. 购物终端可打开礼物系统。
 2. 礼物收藏柜可打开收藏列表。
 3. 日常对话、约会、换装、睡觉、挂画仍可用。
-4. 成就解锁 toast 位于最顶层并播放音效。
-5. 导出再导入不破坏旧功能。
+4. “华丽入场”进度应跟随入场券任务完成数变化；“霓裳羽衣”在每次 VMD 完整结束后计数；“安全撤离”在调酒挑战胜利时计数。
+5. 成就解锁 toast 位于最顶层并播放音效。
+6. 导出再导入不破坏旧功能。
 
 造梦家具：
 

@@ -1,4 +1,5 @@
 import { getSettings } from './settings.js';
+import { recordBartendingChallengeWin } from './game_state.js';
 
 const PANEL_ID = 'bartending-challenge-panel';
 const MAX_DRINKS = 8;
@@ -38,8 +39,8 @@ const INGREDIENTS = Object.freeze({
         { name: '白兰地', weird: false },
         { name: '清酒', weird: false },
         { name: '起泡酒', weird: false },
-        { name: '泰坦冷却液(虚构)', weird: true },
-        { name: '世界树墨水(虚构)', weird: true }
+        { name: '泰坦冷却液', weird: true },
+        { name: '巴德尔试剂', weird: true }
     ],
     flavor: [
         { name: '青柠汁', weird: false },
@@ -50,8 +51,8 @@ const INGREDIENTS = Object.freeze({
         { name: '草莓果泥', weird: false },
         { name: '蜂蜜水', weird: false },
         { name: '咖啡利口甜', weird: false },
-        { name: '泡椒糖霜(虚构)', weird: true },
-        { name: '悖谬辣味棉花糖', weird: true }
+        { name: '琴诺秘制鲜乳', weird: true },
+        { name: '泡椒糖霜', weird: true }
     ],
     garnish: [
         { name: '柠檬片', weird: false },
@@ -61,9 +62,9 @@ const INGREDIENTS = Object.freeze({
         { name: '青橄榄', weird: false },
         { name: '迷迭香', weird: false },
         { name: '可食用花瓣', weird: false },
-        { name: '肉桂棒', weird: false },
-        { name: '发光螺丝糖片(虚构)', weird: true },
-        { name: '会唱歌的冰块(虚构)', weird: true }
+        { name: '麻辣味巧克力', weird: true },
+        { name: '蠕动的鱿鱼须', weird: true },
+        { name: '恒约戒指', weird: true }
     ]
 });
 
@@ -93,7 +94,8 @@ const state = {
         base: null,
         flavor: null,
         garnish: null
-    }
+    },
+    winRecorded: false
 };
 
 export function initBartendingChallenge() {
@@ -299,6 +301,7 @@ function resetGameState() {
     state.phase = 'select';
     state.currentResult = null;
     state.skippedCurrentResult = false;
+    state.winRecorded = false;
     state.isRequesting = false;
     state.lastStatusKind = '';
     state.selected.base = INGREDIENTS.base[0].name;
@@ -621,6 +624,10 @@ function renderRevealedResult(result) {
 
 function renderEndState() {
     const victory = state.hp > 0 && state.drinksConsumed >= MAX_DRINKS;
+    if (victory && !state.winRecorded) {
+        state.winRecorded = true;
+        recordBartendingChallengeWin();
+    }
     if (els.endPanel) els.endPanel.dataset.result = victory ? 'win' : 'lose';
     if (els.endTitle) els.endTitle.textContent = victory ? '挑战成功' : '挑战失败';
     if (els.endText) {

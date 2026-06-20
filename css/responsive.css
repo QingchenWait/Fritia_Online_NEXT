@@ -8,11 +8,37 @@
 
 /* ===== 调酒挑战：窄桌面/平板单栏 ===== */
 @media (max-width: 980px) {
+    #bartending-challenge-panel.ui-overlay {
+        align-items: flex-start;
+        justify-content: center;
+        overflow-y: auto;
+    }
+    .bartending-shell {
+        width: min(96vw, 760px);
+        max-height: none;
+        margin: 12px auto;
+    }
+    .bartending-body {
+        overflow: visible;
+    }
+    .bartending-status-deck {
+        grid-template-columns: 1fr;
+    }
+    .bartending-round-console {
+        text-align: left;
+    }
     .bartending-grid {
+        min-height: auto;
+        display: flex;
+        flex-direction: column;
         grid-template-columns: 1fr;
     }
     .bartending-mixer-panel {
         grid-template-columns: 1fr;
+    }
+    .bartending-result-panel {
+        width: 100%;
+        min-height: auto;
     }
     .bartending-ingredient-list {
         max-height: none;
@@ -20,9 +46,6 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
         overflow: visible;
         padding-right: 0;
-    }
-    .bartending-result-panel {
-        min-height: auto;
     }
     .bartending-slot-board {
         min-height: auto;
@@ -197,18 +220,25 @@
         margin: 0 auto;
     }
     .bartending-shell .otome-panel__head {
+        display: grid;
+        grid-template-columns: 44px minmax(0, 1fr);
+        align-items: start;
         padding-right: 54px;
     }
     .bartending-shell .otome-panel__actions {
         display: contents;
     }
     .bartending-shell .otome-chip {
-        position: absolute;
-        left: 16px;
-        bottom: 10px;
+        position: static;
+        grid-column: 2 / 3;
+        justify-self: start;
+        align-self: start;
+        margin-top: 8px;
         min-height: 28px;
         padding: 4px 10px;
         font-size: 0.72rem;
+        line-height: 1.25;
+        white-space: normal;
     }
     .bartending-body {
         overflow: visible;
@@ -286,9 +316,9 @@
 @media (max-width: 420px) {
     #bartending-challenge-panel.ui-overlay { padding: 8px; }
     .bartending-shell .otome-panel__head {
-        min-height: 116px;
+        min-height: auto;
         padding-left: 14px;
-        padding-bottom: 38px;
+        padding-bottom: 16px;
     }
     .bartending-shell .otome-panel__icon { width: 40px; height: 40px; }
     .bartending-shell .otome-panel__title { font-size: 1.18rem; }

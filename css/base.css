@@ -129,6 +129,13 @@ body {
     font-size: 0.8rem;
 }
 
+#loading-size-text {
+    margin-top: 0.35rem;
+    color: rgba(255, 245, 248, 0.34);
+    font-size: 0.74rem;
+    letter-spacing: 0.08em;
+}
+
 .loading-credit {
     position: absolute;
     bottom: 24px;

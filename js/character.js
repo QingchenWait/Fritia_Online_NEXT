@@ -365,7 +365,7 @@ export function loadCharacterFromModel(scene, modelPath, waypoints, colliders, o
             },
             (xhr) => {
                 if (xhr.lengthComputable && onProgress)
-                    onProgress(10 + (xhr.loaded / xhr.total) * 45);
+                    onProgress(10 + (xhr.loaded / xhr.total) * 45, xhr);
             },
             (err) => reject(err)
         );

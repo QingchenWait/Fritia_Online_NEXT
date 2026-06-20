@@ -842,10 +842,10 @@ function createCenterSpawn(bounds, colliders) {
     };
 }
 
-async function loadBarSceneInternal(scene) {
+async function loadBarSceneInternal(scene, options = {}) {
     const loader = new MMDLoader();
     const mapMesh = await new Promise((resolve, reject) => {
-        loader.load(BAR_MAP_PATH, resolve, undefined, reject);
+        loader.load(BAR_MAP_PATH, resolve, options.onProgress, reject);
     });
 
     const staticMapMesh = prepareMapMesh(mapMesh);
@@ -916,10 +916,10 @@ async function loadBarSceneInternal(scene) {
     return barSceneData;
 }
 
-export function ensureBarScene(scene) {
+export function ensureBarScene(scene, options = {}) {
     if (barSceneData) return Promise.resolve(barSceneData);
     if (!barScenePromise) {
-        barScenePromise = loadBarSceneInternal(scene).catch((err) => {
+        barScenePromise = loadBarSceneInternal(scene, options).catch((err) => {
             barScenePromise = null;
             throw err;
         });

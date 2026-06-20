@@ -4,6 +4,7 @@ import {
     getGameTimeInfo,
     getGifts,
     getMoney,
+    getBarAdmissionProgress,
     getStats
 } from './game_state.js';
 import { getConversationHistory } from './dialogue.js';
@@ -130,6 +131,33 @@ const ACHIEVEMENTS = [
         complete: () => getStats().smallTeacherStartsWithGanShenme >= 1
     },
     {
+        id: 'bar_admission_ticket',
+        title: '华丽入场',
+        desc: '获得暖调闲聚的入场券。',
+        icon: 'src/_logos/ach_bar_admission_ticket.svg',
+        target: 5,
+        progress: () => getBarAdmissionProgress().completed,
+        complete: () => getBarAdmissionProgress().complete
+    },
+    {
+        id: 'neon_dancer',
+        title: '霓裳羽衣',
+        desc: '在暖调闲聚中观看 2 次舞蹈。',
+        icon: 'src/_logos/ach_neon_dancer.svg',
+        target: 2,
+        progress: () => Math.min(getStats().danceWatchCount || 0, 2),
+        complete: () => (getStats().danceWatchCount || 0) >= 2
+    },
+    {
+        id: 'safe_evacuate',
+        title: '安全撤离',
+        desc: '在琴诺的调酒挑战中获得 1 次胜利。',
+        icon: 'src/_logos/ach_safe_evacuate.svg',
+        target: 1,
+        progress: () => Math.min(getStats().bartendingChallengeWins || 0, 1),
+        complete: () => (getStats().bartendingChallengeWins || 0) >= 1
+    },
+    {
         id: 'no_spending_10_days',
         title: '一毛不拔',
         desc: '游戏时间的前 10 天里未花费任何数据金。',
@@ -196,7 +224,6 @@ export function initAchievements() {
     els.close?.addEventListener('click', closeAchievementsPanel);
 
     evaluateAchievements({ notify: false, queueStartup: true });
-    renderAchievementList();
 }
 
 export function openAchievementsPanel() {
@@ -237,7 +264,6 @@ export function evaluateAchievements(options = {}) {
         }
     }
 
-    if (!queueStartup) renderAchievementList();
     return newlyUnlocked;
 }
 

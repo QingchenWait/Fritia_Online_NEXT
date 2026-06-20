@@ -47,7 +47,10 @@ function createDefaultStats() {
         usedModelPaths: [DEFAULT_MODELS[0]],
         smallTeacherStartsWithGanShenme: 0,
         headPatCount: 0,
-        maxDreamFurnitureRevisionCount: 0
+        maxDreamFurnitureRevisionCount: 0,
+        sleepModeCount: 0,
+        danceWatchCount: 0,
+        bartendingChallengeWins: 0
     };
 }
 
@@ -68,7 +71,10 @@ function normalizeStats(data = {}) {
         usedModelPaths: [...new Set([...defaults.usedModelPaths, ...list(data.usedModelPaths)])],
         smallTeacherStartsWithGanShenme: Math.max(0, Math.round(Number(data.smallTeacherStartsWithGanShenme) || 0)),
         headPatCount: Math.max(0, Math.round(Number(data.headPatCount) || 0)),
-        maxDreamFurnitureRevisionCount: Math.max(0, Math.round(Number(data.maxDreamFurnitureRevisionCount) || 0))
+        maxDreamFurnitureRevisionCount: Math.max(0, Math.round(Number(data.maxDreamFurnitureRevisionCount) || 0)),
+        sleepModeCount: Math.max(0, Math.round(Number(data.sleepModeCount) || 0)),
+        danceWatchCount: Math.max(0, Math.round(Number(data.danceWatchCount) || 0)),
+        bartendingChallengeWins: Math.max(0, Math.round(Number(data.bartendingChallengeWins) || 0))
     };
 }
 
@@ -323,6 +329,72 @@ export function recordDreamFurnitureRevision(count) {
     dispatchStatsUpdated();
 }
 
+export function recordSleepModeEntered() {
+    state.stats.sleepModeCount += 1;
+    saveState();
+    dispatchStatsUpdated();
+}
+
+export function recordDanceWatched() {
+    state.stats.danceWatchCount += 1;
+    saveState();
+    dispatchStatsUpdated();
+}
+
+export function recordBartendingChallengeWin() {
+    state.stats.bartendingChallengeWins += 1;
+    saveState();
+    dispatchStatsUpdated();
+}
+
+export function getBarAdmissionProgress() {
+    const stats = getStats();
+    const dailyDialogues = Math.max(0, Math.min(stats.dailyUserMessages || 0, stats.dailyBotMessages || 0));
+    const dateDialogues = Math.max(0, Math.min(stats.dateUserMessages || 0, stats.dateBotMessages || 0));
+    const dreamFurnitureCount = readDreamFurnitureSnapshot().length;
+    const tasks = [
+        {
+            id: 'daily_dialogue',
+            label: '日常对话',
+            value: Math.min(dailyDialogues, 3),
+            target: 3
+        },
+        {
+            id: 'date',
+            label: '约会',
+            value: Math.min(dateDialogues, 1),
+            target: 1
+        },
+        {
+            id: 'sleep',
+            label: '睡觉模式',
+            value: Math.min(stats.sleepModeCount || 0, 1),
+            target: 1
+        },
+        {
+            id: 'gift',
+            label: '送出礼物',
+            value: Math.min(state.gifts.length, 1),
+            target: 1
+        },
+        {
+            id: 'dream_furniture',
+            label: '造梦家具',
+            value: Math.min(dreamFurnitureCount, 1),
+            target: 1
+        }
+    ].map(task => ({
+        ...task,
+        complete: task.value >= task.target
+    }));
+    return {
+        tasks,
+        completed: tasks.filter(task => task.complete).length,
+        total: tasks.length,
+        complete: tasks.every(task => task.complete)
+    };
+}
+
 function dispatchStatsUpdated() {
     if (typeof document !== 'undefined') {
         document.dispatchEvent(new CustomEvent('fritia-game-state-updated'));
@@ -479,7 +551,10 @@ function mergeStats(current, imported) {
         usedModelPaths: [...new Set([...current.usedModelPaths, ...imported.usedModelPaths])],
         smallTeacherStartsWithGanShenme: Math.max(current.smallTeacherStartsWithGanShenme, imported.smallTeacherStartsWithGanShenme),
         headPatCount: Math.max(current.headPatCount, imported.headPatCount),
-        maxDreamFurnitureRevisionCount: Math.max(current.maxDreamFurnitureRevisionCount, imported.maxDreamFurnitureRevisionCount)
+        maxDreamFurnitureRevisionCount: Math.max(current.maxDreamFurnitureRevisionCount, imported.maxDreamFurnitureRevisionCount),
+        sleepModeCount: Math.max(current.sleepModeCount || 0, imported.sleepModeCount || 0),
+        danceWatchCount: Math.max(current.danceWatchCount || 0, imported.danceWatchCount || 0),
+        bartendingChallengeWins: Math.max(current.bartendingChallengeWins || 0, imported.bartendingChallengeWins || 0)
     };
 }
 
@@ -487,6 +562,61 @@ function deriveStatsFromCurrentData() {
     state.stats.usedModelPaths = [...new Set([...state.stats.usedModelPaths, DEFAULT_MODELS[0]])];
     const fiveStarCount = state.gifts.filter(gift => Number(gift.score) >= 5).length;
     state.stats.fiveStarGiftCount = Math.max(state.stats.fiveStarGiftCount, fiveStarCount);
+    deriveDialogueStatsFromLocalHistory();
+    state.stats.sleepModeCount = Math.max(0, Math.round(Number(state.stats.sleepModeCount) || 0));
+    state.stats.danceWatchCount = Math.max(0, Math.round(Number(state.stats.danceWatchCount) || 0));
+    state.stats.bartendingChallengeWins = Math.max(0, Math.round(Number(state.stats.bartendingChallengeWins) || 0));
+}
+
+function deriveDialogueStatsFromLocalHistory() {
+    if (typeof localStorage === 'undefined') return;
+    try {
+        const messages = JSON.parse(localStorage.getItem('fritia_chat_history') || '[]');
+        if (Array.isArray(messages)) {
+            const daily = countDialogueMessages(messages.filter(msg => (msg?.scene || 'daily') !== 'bar'));
+            const bar = countDialogueMessages(messages.filter(msg => (msg?.scene || 'daily') === 'bar'));
+            state.stats.dailyUserMessages = Math.max(state.stats.dailyUserMessages, daily.user);
+            state.stats.dailyBotMessages = Math.max(state.stats.dailyBotMessages, daily.bot);
+            state.stats.barUserMessages = Math.max(state.stats.barUserMessages, bar.user);
+            state.stats.barBotMessages = Math.max(state.stats.barBotMessages, bar.bot);
+            if (state.stats.smallTeacherStartsWithGanShenme <= 0 && messages.some(msg => msg?.role === 'assistant' && String(msg.content || '').trim().startsWith('干什么'))) {
+                state.stats.smallTeacherStartsWithGanShenme = 1;
+            }
+        }
+    } catch {}
+
+    try {
+        const history = JSON.parse(localStorage.getItem('fritia_date_history') || '{}');
+        if (!history || typeof history !== 'object' || Array.isArray(history)) return;
+        let user = 0;
+        let bot = 0;
+        const locations = new Set(state.stats.dateInteractionLocations);
+        Object.entries(history).forEach(([key, value]) => {
+            if (key.endsWith('_archive')) return;
+            const messages = Array.isArray(value) ? [...value] : [];
+            const archives = history[`${key}_archive`];
+            if (Array.isArray(archives)) {
+                archives.forEach(archive => {
+                    if (Array.isArray(archive?.messages)) messages.push(...archive.messages);
+                });
+            }
+            const counts = countDialogueMessages(messages);
+            user += counts.user;
+            bot += counts.bot;
+            if (counts.user > 0 && counts.bot > 0) locations.add(key);
+        });
+        state.stats.dateUserMessages = Math.max(state.stats.dateUserMessages, user);
+        state.stats.dateBotMessages = Math.max(state.stats.dateBotMessages, bot);
+        state.stats.dateInteractionLocations = [...locations];
+    } catch {}
+}
+
+function countDialogueMessages(messages) {
+    return (Array.isArray(messages) ? messages : []).reduce((acc, msg) => {
+        if (msg?.role === 'user') acc.user += 1;
+        if (msg?.role === 'assistant') acc.bot += 1;
+        return acc;
+    }, { user: 0, bot: 0 });
 }
 
 function readDreamFurnitureSnapshot() {

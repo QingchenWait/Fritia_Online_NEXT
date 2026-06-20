@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>芙提雅 Online NEXT</title>
     <link rel="stylesheet" href="css/tokens.css?v=20260619-otome">
-    <link rel="stylesheet" href="css/base.css?v=20260619-otome">
+    <link rel="stylesheet" href="css/base.css?v=20260621-loading-size">
     <link rel="stylesheet" href="css/components.css?v=20260619-otome">
     <link rel="stylesheet" href="css/effects.css?v=20260619-otome">
     <link rel="stylesheet" href="css/panels.css?v=20260619-otome">
-    <link rel="stylesheet" href="css/responsive.css?v=20260619-otome">
+    <link rel="stylesheet" href="css/responsive.css?v=20260621-bartending-head">
     <script type="importmap">
     {
         "imports": {
@@ -28,6 +28,7 @@
                 <div class="loading-bar-fill" id="loading-progress"></div>
             </div>
             <p id="loading-text">初始化场景...</p>
+            <p id="loading-size-text">0.00 MB / 0.00 MB</p>
         </div>
         <p class="loading-credit">青尘工作室出品 | CyanDust_青尘</p>
     </div>
@@ -133,7 +134,7 @@
                 <div class="otome-panel__titles">
                     <span class="otome-panel__kicker">WARM GATHERING INVITE</span>
                     <h2 class="otome-panel__title">发起邀请</h2>
-                    <p class="otome-panel__sub">选择内置角色，或导入 PMX 与人格设定文档，让新的伙伴临时入场。</p>
+                    <p class="otome-panel__sub">选择内置角色，或导入 PMX 与人格设定文档，邀请恋人们来小聚吧 ~</p>
                 </div>
                 <button id="bar-guest-close" class="otome-panel__close" aria-label="关闭邀请">
                     <img src="src/_ui/icon_close.svg" alt="">
@@ -149,7 +150,7 @@
                         <div id="bar-guest-preview" class="bar-guest-preview"><span>PMX</span></div>
                         <div>
                             <div class="otome-section-label">新角色配置</div>
-                            <p class="bar-guest-copy">模型与人格文档只保存在本地浏览器；保存后会加入候选列表。</p>
+                            <p class="bar-guest-copy">上传 PMX 模型、贴图与人格设定，即可邀请入场。点击 [保存自定义角色] 可长期留场。</p>
                         </div>
                     </div>
                     <input type="file" id="bar-guest-pmx-file" accept=".pmx,image/*,.spa,.sph,.toon,.bmp" multiple hidden>
@@ -164,7 +165,7 @@
                         </button>
                         <button id="bar-guest-prompt-pick" class="bar-guest-file-card" type="button">
                             <span class="dance-file-card__kicker">PERSONA FILE</span>
-                            <span class="dance-file-card__title">导入人格文档</span>
+                            <span class="dance-file-card__title">导入人格设定文档</span>
                             <span id="bar-guest-prompt-name" class="dance-file-card__meta">未选择人格文档</span>
                         </button>
                     </div>
@@ -185,10 +186,10 @@
                 <div class="otome-panel__titles">
                     <span class="otome-panel__kicker">CHERNO MIXOLOGY</span>
                     <h2 class="otome-panel__title">调酒挑战</h2>
-                    <p class="otome-panel__sub">琴诺的八杯生存特调。</p>
+                    <p class="otome-panel__sub">海姆达尔的调酒师小琴诺，竭诚为分析员儿服务。</p>
                 </div>
                 <div class="otome-panel__actions">
-                    <span class="otome-chip otome-chip--rose">8 杯挑战</span>
+                    <span class="otome-chip otome-chip--rose">目标：喝下 8 杯特调并存活</span>
                     <button id="bartending-close" class="otome-panel__close" aria-label="关闭调酒挑战">
                         <img src="src/_ui/icon_close.svg" alt="">
                     </button>
@@ -707,6 +708,6 @@
         </div>
     </div>
 
-    <script type="module" src="js/main.js?v=20260619-dream-system"></script>
+    <script type="module" src="js/main.js?v=20260621-loading-size"></script>
 </body>
 </html>

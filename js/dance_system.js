@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { MMDLoader } from 'three/addons/loaders/MMDLoader.js';
 import { MMDAnimationHelper } from 'three/addons/animation/MMDAnimationHelper.js';
+import { recordDanceWatched } from './game_state.js';
 
 const DANCE_STAGE_POSE = Object.freeze({ x: 0, z: 35.6, rotationY: 0 });
 const DANCE_CHOICE_TIMEOUT_MS = 5000;
@@ -326,6 +327,7 @@ function playLoadedDance() {
 function finishPlayback() {
     if (state.mode !== 'playing') return;
     stopAudio();
+    recordDanceWatched();
     prepareRawDanceCoordinates();
     lockDanceScale();
     removeHelperObject();

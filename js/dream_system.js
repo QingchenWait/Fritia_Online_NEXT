@@ -68,7 +68,7 @@ const DREAM_FURNITURE_TEMPLATES = [
     },
     {
         title: '🖼️ 可定制图片的挂画',
-        description: '一张悬挂在墙上的大型挂画，9:16 比例，带有深红色的外边框。'
+        description: '一张悬挂在墙上的大型挂画，9:16 比例，带有深红色的窄边框。'
     },
     {
         title: '🖥️ 双人电竞桌',
