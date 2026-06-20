@@ -958,6 +958,9 @@
         rgba(255,255,255,0.06);
     overflow: hidden;
 }
+.bartending-result-panel.is-ended .bartending-slot-board {
+    display: none;
+}
 .bartending-slot-board::before {
     content: "";
     position: absolute;
@@ -1144,6 +1147,7 @@
     font-size: 0.74rem;
 }
 .bartending-end-panel {
+    order: -1;
     text-align: center;
     padding: 24px 18px;
 }

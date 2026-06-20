@@ -10,9 +10,9 @@ const HIGH_HP_THRESHOLD = 75;
 const COMPACT_LANE_MEDIA = '(max-width: 980px)';
 const PREVIEW_MAX_CHARS = 20;
 const PROCESS_MAX_CHARS = 150;
+const NATURAL_TEXT_CUT_MARKS = new Set([',', '.', '\uFF0C', '\u3002', '\uFF0E']);
 
 const MIX_ACTION_DARK = Object.freeze([
-    '把量杯当作占卜杯，摇到液面出现虚构紫色回声',
     '先倒入一圈会发光的泡沫，再把冰块摇出细小裂纹',
     '用错误的节拍连续摇杯十三次，让香气变得过分热闹',
     '把装饰物短暂浸进悖谬糖雾里，再郑重放回杯口',
@@ -64,7 +64,7 @@ const INGREDIENTS = Object.freeze({
         { name: '可食用花瓣', weird: false },
         { name: '麻辣味巧克力', weird: true },
         { name: '蠕动的鱿鱼须', weird: true },
-        { name: '恒约戒指', weird: true }
+        { name: '世界树的叶子', weird: true }
     ]
 });
 
@@ -134,6 +134,7 @@ export function isBartendingChallengeVisible() {
 
 function cacheElements() {
     els.panel = document.getElementById(PANEL_ID);
+    els.resultPanel = els.panel?.querySelector('.bartending-result-panel');
     els.close = document.getElementById('bartending-close');
     els.hpValue = document.getElementById('bartending-hp-value');
     els.hpBar = document.getElementById('bartending-hp-bar');
@@ -384,6 +385,7 @@ function renderPhasePanels() {
     const isRevealed = state.phase === 'revealed';
     const isEnded = state.phase === 'ended';
 
+    els.resultPanel?.classList.toggle('is-ended', isEnded);
     els.loading?.classList.toggle('hidden', !isLoading);
     els.previewPanel?.classList.toggle('hidden', !(isPreview || isLoading));
     els.revealPanel?.classList.toggle('hidden', !(isRevealed || (isEnded && state.currentResult)));
@@ -651,11 +653,11 @@ function buildBartendingRequestBody({ ingredients, note, hp, drinksConsumed, set
                 role: 'system',
                 content: [
                     '你是芙提雅 Online NEXT 的“调酒挑战”结果生成器。',
-                    '角色：琴诺是暖调闲聚里的调酒师，擅长把玩家给出的材料理解成夸张、可爱、不可预测的黑暗料理调酒。',
+                    '角色：琴诺是暖调闲聚里的调酒师，擅长把分析员给出的材料，理解成夸张、可爱、不可预测的黑暗料理调酒。',
                     '你必须只输出严格 JSON。必须保证 JSON 格式正确。禁止 Markdown，禁止解释，禁止代码，禁止外部贴图 URL。',
                     'JSON 字符串内部如需引用角色台词，使用中文弯引号或单书名号，不要在字符串内部直接使用未转义英文双引号。',
-                    '玩家选择的三种材料只是灵感来源，不是决定结果的唯一因素。不要因为相同材料组合就反复生成相同或稳定偏好的结果。',
-                    '调酒过程必须展现出琴诺可爱、害羞、胆小慌张、充满奇思妙想的个性。琴诺每次都会使用完全不同且不可预测的调酒方式。',
+                    '分析员选择的三种材料只是灵感来源，不是决定结果的唯一因素。不要因为相同材料组合就反复生成相同或稳定偏好的结果。',
+                    '调酒过程必须展现出琴诺可爱、害羞、胆小慌张、充满奇思妙想的个性。琴诺每次都会使用完全不同且不可预测的调酒方式。不要使用占卜类行为。不要让调酒过程看起来像是现实中专业调酒师的操作指导。',
                     '材料本身只用作琴诺的调酒参考，琴诺的临场动作、摇杯节奏、过滤方式、装饰处理、误解方式和突发灵感，必须比材料本身更能影响最终好坏。',
                     '输出内容必须是虚构游戏语境。不要输出现实可复现的危险配方、真实毒物、真实伤害指导或具体危险配比。',
                     '结果要有不确定性：不要每次都是黑暗料理，也不要每次都是好酒；同一材料组合重复请求时，也应因为调配动作不同而出现明显差异。',
@@ -689,8 +691,8 @@ function buildBartendingRequestBody({ ingredients, note, hp, drinksConsumed, set
                     '平衡倾向：',
                     '1. 本轮随机调配倾向来自前端。你要优先遵循这个倾向，但仍允许少量意外反转。',
                     '2. 材料只提供风味和视觉线索，不能让固定材料组合稳定变成好酒；调配动作必须明显改变最终结果。',
-                    '3. 琴诺会参考玩家材料，但不一定正确理解；她的临场动作可以让正常材料变成黑暗料理，也可以把奇怪材料意外调好。',
-                    '4. previewText 的前台描述必须具有迷惑性，积极描述也可以对应黑暗料理。',
+                    '3. 琴诺会参考分析员玩家给出的材料，但不一定正确理解；她的临场动作可以让正常材料变成黑暗料理，也可以把奇怪材料意外调好。不要使用占卜类行为',
+                    '4. previewText 的前台描述必须具有很大的迷惑性，积极描述也可以对应黑暗料理。',
                     '5. isDarkCuisine=true 表示饮用后扣血，hpDelta 应为负数。',
                     '6. isDarkCuisine=false 表示饮用后回血，hpDelta 应为正数。',
                     '7. darkLevel 为 1 到 5 的整数，越高越偏离正常观念。',
@@ -967,7 +969,7 @@ function sanitizePreview(value, fallback) {
         .replace(/，+/g, '，')
         .replace(/^，|，$/g, '');
     if (!/[\u4e00-\u9fff]/.test(text) || Array.from(text).length < 8) return fallback;
-    return Array.from(text).slice(0, PREVIEW_MAX_CHARS).join('');
+    return truncateAtNextNaturalMark(text, PREVIEW_MAX_CHARS);
 }
 
 function sanitizeProcessText(value, fallback) {
@@ -976,7 +978,21 @@ function sanitizeProcessText(value, fallback) {
         .replace(/氰化物|砒霜|农药|漂白剂|强酸|强碱|水银|汽油|甲醇|毒鼠强|亚硝酸盐/g, '虚构黑暗物质')
         .replace(/\d+(?:\.\d+)?\s*(?:克|毫升|ml|g|kg|升)/gi, '少量');
     if (!/[\u4e00-\u9fff]/.test(text)) return fallback;
-    return Array.from(text).slice(0, PROCESS_MAX_CHARS).join('');
+    return truncateAtNextNaturalMark(text, PROCESS_MAX_CHARS);
+}
+
+function truncateAtNextNaturalMark(text, maxChars) {
+    const chars = Array.from(String(text || ''));
+    const limit = Math.max(0, Math.floor(Number(maxChars) || 0));
+    if (chars.length <= limit) return chars.join('');
+
+    for (let i = limit; i < chars.length; i += 1) {
+        if (NATURAL_TEXT_CUT_MARKS.has(chars[i])) {
+            return chars.slice(0, i + 1).join('').trim();
+        }
+    }
+
+    return chars.slice(0, limit).join('').trim();
 }
 
 function sanitizeTags(value, fallback) {
