@@ -128,6 +128,19 @@ let dreamTerminalMesh;
 let dreamDoorMesh;
 let dreamDoorInteractionMesh;
 let dreamDoorCollider;
+
+function setKeyPromptHTML(el, html, promptKey) {
+    if (!el) return;
+    if (promptKey) el.dataset.promptKey = promptKey;
+    el.setAttribute('translate', 'yes');
+    if (el.dataset.promptSource !== html) {
+        el.innerHTML = html;
+        el.dataset.promptSource = html;
+    }
+    el.querySelectorAll('kbd').forEach((kbd) => {
+        kbd.setAttribute('translate', 'no');
+    });
+}
 let dreamDoorClosedPosition;
 let dreamDoorOpenPosition;
 let collectionCabinetMesh;
@@ -1034,8 +1047,7 @@ function startDreamFurnitureCinematic(record, runtimeItem) {
     controlsModule.setMovementLocked?.(true);
     const prompt = document.getElementById('interaction-prompt');
     if (prompt) {
-        prompt.innerHTML = '按 <kbd>E</kbd> 跳过展示';
-        prompt.dataset.promptKey = 'KeyE';
+        setKeyPromptHTML(prompt, '按 <kbd>E</kbd> 跳过展示', 'KeyE');
         prompt.classList.remove('hidden');
     }
     const paintingPrompt = document.getElementById('painting-prompt');
@@ -1444,8 +1456,7 @@ function updateInteractionPrompt() {
         dreamPaintingPrompt?.classList.add('hidden');
         if (paintingPrompt) {
             paintingPrompt.classList.remove('is-disabled');
-            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 关闭';
-            paintingPrompt.dataset.promptKey = 'KeyE';
+            setKeyPromptHTML(paintingPrompt, '按 <kbd>E</kbd> 关闭', 'KeyE');
             paintingPrompt.classList.remove('hidden');
         }
         stackPromptButtons(prompt, paintingPrompt, dreamPaintingPrompt);
@@ -1472,8 +1483,7 @@ function updateInteractionPrompt() {
     const lookWardrobe = isLookingAtWardrobe();
 
     if (nearChar && !isDanceFlowActive()) {
-        prompt.innerHTML = '按 <kbd>F</kbd> 与芙提雅对话';
-        prompt.dataset.promptKey = 'KeyF';
+        setKeyPromptHTML(prompt, '按 <kbd>F</kbd> 与芙提雅对话', 'KeyF');
         prompt.classList.remove('hidden');
     } else {
         prompt.classList.add('hidden');
@@ -1493,74 +1503,60 @@ function updateInteractionPrompt() {
         const lookCollectionCabinet = isLookingAtCollectionCabinet();
         paintingPrompt.classList.remove('is-disabled');
         if (lookBarDance && !isDanceFlowActive()) {
-            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 观看跳舞';
-            paintingPrompt.dataset.promptKey = 'KeyE';
+            setKeyPromptHTML(paintingPrompt, '按 <kbd>E</kbd> 观看跳舞', 'KeyE');
             paintingPrompt.classList.remove('hidden');
         } else if (lookBarExit) {
-            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 返回宿舍';
-            paintingPrompt.dataset.promptKey = 'KeyE';
+            setKeyPromptHTML(paintingPrompt, '按 <kbd>E</kbd> 返回宿舍', 'KeyE');
             paintingPrompt.classList.remove('hidden');
         } else if (lookDreamDoor) {
-            paintingPrompt.innerHTML = getDreamDoorPromptText();
-            paintingPrompt.dataset.promptKey = 'KeyE';
+            setKeyPromptHTML(paintingPrompt, getDreamDoorPromptText(), 'KeyE');
             paintingPrompt.classList.remove('hidden');
         } else if (lookDreamTerminal) {
-            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 打开造梦终端';
-            paintingPrompt.dataset.promptKey = 'KeyE';
+            setKeyPromptHTML(paintingPrompt, '按 <kbd>E</kbd> 打开造梦终端', 'KeyE');
             paintingPrompt.classList.remove('hidden');
             if (dreamPaintingPrompt) {
-                dreamPaintingPrompt.innerHTML = '按 <kbd>1</kbd> 拍摄房间';
-                dreamPaintingPrompt.dataset.promptKey = 'Digit1';
+                setKeyPromptHTML(dreamPaintingPrompt, '按 <kbd>1</kbd> 拍摄房间', 'Digit1');
                 dreamPaintingPrompt.classList.remove('hidden');
             }
         } else if (lookDreamFurniture) {
             const dreamFurnitureId = getLookingDreamFurniture(camera);
             const furnitureName = getDreamFurnitureLabel(dreamFurnitureId);
-            paintingPrompt.innerHTML = `按 <kbd>E</kbd> 管理 [${furnitureName}]`;
-            paintingPrompt.dataset.promptKey = 'KeyE';
+            setKeyPromptHTML(paintingPrompt, `按 <kbd>E</kbd> 管理 [${furnitureName}]`, 'KeyE');
             paintingPrompt.classList.remove('hidden');
             if (isDreamPaintingFurniture(dreamFurnitureId) && dreamPaintingPrompt) {
-                dreamPaintingPrompt.innerHTML = '按 <kbd>1</kbd> 替换图片';
-                dreamPaintingPrompt.dataset.promptKey = 'Digit1';
+                setKeyPromptHTML(dreamPaintingPrompt, '按 <kbd>1</kbd> 替换图片', 'Digit1');
                 dreamPaintingPrompt.classList.remove('hidden');
             }
         } else if (lookTerminal) {
-            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 打开购物终端';
-            paintingPrompt.dataset.promptKey = 'KeyE';
+            setKeyPromptHTML(paintingPrompt, '按 <kbd>E</kbd> 打开购物终端', 'KeyE');
             paintingPrompt.classList.remove('hidden');
         } else if (lookCollectionCabinet) {
-            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 打开礼物收藏';
-            paintingPrompt.dataset.promptKey = 'KeyE';
+            setKeyPromptHTML(paintingPrompt, '按 <kbd>E</kbd> 打开礼物收藏', 'KeyE');
             paintingPrompt.classList.remove('hidden');
         } else if (lookPaint) {
-            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 更换挂画';
-            paintingPrompt.dataset.promptKey = 'KeyE';
+            setKeyPromptHTML(paintingPrompt, '按 <kbd>E</kbd> 更换挂画', 'KeyE');
             paintingPrompt.classList.remove('hidden');
         } else if (lookWardrobe) {
-            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 换装';
-            paintingPrompt.dataset.promptKey = 'KeyE';
+            setKeyPromptHTML(paintingPrompt, '按 <kbd>E</kbd> 换装', 'KeyE');
             paintingPrompt.classList.remove('hidden');
         } else if (lookBed) {
             if (isSmallTeacherModel()) {
-                paintingPrompt.innerHTML = '<span style="opacity:0.4;cursor:not-allowed;">按 <kbd>E</kbd> 休息 <small style="font-size:0.75em;">(该装扮不可用)</small></span>';
+                setKeyPromptHTML(paintingPrompt, '<span style="opacity:0.4;cursor:not-allowed;">按 <kbd>E</kbd> 休息 <small style="font-size:0.75em;">(该装扮不可用)</small></span>', 'KeyE');
             } else {
-                paintingPrompt.innerHTML = '按 <kbd>E</kbd> 休息';
+                setKeyPromptHTML(paintingPrompt, '按 <kbd>E</kbd> 休息', 'KeyE');
             }
-            paintingPrompt.dataset.promptKey = 'KeyE';
             paintingPrompt.classList.remove('hidden');
         } else if (lookDesk) {
-            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 开始今日约会行程';
-            paintingPrompt.dataset.promptKey = 'KeyE';
+            setKeyPromptHTML(paintingPrompt, '按 <kbd>E</kbd> 开始今日约会行程', 'KeyE');
             paintingPrompt.classList.remove('hidden');
         } else if (lookDoor) {
-            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 进入暖调闲聚';
-            paintingPrompt.dataset.promptKey = 'KeyE';
+            setKeyPromptHTML(paintingPrompt, '按 <kbd>E</kbd> 进入暖调闲聚', 'KeyE');
             paintingPrompt.classList.remove('hidden');
         } else {
             paintingPrompt.classList.add('hidden');
         }
         if (lookBarExit && isDanceFlowActive() && !paintingPrompt.classList.contains('hidden')) {
-            paintingPrompt.innerHTML = '按 <kbd>E</kbd> 返回宿舍';
+            setKeyPromptHTML(paintingPrompt, '按 <kbd>E</kbd> 返回宿舍');
             delete paintingPrompt.dataset.promptKey;
             paintingPrompt.classList.add('is-disabled');
         }
@@ -1571,8 +1567,7 @@ function updateInteractionPrompt() {
 
 function updateBarInteractionPrompt(prompt, paintingPrompt, dreamPaintingPrompt, nearChar) {
     if (nearChar && !isDanceFlowActive()) {
-        prompt.innerHTML = '按 <kbd>F</kbd> 与芙提雅对话';
-        prompt.dataset.promptKey = 'KeyF';
+        setKeyPromptHTML(prompt, '按 <kbd>F</kbd> 与芙提雅对话', 'KeyF');
         prompt.classList.remove('hidden');
     } else {
         prompt.classList.add('hidden');
@@ -1583,12 +1578,10 @@ function updateBarInteractionPrompt(prompt, paintingPrompt, dreamPaintingPrompt,
     paintingPrompt.classList.remove('is-disabled');
     const look = getBarInteractionLookState();
     if (look.dance && !isDanceFlowActive()) {
-        paintingPrompt.innerHTML = '按 <kbd>E</kbd> 观看跳舞';
-        paintingPrompt.dataset.promptKey = 'KeyE';
+        setKeyPromptHTML(paintingPrompt, '按 <kbd>E</kbd> 观看跳舞', 'KeyE');
         paintingPrompt.classList.remove('hidden');
     } else if (look.exit) {
-        paintingPrompt.innerHTML = '按 <kbd>E</kbd> 返回宿舍';
-        paintingPrompt.dataset.promptKey = 'KeyE';
+        setKeyPromptHTML(paintingPrompt, '按 <kbd>E</kbd> 返回宿舍', 'KeyE');
         paintingPrompt.classList.remove('hidden');
         if (isDanceFlowActive()) {
             delete paintingPrompt.dataset.promptKey;
@@ -1603,12 +1596,10 @@ function updateBarInteractionPromptV2(prompt, paintingPrompt, dreamPaintingPromp
     const nearestGuest = findNearestGuest(camera.position);
     const nearGuest = nearestGuest && controlsModule?.isNearCharacter(getGuestPosition(nearestGuest));
     if (nearGuest && !isDanceFlowActive()) {
-        prompt.innerHTML = `按 <kbd>F</kbd> 与${nearestGuest.card.name}对话`;
-        prompt.dataset.promptKey = 'KeyF';
+        setKeyPromptHTML(prompt, `按 <kbd>F</kbd> 与${nearestGuest.card.name}对话`, 'KeyF');
         prompt.classList.remove('hidden');
     } else if (nearChar && !isDanceFlowActive()) {
-        prompt.innerHTML = '按 <kbd>F</kbd> 与芙提雅对话';
-        prompt.dataset.promptKey = 'KeyF';
+        setKeyPromptHTML(prompt, '按 <kbd>F</kbd> 与芙提雅对话', 'KeyF');
         prompt.classList.remove('hidden');
     } else {
         prompt.classList.add('hidden');
@@ -1619,24 +1610,19 @@ function updateBarInteractionPromptV2(prompt, paintingPrompt, dreamPaintingPromp
     paintingPrompt.classList.remove('is-disabled');
     const look = getBarInteractionLookState();
     if (look.bartending && !isDanceFlowActive()) {
-        paintingPrompt.innerHTML = '按 <kbd>E</kbd> 请琴诺帮忙调酒';
-        paintingPrompt.dataset.promptKey = 'KeyE';
+        setKeyPromptHTML(paintingPrompt, '按 <kbd>E</kbd> 请琴诺帮忙调酒', 'KeyE');
         paintingPrompt.classList.remove('hidden');
     } else if (look.roundtable && !isDanceFlowActive()) {
-        paintingPrompt.innerHTML = '按 <kbd>E</kbd> 加入圆桌密语';
-        paintingPrompt.dataset.promptKey = 'KeyE';
+        setKeyPromptHTML(paintingPrompt, '按 <kbd>E</kbd> 加入圆桌密语', 'KeyE');
         paintingPrompt.classList.remove('hidden');
     } else if (look.invite && !isDanceFlowActive()) {
-        paintingPrompt.innerHTML = '按 <kbd>E</kbd> 邀请其他人入场';
-        paintingPrompt.dataset.promptKey = 'KeyE';
+        setKeyPromptHTML(paintingPrompt, '按 <kbd>E</kbd> 邀请其他人入场', 'KeyE');
         paintingPrompt.classList.remove('hidden');
     } else if (look.dance && !isDanceFlowActive()) {
-        paintingPrompt.innerHTML = '按 <kbd>E</kbd> 观看跳舞';
-        paintingPrompt.dataset.promptKey = 'KeyE';
+        setKeyPromptHTML(paintingPrompt, '按 <kbd>E</kbd> 观看跳舞', 'KeyE');
         paintingPrompt.classList.remove('hidden');
     } else if (look.exit) {
-        paintingPrompt.innerHTML = '按 <kbd>E</kbd> 返回宿舍';
-        paintingPrompt.dataset.promptKey = 'KeyE';
+        setKeyPromptHTML(paintingPrompt, '按 <kbd>E</kbd> 返回宿舍', 'KeyE');
         paintingPrompt.classList.remove('hidden');
         if (isDanceFlowActive()) {
             delete paintingPrompt.dataset.promptKey;

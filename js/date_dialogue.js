@@ -88,6 +88,24 @@ function buildDateSystemPrompt(locationName) {
     return `${datePromptTemplate.replace('{location}', locationName)}\n\n${getGameTimeContext()}`;
 }
 
+function buildDateOpeningMessage(locationName) {
+    return {
+        role: 'user',
+        content: `我们已经来到${locationName}，请你作为芙提雅主动说出约会开始的第一句话。`
+    };
+}
+
+function removeEmptyDateAssistantMessages(locationId) {
+    const history = dateConversationHistory[locationId];
+    if (!Array.isArray(history) || history.length === 0) return false;
+    const filtered = history.filter(message => (
+        message?.role !== 'assistant' || String(message?.content || '').trim()
+    ));
+    if (filtered.length === history.length) return false;
+    dateConversationHistory[locationId] = filtered;
+    return true;
+}
+
 function getDateContextMessages(history = [], settings = getSettings()) {
     return history
         .filter(message => shouldKeepMessageForCurrentDeepSeekMode(message, settings, ['assistant']))
@@ -156,6 +174,7 @@ function selectLocation(loc) {
     els.chatTitle.textContent = `${loc.emoji} ${loc.name}`;
 
     const todayKey = getTodayKey();
+    const removedEmptyMessages = removeEmptyDateAssistantMessages(loc.id);
     const history = dateConversationHistory[loc.id];
 
     if (history && history.length > 0) {
@@ -175,6 +194,7 @@ function selectLocation(loc) {
             saveDateHistory();
         }
     }
+    if (removedEmptyMessages) saveDateHistory();
 
     renderDateMessages();
 
@@ -295,7 +315,8 @@ async function startDateConversation(loc) {
         const messages = [
             { role: 'system', content: systemPrompt },
             ...(ragMessage ? [ragMessage] : []),
-            ...(intimateMessage ? [intimateMessage] : [])
+            ...(intimateMessage ? [intimateMessage] : []),
+            buildDateOpeningMessage(loc.name)
         ];
 
         const response = await fetch(`${settings.baseUrl}/chat/completions`, {
@@ -347,13 +368,18 @@ async function startDateConversation(loc) {
             }
         }
 
-        dateConversationHistory[loc.id].push({
-            role: 'assistant',
-            content: fullText,
-            ts: Date.now(),
-            deepseekIntimateMode: Boolean(intimateMessage)
-        });
-        saveDateHistory();
+        if (fullText.trim()) {
+            dateConversationHistory[loc.id].push({
+                role: 'assistant',
+                content: fullText,
+                ts: Date.now(),
+                deepseekIntimateMode: Boolean(intimateMessage)
+            });
+            saveDateHistory();
+        } else {
+            bubbleEl.remove();
+            appendDateSystemMessage('模型没有返回约会开场白，请返回地点列表后重新选择，或稍后再试。');
+        }
     } catch (err) {
         thinkingEl.remove();
         if (err.name !== 'AbortError') {

@@ -56,8 +56,8 @@
     </div>
 
     <div id="sleep-ui" class="hidden">
-        <button class="sleep-btn" id="btn-pet" data-prompt-key="KeyF">按 <kbd>F</kbd> 摸头</button>
-        <button class="sleep-btn" id="btn-wake" data-prompt-key="KeyE">按 <kbd>E</kbd> 起床</button>
+        <button class="sleep-btn" id="btn-pet" data-prompt-key="KeyF" translate="yes">按 <kbd translate="no">F</kbd> 摸头</button>
+        <button class="sleep-btn" id="btn-wake" data-prompt-key="KeyE" translate="yes">按 <kbd translate="no">E</kbd> 起床</button>
     </div>
 
     <div id="room-panorama-ui" class="hidden" aria-label="全景拍照模式">
@@ -74,7 +74,7 @@
                 </svg>
                 <span>拍摄房间</span>
             </button>
-            <button id="room-panorama-close" class="btn btn--ghost" data-prompt-key="KeyE" aria-label="按 E 退出全景拍照模式">按 <kbd>E</kbd> 退出</button>
+            <button id="room-panorama-close" class="btn btn--ghost" data-prompt-key="KeyE" translate="yes" aria-label="按 E 退出全景拍照模式">按 <kbd translate="no">E</kbd> 退出</button>
         </div>
     </div>
 
@@ -423,14 +423,14 @@
             <div id="money-display">数据金 | 🪙 40,000</div>
             <div id="salary-toast" class="hidden"></div>
         </div>
-        <div id="interaction-prompt" class="kbd-prompt hidden" data-prompt-key="KeyF" role="button" tabindex="0">
-            按 <kbd>F</kbd> 与芙提雅对话
+        <div id="interaction-prompt" class="kbd-prompt hidden" data-prompt-key="KeyF" translate="yes" role="button" tabindex="0">
+            按 <kbd translate="no">F</kbd> 与芙提雅对话
         </div>
-        <div id="painting-prompt" class="kbd-prompt hidden" data-prompt-key="KeyE" role="button" tabindex="0">
-            按 <kbd>E</kbd> 更换挂画
+        <div id="painting-prompt" class="kbd-prompt hidden" data-prompt-key="KeyE" translate="yes" role="button" tabindex="0">
+            按 <kbd translate="no">E</kbd> 更换挂画
         </div>
-        <div id="dream-painting-prompt" class="kbd-prompt hidden" data-prompt-key="Digit1" role="button" tabindex="0">
-            按 <kbd>1</kbd> 替换图片
+        <div id="dream-painting-prompt" class="kbd-prompt hidden" data-prompt-key="Digit1" translate="yes" role="button" tabindex="0">
+            按 <kbd translate="no">1</kbd> 替换图片
         </div>
         <div id="achievement-toast-host"></div>
         <div id="dream-object-controls" class="hidden">
@@ -469,19 +469,19 @@
             </button>
         </div>
         <div id="dream-revision-confirm-bar" class="hidden" aria-live="polite">
-            <button id="dream-revision-confirm" class="dream-revision-action confirm" data-prompt-key="Digit1">
-                <kbd>1</kbd><span>确认</span>
+            <button id="dream-revision-confirm" class="dream-revision-action confirm" data-prompt-key="Digit1" translate="yes">
+                <kbd translate="no">1</kbd><span>确认</span>
             </button>
-            <button id="dream-revision-rollback" class="dream-revision-action rollback" data-prompt-key="Digit2">
-                <kbd>2</kbd><span>回退</span>
+            <button id="dream-revision-rollback" class="dream-revision-action rollback" data-prompt-key="Digit2" translate="yes">
+                <kbd translate="no">2</kbd><span>回退</span>
             </button>
         </div>
         <div id="dance-curtain-bar" class="hidden" aria-live="polite">
-            <button id="dance-replay" class="dream-revision-action confirm" data-prompt-key="Digit1">
-                <kbd>1</kbd><span>再来一次</span>
+            <button id="dance-replay" class="dream-revision-action confirm" data-prompt-key="Digit1" translate="yes">
+                <kbd translate="no">1</kbd><span>再来一次</span>
             </button>
-            <button id="dance-curtain" class="dream-revision-action curtain" data-prompt-key="Digit2">
-                <kbd>2</kbd><span>喝彩谢幕</span>
+            <button id="dance-curtain" class="dream-revision-action curtain" data-prompt-key="Digit2" translate="yes">
+                <kbd translate="no">2</kbd><span>喝彩谢幕</span>
             </button>
         </div>
         <div id="dream-screen-toast" class="hidden" aria-live="polite"></div>
