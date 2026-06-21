@@ -131,6 +131,7 @@ npm run dev
 - 暖调闲聚舞台：看向 `BarDanceInvisiblePlane` 时显示 `按 E 观看跳舞`，打开 `#dance-panel`；舞蹈流程中 `updateDanceSystem(delta)` 接管 VMD 动作，暂停角色日常 AI，但玩家移动/视角仍由 `controls.js` 正常更新。
 - 暖调闲聚调酒：看向 `BarBartendingChallengeInvisibleBox` 时显示 `按 E 请琴诺帮忙调酒`，打开 `#bartending-challenge-panel` 并释放控制模式；Escape 或关闭按钮退出并派发 `fritia-overlay-closed`。
 - 暖调闲聚圆桌密语：看向 `BarRoundtableWhispersInvisibleBox1/2` 时显示 `按 E 加入圆桌密语`，打开 `#roundtable-whispers-panel` 并释放控制模式；面板关闭或离开酒吧时会清空圆桌请求队列并中断当前 LLM 请求。
+- 进入暖调闲聚时 `#fade-overlay.is-bar-loading` 会显示全屏流星加载特效、底部进度条 `#bar-loading-progress` 和状态文案 `#bar-loading-text`；地图加载使用 PMX 真实 progress，访客加载使用阶段进度。
 - `hasClearLineOfSight(targetPoint, targetDistance)`：按 E 交互视线遮挡判断。玩家视角到目标点之间如果被当前碰撞体阻挡，则不显示也不触发按 E 管理/交互。睡眠模式的 `按 E 起床` 不走这个规则。
 - `isLookingAtTerminal()` / `isLookingAtDreamTerminal()` / `isLookingAtDreamDoor()` / `isLookingAtPainting()` 等：各类准星交互检测。
 - `toggleDreamDoor()`：切换造梦空间推拉门开关状态，并刷新玩家/角色碰撞作用域。
@@ -144,6 +145,7 @@ npm run dev
 - `refreshActiveHistoryTab()`：打开历史对话浮层时按当前激活栏目刷新内容，确保停留在“暖调闲聚”页后再次打开也能看到最新访客/酒吧对话。
 - `enterBarScene()` / `exitBarScene()`：通过黑屏转场进入/离开暖调闲聚；切换旧房间组显示、scene background/fog、玩家碰撞体和芙提雅导航作用域。
 - `exitBarScene()` 会强制关闭圆桌密语并取消 overlay 自动恢复控制标记，避免转场结束后旧面板状态抢回 Pointer Lock。
+- `enterBarScene()` 成功切入暖调闲聚后循环播放 `src/_voices/bar_bgm_min.mp3`，音量约 `0.28` 并淡入；`exitBarScene()` 淡出并停止该 BGM。
 - `exitBarScene()` 在舞蹈流程未结束前会被拦截；出口提示保留但置灰且不携带 `data-prompt-key`，避免点击或按 E 触发返回。
 - `exportData()`：导出设置、游戏状态、日常对话、约会对话、成就、礼物、造梦家具、挂画。
 - `handleImportFile(e)`：导入 JSON，兼容旧存档，导入后刷新 HUD、成就、礼物、造梦家具。
@@ -1108,6 +1110,8 @@ DOM ID：
 - `#roundtable-message-list`
 - `#roundtable-input`
 - `#roundtable-send`
+- `#bar-loading-progress`
+- `#bar-loading-text`
 
 家具位置 overlay：
 

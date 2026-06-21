@@ -35,7 +35,25 @@
 
     <canvas id="game-canvas"></canvas>
 
-    <div id="fade-overlay"></div>
+    <div id="fade-overlay">
+        <div class="bar-loading-fx" aria-hidden="true">
+            <div class="bar-loading-fx__stars"></div>
+            <div class="bar-loading-fx__meteor meteor-a"></div>
+            <div class="bar-loading-fx__meteor meteor-b"></div>
+            <div class="bar-loading-fx__meteor meteor-c"></div>
+            <div class="bar-loading-fx__meteor meteor-d"></div>
+            <div class="bar-loading-fx__meteor meteor-e"></div>
+            <div class="bar-loading-fx__meteor meteor-f"></div>
+            <div class="bar-loading-fx__meteor meteor-g"></div>
+        </div>
+        <div id="bar-loading-panel" class="bar-loading-panel" role="status" aria-live="polite">
+            <div class="bar-loading-panel__label">暖调闲聚载入中</div>
+            <div class="bar-loading-panel__bar">
+                <div id="bar-loading-progress" class="bar-loading-panel__fill"></div>
+            </div>
+            <div id="bar-loading-text" class="bar-loading-panel__text">正在推开酒吧的门...</div>
+        </div>
+    </div>
 
     <div id="sleep-ui" class="hidden">
         <button class="sleep-btn" id="btn-pet" data-prompt-key="KeyF">按 <kbd>F</kbd> 摸头</button>

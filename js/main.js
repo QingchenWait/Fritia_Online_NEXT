@@ -141,6 +141,8 @@ let barSceneData = null;
 let currentPlayerRoomId = 'bedroom';
 let isBarSceneActive = false;
 let barTransitionInProgress = false;
+let barBgm = null;
+let barBgmFadeTimer = null;
 let previousSceneFog = null;
 let previousSceneBackground = null;
 let hasStoredRoomAtmosphere = false;
@@ -187,6 +189,10 @@ async function setLoadingText(text) {
 function setLoadingProgress(pct) {
     const bar = document.getElementById('loading-progress');
     if (bar) bar.style.width = `${Math.min(100, pct)}%`;
+}
+
+function wait(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function formatLoadingMegabytes(bytes) {
@@ -1121,15 +1127,33 @@ async function enterBarScene() {
     barTransitionInProgress = true;
     controlsModule?.setMovementLocked?.(true);
     let needsFadeIn = false;
+    let barLoadingActive = false;
 
     try {
-        if (!barSceneData) {
-            barSceneData = await ensureBarScene(scene);
-        }
-        if (!barSceneData) return;
-
-        await fadeToBlack();
+        await showBarLoadingOverlay('正在推开暖调闲聚的门...');
         needsFadeIn = true;
+        barLoadingActive = true;
+        await wait(180);
+        if (!barSceneData) {
+            setBarLoadingProgress(12, '正在加载暖调闲聚地图...');
+            barSceneData = await ensureBarScene(scene, {
+                onProgress: (event) => {
+                    const total = Number(event?.total) || 0;
+                    const loaded = Number(event?.loaded) || 0;
+                    if (total > 0) {
+                        const pct = 12 + (loaded / total) * 50;
+                        setBarLoadingProgress(pct, '正在加载暖调闲聚地图...');
+                    } else {
+                        setBarLoadingProgress(34, '正在加载暖调闲聚地图...');
+                    }
+                }
+            });
+        } else {
+            setBarLoadingProgress(58, '正在唤醒暖调闲聚灯光...');
+        }
+        if (!barSceneData) throw new Error('暖调闲聚地图数据为空。');
+
+        setBarLoadingProgress(66, '正在整理酒吧场景...');
         setBarSceneVisible(true);
         if (roomGroup) roomGroup.visible = false;
         applyBarSceneAtmosphere();
@@ -1145,10 +1169,15 @@ async function enterBarScene() {
         applyBarNavigationScope();
         controlsModule?.setColliders(getActivePlayerColliders());
         controlsModule?.resolveCameraCollisions?.();
+        setBarLoadingProgress(82, '正在邀请暖调闲聚成员...');
         await loadPersistentBarGuests();
 
-        await fadeFromBlack();
+        setBarLoadingProgress(100, '准备好了。');
+        await wait(220);
+        startBarBgm();
+        await hideBarLoadingOverlay();
         needsFadeIn = false;
+        barLoadingActive = false;
     } catch (err) {
         console.error('[BarScene] 无法进入暖调闲聚:', err);
         if (roomGroup) roomGroup.visible = true;
@@ -1156,8 +1185,17 @@ async function enterBarScene() {
         restoreRoomAtmosphere();
         isBarSceneActive = false;
         currentPlayerRoomId = 'bedroom';
-        if (needsFadeIn) await fadeFromBlack();
+        stopBarBgm({ fade: false });
+        if (needsFadeIn) {
+            if (barLoadingActive) {
+                await hideBarLoadingOverlay();
+                barLoadingActive = false;
+            } else {
+                await fadeFromBlack();
+            }
+        }
     } finally {
+        document.getElementById('fade-overlay')?.classList.remove('is-bar-loading');
         controlsModule?.setMovementLocked?.(false);
         barTransitionInProgress = false;
     }
@@ -1170,6 +1208,7 @@ async function exitBarScene() {
     controlsModule?.setMovementLocked?.(true);
     closeRoundtableWhispers({ dispatch: false });
     controlsModule?.cancelOverlayResume?.();
+    stopBarBgm();
     let needsFadeIn = false;
 
     try {
@@ -2103,6 +2142,87 @@ function fadeFromBlack() {
         overlay.style.opacity = '0';
         setTimeout(resolve, 500);
     });
+}
+
+function setBarLoadingProgress(pct, text = '') {
+    const fill = document.getElementById('bar-loading-progress');
+    if (fill) fill.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+    if (text) {
+        const label = document.getElementById('bar-loading-text');
+        if (label) label.textContent = text;
+    }
+}
+
+async function showBarLoadingOverlay(text = '正在推开酒吧的门...') {
+    const overlay = document.getElementById('fade-overlay');
+    if (!overlay) return;
+    setBarLoadingProgress(6, text);
+    overlay.classList.add('is-bar-loading');
+    await fadeToBlack();
+}
+
+async function hideBarLoadingOverlay() {
+    await fadeFromBlack();
+    document.getElementById('fade-overlay')?.classList.remove('is-bar-loading');
+}
+
+function startBarBgm() {
+    if (barBgmFadeTimer) {
+        clearInterval(barBgmFadeTimer);
+        barBgmFadeTimer = null;
+    }
+    if (!barBgm) {
+        barBgm = new Audio('src/_voices/bar_bgm_min.mp3');
+        barBgm.loop = true;
+        barBgm.volume = 0;
+    }
+    barBgm.currentTime = barBgm.currentTime || 0;
+    barBgm.play().then(() => {
+        const targetVolume = 0.7;
+        barBgmFadeTimer = setInterval(() => {
+            if (!barBgm) {
+                clearInterval(barBgmFadeTimer);
+                barBgmFadeTimer = null;
+                return;
+            }
+            barBgm.volume = Math.min(targetVolume, barBgm.volume + 0.035);
+            if (barBgm.volume >= targetVolume) {
+                clearInterval(barBgmFadeTimer);
+                barBgmFadeTimer = null;
+            }
+        }, 80);
+    }).catch((err) => {
+        console.warn('[BarScene] BGM playback was blocked or failed:', err);
+    });
+}
+
+function stopBarBgm({ fade = true } = {}) {
+    if (barBgmFadeTimer) {
+        clearInterval(barBgmFadeTimer);
+        barBgmFadeTimer = null;
+    }
+    if (!barBgm) return;
+    if (!fade) {
+        barBgm.pause();
+        barBgm.currentTime = 0;
+        barBgm.volume = 0;
+        return;
+    }
+    barBgmFadeTimer = setInterval(() => {
+        if (!barBgm) {
+            clearInterval(barBgmFadeTimer);
+            barBgmFadeTimer = null;
+            return;
+        }
+        barBgm.volume = Math.max(0, barBgm.volume - 0.045);
+        if (barBgm.volume <= 0.001) {
+            barBgm.pause();
+            barBgm.currentTime = 0;
+            barBgm.volume = 0;
+            clearInterval(barBgmFadeTimer);
+            barBgmFadeTimer = null;
+        }
+    }, 70);
 }
 
 async function enterSleepMode() {
