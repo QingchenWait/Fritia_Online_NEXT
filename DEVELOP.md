@@ -607,7 +607,15 @@ IndexedDB：
 localStorage key：
 
 - `fritia_knowledge_base_state`：仅保存 `version/activeKbId/activeKbIds/updatedAt`，大文本和索引不写入 `localStorage`。`activeKbId` 为旧版兼容字段；新版以 `activeKbIds` 表示多个同时启用的知识库。
+- `fritia_preloaded_knowledge_base_state`：仅记录预加载知识库资源是否已经安装过，避免用户手动删除后下次启动又被自动恢复；不保存知识库正文、分块或索引，也不进入存档。
 - `fritia_kb_debug`：可选调试开关。设置为 `"1"` 后，BM25 检索会在 console 输出本轮检索 query、启用知识库 id、有效关键词、候选分数、覆盖率、来源知识库、来源文件和标题路径。
+
+预加载知识库：
+
+- `src/_rag_data/chenbai_character_settings_260622.json`：从用户存档中抽取的普通知识库存档片段，包含知识库“尘白人物设定 (260622)”的元数据、22 个文件、133 个分块和可重建 BM25 索引所需数据。
+- 启动时 `main.js` 调用 `ensurePreloadedKnowledgeBases()`，仅在本地 IndexedDB 尚无该知识库且该预加载源未安装过时，将 JSON 通过 `importKnowledgeBaseArchive()` 写入 IndexedDB。
+- 预加载完成后，该知识库在 `knowledgeBases/files/chunks/indexes` 中与用户创建的知识库结构完全一致，不写入 `builtin` 或其他特殊字段；用户可以在设置页正常启用、停用、上传文件、删除文件或删除知识库。
+- 若用户删除该知识库，`fritia_preloaded_knowledge_base_state` 会阻止下次启动自动恢复，确保删除行为与普通知识库一致。
 
 文本处理：
 
@@ -630,7 +638,7 @@ RAG 接入：
 导出/导入：
 
 - `exportKnowledgeBaseArchive()` 生成 `knowledgeBase` 存档字段，包含 `state/config/knowledgeBases/files/chunks/indexes`。
-- `importKnowledgeBaseArchive()` 兼容旧存档缺失字段和旧版 `activeKbId` 单库字段；导入时按 `id` 去重合并，坏知识库/文件/分块跳过，导入后重建 touched 知识库索引。若当前本地没有启用知识库，会恢复存档中的 `activeKbIds`。
+- `importKnowledgeBaseArchive()` 兼容旧存档缺失字段和旧版 `activeKbId` 单库字段；导入时按 `id` 去重合并，坏知识库/文件/分块跳过，导入后重建 touched 知识库索引。若导入存档包含预加载知识库同 id，则先删除本地同库的文件、分块和索引，再以存档里的完整知识库为准恢复，保证存档内容优先于预加载原始内容。若当前本地没有启用知识库，会恢复存档中的 `activeKbIds`。
 
 设置页 DOM：
 

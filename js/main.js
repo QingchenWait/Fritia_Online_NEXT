@@ -109,7 +109,7 @@ import {
     updateRoundtableWhispers
 } from './roundtable_whispers.js';
 import { createZip, readZip, readZipText } from './zip_store.js';
-import { exportKnowledgeBaseArchive, importKnowledgeBaseArchive } from './knowledge_base.js';
+import { ensurePreloadedKnowledgeBases, exportKnowledgeBaseArchive, importKnowledgeBaseArchive } from './knowledge_base.js';
 
 let scene, camera, renderer;
 let controlsModule, charData;
@@ -417,6 +417,7 @@ async function init() {
     setLoadingProgress(95);
     await initDialogue();
     await initDateDialogue();
+    await ensurePreloadedKnowledgeBases();
     initSettings({ controlsModule });
     initGiftSystem();
     initAchievements();
@@ -2770,7 +2771,7 @@ async function applyImportedDataV3(data, assetFiles = new Map()) {
         importBarConversationHistory(data.barConversations);
     }
     const roundtableImport = importRoundtableWhispers(data.roundtableWhispers || data.barRoundtableWhispers || {});
-    const knowledgeImport = await importKnowledgeBaseArchive(data.knowledgeBase || data.knowledgeBasesArchive || {});
+    const knowledgeImport = await importKnowledgeBaseArchive(data.knowledgeBase || data.knowledgeBasesArchive || {}, { replacePreloaded: true });
 
     const guestAssets = [];
     for (const card of data.barGuestCards || []) {
@@ -2835,7 +2836,7 @@ function handleImportFile(e) {
                 importDateConversationHistory(data.dateConversations);
             }
             importRoundtableWhispers(data.roundtableWhispers || data.barRoundtableWhispers || {});
-            const knowledgeImport = await importKnowledgeBaseArchive(data.knowledgeBase || data.knowledgeBasesArchive || {});
+            const knowledgeImport = await importKnowledgeBaseArchive(data.knowledgeBase || data.knowledgeBasesArchive || {}, { replacePreloaded: true });
             const importResult = importGameState(data, { suppressEvent: true });
             const dreamImport = importDreamFurniture(data.dreamFurniture || data.gameState?.dreamFurniture || []);
             importAchievements(data.achievements);

@@ -15,8 +15,11 @@ const DEFAULTS = {
 const SECTION_SUBTITLES = {
     model: '配置对话模型连接，所有密钥只保存在当前浏览器。',
     controls: '设置鼠标和触控的灵敏度。',
-    knowledge: '导入外部文本知识库，进一步扩展世界观与人物设定。'
+    knowledge: '导入外部文本知识库，进一步扩展世界观与人物设定。',
+    resources: '查看游戏信息、制作鸣谢与相关资源。'
 };
+
+const SETTINGS_SECTIONS = ['model', 'controls', 'knowledge', 'resources'];
 
 function clampSensitivity(value) {
     const next = Number(value);
@@ -104,6 +107,7 @@ export function initSettings(options = {}) {
     const localizationValue = document.getElementById('localization-sensitivity-value');
     const intimateCard = document.getElementById('deepseek-intimate-mode-card');
     const intimateToggle = document.getElementById('deepseek-intimate-mode');
+    const aboutText = document.getElementById('settings-about-text');
 
     const panel = document.getElementById('settings-panel');
     const toggle = document.getElementById('settings-toggle');
@@ -154,8 +158,23 @@ export function initSettings(options = {}) {
         intimateCard.classList.toggle('hidden', !visible);
     }
 
+    async function loadAboutText() {
+        if (!aboutText || aboutText.dataset.loaded === '1') return;
+        try {
+            const response = await fetch('./src/about.txt', { cache: 'no-cache' });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const text = (await response.text()).trim();
+            aboutText.textContent = text || '青尘工作室 | BiliBili @CyanDust_青尘';
+            aboutText.dataset.loaded = '1';
+        } catch (err) {
+            aboutText.textContent = '青尘工作室 | BiliBili @CyanDust_青尘';
+            aboutText.dataset.loaded = '1';
+            console.warn('[Settings] about.txt load failed:', err);
+        }
+    }
+
     function showSection(sectionId) {
-        const next = ['model', 'controls', 'knowledge'].includes(sectionId) ? sectionId : 'model';
+        const next = SETTINGS_SECTIONS.includes(sectionId) ? sectionId : 'model';
         sectionButtons.forEach(btn => {
             btn.classList.toggle('active', btn.dataset.settingsSection === next);
         });
@@ -166,6 +185,9 @@ export function initSettings(options = {}) {
         panel.classList.add('is-detail');
         if (next === 'knowledge') {
             void refreshKnowledgeBasePanel();
+        }
+        if (next === 'resources') {
+            void loadAboutText();
         }
     }
 
@@ -192,6 +214,7 @@ export function initSettings(options = {}) {
 
     initKnowledgeBasePanel();
     applySensitivityInputs(settings);
+    void loadAboutText();
 
     mouseSlider?.addEventListener('input', updateSensitivityPreview);
     touchSlider?.addEventListener('input', updateSensitivityPreview);

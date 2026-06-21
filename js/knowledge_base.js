@@ -1,6 +1,7 @@
 const DB_NAME = 'fritia_knowledge_base_db';
 const DB_VERSION = 1;
 const STATE_KEY = 'fritia_knowledge_base_state';
+const PRELOADED_STATE_KEY = 'fritia_preloaded_knowledge_base_state';
 
 const DEFAULT_CHUNK_SIZE = 512;
 const DEFAULT_CHUNK_OVERLAP = 50;
@@ -9,6 +10,14 @@ const DEFAULT_INJECT_LIMIT = 6;
 const MAX_UPLOAD_BYTES = 1.5 * 1024 * 1024;
 const MAX_PREVIEW_CHUNKS = 80;
 const DEBUG_KEY = 'fritia_kb_debug';
+
+const PRELOADED_KNOWLEDGE_BASES = [
+    {
+        sourceId: 'chenbai-character-settings-260622',
+        kbId: 'kb_mqo75m8k_qzcrq5',
+        url: './src/_rag_data/chenbai_character_settings_260622.json'
+    }
+];
 
 const STOP_WORDS = new Set([
     'the', 'and', 'for', 'with', 'that', 'this', 'from', 'into', 'you', 'your',
@@ -188,6 +197,78 @@ function removeActiveKnowledgeBaseId(id) {
     if (!cleanId) return;
     const ids = getActiveKnowledgeBaseIds();
     if (ids.includes(cleanId)) setActiveKnowledgeBaseIds(ids.filter(item => item !== cleanId));
+}
+
+function getPreloadedKnowledgeBaseIds() {
+    return new Set(PRELOADED_KNOWLEDGE_BASES.map(item => item.kbId).filter(Boolean));
+}
+
+function loadPreloadedState() {
+    try {
+        const data = JSON.parse(localStorage.getItem(PRELOADED_STATE_KEY) || '{}');
+        if (!data || typeof data !== 'object') return { installedSourceIds: [] };
+        return {
+            ...data,
+            installedSourceIds: normalizeActiveKnowledgeBaseIds(data.installedSourceIds)
+        };
+    } catch {
+        return { installedSourceIds: [] };
+    }
+}
+
+function savePreloadedState(installedSourceIds) {
+    try {
+        localStorage.setItem(PRELOADED_STATE_KEY, JSON.stringify({
+            version: 1,
+            installedSourceIds: normalizeActiveKnowledgeBaseIds(installedSourceIds),
+            updatedAt: Date.now()
+        }));
+    } catch {}
+}
+
+export async function ensurePreloadedKnowledgeBases() {
+    if (typeof fetch !== 'function') return { imported: 0, skipped: 0, failed: 0 };
+    const state = loadPreloadedState();
+    const installed = new Set(state.installedSourceIds || []);
+    let imported = 0;
+    let skipped = 0;
+    let failed = 0;
+    let changed = false;
+
+    for (const source of PRELOADED_KNOWLEDGE_BASES) {
+        if (!source?.sourceId || !source?.kbId || !source?.url) continue;
+        if (installed.has(source.sourceId)) {
+            skipped += 1;
+            continue;
+        }
+
+        try {
+            const existing = await getRecord('knowledgeBases', source.kbId);
+            if (existing) {
+                installed.add(source.sourceId);
+                changed = true;
+                skipped += 1;
+                continue;
+            }
+
+            const response = await fetch(source.url, { cache: 'force-cache' });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const payload = await response.json();
+            const result = await importKnowledgeBaseArchive(payload, { replaceExisting: false });
+            const saved = await getRecord('knowledgeBases', source.kbId);
+            if (!saved) throw new Error(`Preloaded knowledge base was not installed: ${source.kbId}`);
+
+            installed.add(source.sourceId);
+            changed = true;
+            imported += result.knowledgeBases || 0;
+        } catch (err) {
+            failed += 1;
+            console.warn('[KnowledgeBase] preloaded archive import failed:', source.url, err);
+        }
+    }
+
+    if (changed) savePreloadedState([...installed]);
+    return { imported, skipped, failed };
 }
 
 function createId(prefix) {
@@ -1165,7 +1246,7 @@ function normalizeImportedChunk(raw, validKbIds, validFileIds) {
     };
 }
 
-export async function importKnowledgeBaseArchive(archive) {
+export async function importKnowledgeBaseArchive(archive, options = {}) {
     if (!archive || typeof archive !== 'object') return { knowledgeBases: 0, files: 0, chunks: 0, skipped: 0 };
     const payload = archive.knowledgeBase || archive.knowledgeBasesArchive || archive;
     const rawKbs = Array.isArray(payload.knowledgeBases) ? payload.knowledgeBases : [];
@@ -1175,28 +1256,58 @@ export async function importKnowledgeBaseArchive(archive) {
         return { knowledgeBases: 0, files: 0, chunks: 0, skipped: 0 };
     }
 
-    const existing = await Promise.all([getAll('knowledgeBases'), getAll('files'), getAll('chunks')]);
-    const existingKbIds = new Set(existing[0].map(item => item.id));
-    const existingFileIds = new Set(existing[1].map(item => item.id));
-    const existingChunkIds = new Set(existing[2].map(item => item.id));
-
     const kbs = rawKbs.map(normalizeImportedKb).filter(Boolean);
+    const existing = await Promise.all([getAll('knowledgeBases'), getAll('files'), getAll('chunks')]);
+    const originalKbIds = new Set(existing[0].map(item => item.id));
+    const preloadedKbIds = getPreloadedKnowledgeBaseIds();
+    const requestedReplaceIds = new Set(normalizeActiveKnowledgeBaseIds(options.replaceKnowledgeBaseIds));
+    const replaceKbIds = new Set(kbs
+        .filter(kb => originalKbIds.has(kb.id))
+        .filter(kb => options.replaceExisting
+            || requestedReplaceIds.has(kb.id)
+            || (options.replacePreloaded !== false && preloadedKbIds.has(kb.id))
+        )
+        .map(kb => kb.id));
+
+    const existingKbIds = new Set(existing[0]
+        .filter(item => !replaceKbIds.has(item.id))
+        .map(item => item.id));
+    const existingFileIds = new Set(existing[1]
+        .filter(item => !replaceKbIds.has(item.kbId))
+        .map(item => item.id));
+    const existingChunkIds = new Set(existing[2]
+        .filter(item => !replaceKbIds.has(item.kbId))
+        .map(item => item.id));
     const validKbIds = new Set([...existingKbIds, ...kbs.map(item => item.id)]);
     const files = rawFiles.map(item => normalizeImportedFile(item, validKbIds)).filter(Boolean);
     const validFileIds = new Set([...existingFileIds, ...files.map(item => item.id)]);
     const chunks = rawChunks.map(item => normalizeImportedChunk(item, validKbIds, validFileIds)).filter(Boolean);
 
     let kbAdded = 0;
+    let kbReplaced = 0;
     let fileAdded = 0;
     let chunkAdded = 0;
     let skipped = rawKbs.length + rawFiles.length + rawChunks.length - kbs.length - files.length - chunks.length;
     const touchedKbIds = new Set();
 
     const db = await openDb();
-    const tx = db.transaction(['knowledgeBases', 'files', 'chunks'], 'readwrite');
+    const tx = db.transaction(['knowledgeBases', 'files', 'chunks', 'indexes'], 'readwrite');
     const kbStore = tx.objectStore('knowledgeBases');
     const fileStore = tx.objectStore('files');
     const chunkStore = tx.objectStore('chunks');
+    const indexStore = tx.objectStore('indexes');
+
+    for (const kbId of replaceKbIds) {
+        kbStore.delete(kbId);
+        indexStore.delete(kbId);
+        for (const file of existing[1]) {
+            if (file.kbId === kbId) fileStore.delete(file.id);
+        }
+        for (const chunk of existing[2]) {
+            if (chunk.kbId === kbId) chunkStore.delete(chunk.id);
+        }
+        touchedKbIds.add(kbId);
+    }
 
     for (const kb of kbs) {
         if (existingKbIds.has(kb.id)) {
@@ -1206,7 +1317,11 @@ export async function importKnowledgeBaseArchive(archive) {
         kbStore.put(kb);
         existingKbIds.add(kb.id);
         touchedKbIds.add(kb.id);
-        kbAdded += 1;
+        if (replaceKbIds.has(kb.id)) {
+            kbReplaced += 1;
+        } else {
+            kbAdded += 1;
+        }
     }
     for (const file of files) {
         if (existingFileIds.has(file.id)) {
@@ -1240,7 +1355,7 @@ export async function importKnowledgeBaseArchive(archive) {
         setActiveKnowledgeBaseIds(incomingActiveIds);
     }
     document.dispatchEvent(new CustomEvent('fritia-knowledge-base-updated', { detail: { imported: true } }));
-    return { knowledgeBases: kbAdded, files: fileAdded, chunks: chunkAdded, skipped };
+    return { knowledgeBases: kbAdded, replaced: kbReplaced, files: fileAdded, chunks: chunkAdded, skipped };
 }
 
 function cacheUiElements() {

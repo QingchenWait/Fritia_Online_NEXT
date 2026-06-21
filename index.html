@@ -8,8 +8,8 @@
     <link rel="stylesheet" href="css/base.css?v=20260621-loading-size">
     <link rel="stylesheet" href="css/components.css?v=20260619-otome">
     <link rel="stylesheet" href="css/effects.css?v=20260619-otome">
-    <link rel="stylesheet" href="css/panels.css?v=20260622-settings-scroll">
-    <link rel="stylesheet" href="css/responsive.css?v=20260622-settings-scroll">
+    <link rel="stylesheet" href="css/panels.css?v=20260622-more-resources">
+    <link rel="stylesheet" href="css/responsive.css?v=20260622-more-resources">
     <script type="importmap">
     {
         "imports": {
@@ -580,6 +580,10 @@
                         <span class="settings-nav-item__icon">RAG</span>
                         <span>知识库</span>
                     </button>
+                    <button class="settings-nav-item" type="button" data-settings-section="resources">
+                        <span class="settings-nav-item__icon">INFO</span>
+                        <span>更多资源</span>
+                    </button>
                 </aside>
 
                 <section class="settings-view active" data-settings-view="model" aria-label="大模型设置">
@@ -714,6 +718,24 @@
                                 </div>
                             </div>
                         </main>
+                    </div>
+                </section>
+
+                <section class="settings-view" data-settings-view="resources" aria-label="更多资源">
+                    <button class="settings-back-btn btn btn--ghost" type="button" data-settings-back>返回设置分组</button>
+                    <div class="settings-resources-page">
+                        <div class="settings-resources-logo-wrap">
+                            <img class="settings-resources-logo" src="src/_logos/Profile_Fritia.png" alt="芙提雅">
+                        </div>
+                        <h3 class="settings-resources-title">芙提雅 ONLINE <span>NEXT</span></h3>
+                        <p class="settings-resources-subtitle">💖 对你的爱，跨越空间 💖</p>
+                        <div id="settings-about-text" class="settings-about-text" aria-live="polite">正在读取制作信息...</div>
+                        <div class="settings-resource-links" aria-label="更多资源链接">
+                            <a class="settings-resource-link" href="https://space.bilibili.com/385556208/lists/8275529?type=season" target="_blank" rel="noopener noreferrer">📹 宣传视频</a>
+                            <a class="settings-resource-link" href="https://github.com/QingchenWait/Fritia_Online_NEXT" target="_blank" rel="noopener noreferrer">🕶️ 源码仓库</a>
+                            <a class="settings-resource-link" href="https://qingchenwait.github.io/fritia_online_guide/#resources" target="_blank" rel="noopener noreferrer">🤖 AstrBot 版</a>
+                            <a class="settings-resource-link" href="https://ifdian.net/a/cyandust" target="_blank" rel="noopener noreferrer">☕️ 赞助创作</a>
+                        </div>
                     </div>
                 </section>
             </div>
