@@ -109,6 +109,7 @@ import {
     updateRoundtableWhispers
 } from './roundtable_whispers.js';
 import { createZip, readZip, readZipText } from './zip_store.js';
+import { exportKnowledgeBaseArchive, importKnowledgeBaseArchive } from './knowledge_base.js';
 
 let scene, camera, renderer;
 let controlsModule, charData;
@@ -403,7 +404,7 @@ async function init() {
     setLoadingProgress(95);
     await initDialogue();
     await initDateDialogue();
-    initSettings();
+    initSettings({ controlsModule });
     initGiftSystem();
     initAchievements();
     initBartendingChallenge();
@@ -2706,7 +2707,7 @@ function renderDateHistory(dateFilter = 'all') {
     });
 }
 
-function buildExportPayloadV3(options = {}) {
+async function buildExportPayloadV3(options = {}) {
     const gameState = exportGameState();
     return {
         version: 3,
@@ -2725,6 +2726,7 @@ function buildExportPayloadV3(options = {}) {
         dateConversations: getDateConversationHistory(),
         barConversations: getBarConversationHistory(),
         roundtableWhispers: exportRoundtableWhispers(),
+        knowledgeBase: await exportKnowledgeBaseArchive(),
         barGuestBuiltinState: exportBarGuestBuiltinState(),
         barGuestCards: options.barGuestCards || exportBarGuestCards()
     };
@@ -2733,7 +2735,7 @@ function buildExportPayloadV3(options = {}) {
 async function exportDataZip() {
     const assets = await exportBarGuestAssets();
     const assetPaths = new Set(assets.map(asset => asset.path));
-    const data = buildExportPayloadV3({
+    const data = await buildExportPayloadV3({
         barGuestCards: exportBarGuestCardsByPaths(assetPaths)
     });
     const entries = [{ path: 'save.json', data: JSON.stringify(data, null, 2) }];
@@ -2750,8 +2752,8 @@ async function exportDataZip() {
     URL.revokeObjectURL(url);
 }
 
-function exportData() {
-    const data = buildExportPayloadV3();
+async function exportData() {
+    const data = await buildExportPayloadV3();
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -2782,6 +2784,7 @@ async function applyImportedDataV3(data, assetFiles = new Map()) {
         importBarConversationHistory(data.barConversations);
     }
     const roundtableImport = importRoundtableWhispers(data.roundtableWhispers || data.barRoundtableWhispers || {});
+    const knowledgeImport = await importKnowledgeBaseArchive(data.knowledgeBase || data.knowledgeBasesArchive || {});
 
     const guestAssets = [];
     for (const card of data.barGuestCards || []) {
@@ -2803,7 +2806,7 @@ async function applyImportedDataV3(data, assetFiles = new Map()) {
     refreshDreamFurnitureAfterImport();
     updateGameHud(true);
     renderGiftCollection();
-    return { importResult, dreamImport, guestImport, roundtableImport };
+    return { importResult, dreamImport, guestImport, roundtableImport, knowledgeImport };
 }
 
 async function handleImportFileV2(e) {
@@ -2819,8 +2822,8 @@ async function handleImportFileV2(e) {
         } else {
             data = JSON.parse(await file.text());
         }
-        const { importResult, dreamImport, guestImport, roundtableImport } = await applyImportedDataV3(data, assetFiles);
-        alert(`导入成功！礼物新增 ${importResult.giftsAdded || 0} 条，造梦家具新增 ${dreamImport.added || 0} 件，访客角色导入 ${guestImport.imported || 0} 个，圆桌消息新增 ${roundtableImport.imported || 0} 条。刷新页面以应用设置。`);
+        const { importResult, dreamImport, guestImport, roundtableImport, knowledgeImport } = await applyImportedDataV3(data, assetFiles);
+        alert(`导入成功！礼物新增 ${importResult.giftsAdded || 0} 条，造梦家具新增 ${dreamImport.added || 0} 件，访客角色导入 ${guestImport.imported || 0} 个，圆桌消息新增 ${roundtableImport.imported || 0} 条，知识库新增 ${knowledgeImport.knowledgeBases || 0} 个 / ${knowledgeImport.files || 0} 个文件。刷新页面以应用设置。`);
     } catch (err) {
         alert('导入失败：文件格式不正确或资源缺失');
         console.error('Import error:', err);
@@ -2833,7 +2836,7 @@ function handleImportFile(e) {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
         try {
             const data = JSON.parse(ev.target.result);
             if (data.settings) {
@@ -2846,6 +2849,7 @@ function handleImportFile(e) {
                 importDateConversationHistory(data.dateConversations);
             }
             importRoundtableWhispers(data.roundtableWhispers || data.barRoundtableWhispers || {});
+            const knowledgeImport = await importKnowledgeBaseArchive(data.knowledgeBase || data.knowledgeBasesArchive || {});
             const importResult = importGameState(data, { suppressEvent: true });
             const dreamImport = importDreamFurniture(data.dreamFurniture || data.gameState?.dreamFurniture || []);
             importAchievements(data.achievements);
@@ -2853,7 +2857,7 @@ function handleImportFile(e) {
             refreshDreamFurnitureAfterImport();
             updateGameHud(true);
             renderGiftCollection();
-            alert(`导入成功！礼物同步新增 ${importResult.giftsAdded || 0} 条，造梦家具新增 ${dreamImport.added || 0} 件，跳过 ${dreamImport.skipped || 0} 件。刷新页面以应用设置。`);
+            alert(`导入成功！礼物同步新增 ${importResult.giftsAdded || 0} 条，造梦家具新增 ${dreamImport.added || 0} 件，跳过 ${dreamImport.skipped || 0} 件，知识库新增 ${knowledgeImport.knowledgeBases || 0} 个 / ${knowledgeImport.files || 0} 个文件。刷新页面以应用设置。`);
         } catch (err) {
             alert('导入失败：文件格式不正确');
             console.error('Import error:', err);

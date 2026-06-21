@@ -553,34 +553,117 @@
         </div>
     </div>
 
-    <div id="settings-panel" class="ui-overlay hidden">
-        <div class="otome-panel otome-panel--sm">
-            <div class="otome-panel__head">
+    <div id="settings-panel" class="ui-overlay hidden" data-active-section="model">
+        <div class="otome-panel otome-panel--xl settings-shell">
+            <div class="otome-panel__head settings-head">
                 <div class="otome-panel__icon"><img src="src/_ui/icon_settings.svg" alt=""></div>
                 <div class="otome-panel__titles">
-                    <span class="otome-panel__kicker">CONNECTION</span>
-                    <h2 class="otome-panel__title">对话模型设置</h2>
-                    <p class="otome-panel__sub">OpenAI 兼容格式 · 数据仅本地存储，不会上传云端</p>
+                    <span class="otome-panel__kicker">SYSTEM CONSOLE</span>
+                    <h2 class="otome-panel__title">系统设置</h2>
+                    <p class="otome-panel__sub">对话模型与本地资料库。所有配置仅保存在当前浏览器。</p>
                 </div>
                 <button id="settings-close" class="otome-panel__close" aria-label="关闭设置">
                     <img src="src/_ui/icon_close.svg" alt="">
                 </button>
             </div>
-            <div class="otome-panel__body">
-                <div class="otome-field">
-                    <label class="otome-field-label" for="api-key">API Key</label>
-                    <input type="password" id="api-key" placeholder="sk-...">
-                </div>
-                <div class="otome-field">
-                    <label class="otome-field-label" for="base-url">Base URL</label>
-                    <input type="text" id="base-url" placeholder="https://api.openai.com/v1">
-                </div>
-                <div class="otome-field">
-                    <label class="otome-field-label" for="model-name">模型名称</label>
-                    <input type="text" id="model-name" placeholder="gpt-4o-mini">
-                </div>
+            <div class="otome-panel__body otome-panel__body--flush settings-body">
+                <aside class="settings-nav" aria-label="设置分组">
+                    <button class="settings-nav-item active" type="button" data-settings-section="model">
+                        <span class="settings-nav-item__icon">LLM</span>
+                        <span>大模型设置</span>
+                    </button>
+                    <button class="settings-nav-item" type="button" data-settings-section="knowledge">
+                        <span class="settings-nav-item__icon">RAG</span>
+                        <span>知识库</span>
+                    </button>
+                </aside>
+
+                <section class="settings-view active" data-settings-view="model" aria-label="大模型设置">
+                    <button class="settings-back-btn btn btn--ghost" type="button" data-settings-back>返回设置分组</button>
+                    <div class="settings-view-head">
+                        <span class="otome-section-label">对话模型连接</span>
+                        <p>日常对话、约会、圆桌密语、造梦家具等玩法复用同一组 OpenAI 兼容 chat/completions 配置。</p>
+                    </div>
+                    <div class="settings-form-grid">
+                        <div class="otome-field">
+                            <label class="otome-field-label" for="api-key">API Key</label>
+                            <input type="password" id="api-key" placeholder="sk-...">
+                        </div>
+                        <div class="otome-field">
+                            <label class="otome-field-label" for="base-url">Base URL</label>
+                            <input type="text" id="base-url" placeholder="https://api.openai.com/v1">
+                        </div>
+                        <div class="otome-field">
+                            <label class="otome-field-label" for="model-name">模型名称</label>
+                            <input type="text" id="model-name" placeholder="gpt-4o-mini">
+                        </div>
+                    </div>
+                    <div class="settings-note-card">
+                        <strong>知识库不需要 embedding 配置</strong>
+                        <span>本地 RAG 只使用浏览器 IndexedDB 与 BM25 / 关键词倒排索引，不会调用额外模型。</span>
+                    </div>
+                </section>
+
+                <section class="settings-view" data-settings-view="knowledge" aria-label="知识库">
+                    <button class="settings-back-btn btn btn--ghost" type="button" data-settings-back>返回设置分组</button>
+                    <div class="knowledge-workbench">
+                        <aside class="kb-sidebar" aria-label="知识库列表">
+                            <div class="kb-create-row">
+                                <input id="kb-create-name" type="text" maxlength="40" placeholder="新建知识库名称">
+                                <button id="kb-create-btn" class="btn btn--primary" type="button">创建</button>
+                            </div>
+                            <div id="kb-list" class="kb-list"></div>
+                        </aside>
+                        <main class="kb-main" aria-label="知识库详情">
+                            <div id="kb-empty" class="kb-empty-state">
+                                <span>ARCHIVE EMPTY</span>
+                                <strong>创建知识库后上传 txt / md 文件</strong>
+                            </div>
+                            <div id="kb-detail" class="kb-detail hidden">
+                                <div class="kb-detail-head">
+                                    <div>
+                                        <span class="otome-section-label">资料库终端</span>
+                                        <h3 id="kb-current-title">知识库</h3>
+                                        <p id="kb-current-meta">0 文件 · 0 片段</p>
+                                    </div>
+                                    <div class="kb-actions">
+                                        <button id="kb-enable-toggle" class="btn btn--gold" type="button">启用此知识库</button>
+                                        <button id="kb-delete-btn" class="btn btn--danger" type="button">删除知识库</button>
+                                    </div>
+                                </div>
+                                <div id="kb-active-status" class="kb-status" data-kind="info">选择知识库后可启用检索。</div>
+                                <div class="kb-upload-console">
+                                    <input id="kb-file-input" type="file" accept=".txt,.md,text/plain,text/markdown" multiple hidden>
+                                    <button id="kb-upload-btn" class="kb-upload-card" type="button">
+                                        <span class="dance-file-card__kicker">LOCAL FILES</span>
+                                        <strong>上传 txt / md 文档</strong>
+                                        <small>默认 512 字分块 · 50 字重叠 · BM25 本地索引</small>
+                                    </button>
+                                    <div id="kb-upload-status" class="kb-status" data-kind="info" aria-live="polite">等待上传文档。</div>
+                                </div>
+                                <div class="kb-management-grid">
+                                    <section class="kb-files-panel">
+                                        <div class="kb-panel-label">
+                                            <span>文件列表</span>
+                                            <strong>FILES</strong>
+                                        </div>
+                                        <div id="kb-file-list" class="kb-file-list"></div>
+                                    </section>
+                                    <section class="kb-chunks-panel">
+                                        <div class="kb-panel-label">
+                                            <span id="kb-preview-title">分块预览</span>
+                                            <strong>CHUNKS</strong>
+                                        </div>
+                                        <div id="kb-chunk-list" class="kb-chunk-list"></div>
+                                    </section>
+                                </div>
+                            </div>
+                        </main>
+                    </div>
+                </section>
             </div>
-            <div class="otome-panel__foot">
+            <div class="otome-panel__foot settings-foot">
+                <span>RAG 只接入日常对话、约会进程和圆桌密语。</span>
                 <button id="settings-save" class="btn btn--primary">保存设置</button>
             </div>
         </div>

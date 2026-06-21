@@ -1,5 +1,6 @@
 import { getSettings } from './settings.js';
 import { getGameTimeContext, recordDialogueInteraction } from './game_state.js';
+import { buildRagReferenceMessage } from './knowledge_base.js';
 
 const STORAGE_KEY = 'fritia_roundtable_whispers';
 const MESSAGE_TTL_MS = 5 * 24 * 60 * 60 * 1000;
@@ -1425,7 +1426,9 @@ async function processNextEvent() {
 
     try {
         const settings = getSettings();
-        const estimatedTokens = estimateRequestTokens(speaker, event);
+        const ragMessage = await buildRoundtableRagMessage(event);
+        if (requestToken !== state.requestToken || !isActiveSession()) return;
+        const estimatedTokens = estimateRequestTokens(speaker, event, ragMessage);
         const budgetBeforeRequest = getBudgetState();
         if (budgetBeforeRequest.tokenTotal + estimatedTokens >= TOKEN_HARD_LIMIT_10M) {
             logRoundtableBlock('token-hard-limit-before-request', {
@@ -1462,6 +1465,7 @@ async function processNextEvent() {
             settings,
             speaker,
             event,
+            ragMessage,
             signal: state.abortController.signal
         });
         if (requestToken !== state.requestToken || !isActiveSession()) return;
@@ -1612,7 +1616,7 @@ function recordCall(type, tokens = 0) {
     getBudgetState();
 }
 
-function estimateRequestTokens(speaker, event) {
+function estimateRequestTokens(speaker, event, ragMessage = null) {
     const recentMessages = state.messages
         .filter(item => item.role !== 'system')
         .slice(-10)
@@ -1624,6 +1628,7 @@ function estimateRequestTokens(speaker, event) {
         event?.text || '',
         event?.sourceText || '',
         recentMessages,
+        ragMessage?.content || '',
         getGameTimeContext(),
         'roundtable-json-contract-static-overhead'
     ].join('\n')) + 1200;
@@ -1872,7 +1877,7 @@ function handleRequestError(err, speaker, event) {
     }, err);
 }
 
-async function requestRoundtableCompletion({ settings, speaker, event, signal }) {
+async function requestRoundtableCompletion({ settings, speaker, event, ragMessage = null, signal }) {
     const baseUrl = normalizeBaseUrl(settings.baseUrl);
     const response = await fetch(`${baseUrl}/chat/completions`, {
         method: 'POST',
@@ -1880,7 +1885,7 @@ async function requestRoundtableCompletion({ settings, speaker, event, signal })
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${settings.apiKey}`
         },
-        body: JSON.stringify(buildRequestBody(settings, speaker, event)),
+        body: JSON.stringify(buildRequestBody(settings, speaker, event, ragMessage)),
         signal
     });
 
@@ -1902,7 +1907,21 @@ async function requestRoundtableCompletion({ settings, speaker, event, signal })
     return readCompletionStream(response);
 }
 
-function buildRequestBody(settings, speaker, event) {
+async function buildRoundtableRagMessage(event) {
+    const recentMessages = state.messages
+        .filter(item => item.role !== 'system')
+        .slice(-8)
+        .map(item => `${item.speakerName}：${item.text}`);
+    const query = [event?.text || '', event?.sourceText || '', state.topicSummary].filter(Boolean).join('\n');
+    return buildRagReferenceMessage({
+        mode: 'roundtable',
+        query,
+        recentMessages,
+        limit: 5
+    });
+}
+
+function buildRequestBody(settings, speaker, event, ragMessage = null) {
     const participants = getActiveParticipants();
     const others = participants
         .filter(item => item.id !== speaker.id)
@@ -1964,6 +1983,7 @@ function buildRequestBody(settings, speaker, event) {
                     'targetId 只能是 player、all 或某个参与者 id。intent 只能是 answer/react/tease/ask/shift_topic/idle/handoff_to_player。emotion 只能是 neutral/happy/shy/jealous/teasing/serious。'
                 ].join('\n')
             },
+            ...(ragMessage ? [ragMessage] : []),
             {
                 role: 'user',
                 content: [
@@ -2195,8 +2215,10 @@ function stopAllRequests(reason = '') {
         clearTimeout(state.processTimer);
         state.processTimer = 0;
     }
-    if (state.abortController) {
+    if (state.processing || state.abortController) {
         state.requestToken += 1;
+    }
+    if (state.abortController) {
         state.abortController.abort();
         state.abortController = null;
     }

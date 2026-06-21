@@ -1,6 +1,7 @@
 import { getSettings } from './settings.js';
 import { addAffinity, getGameTimeContext, recordDialogueInteraction } from './game_state.js';
 import { getDreamFurnitureDialogueContext } from './dream_system.js';
+import { buildRagReferenceMessage } from './knowledge_base.js';
 
 const HISTORY_KEY = 'fritia_chat_history';
 
@@ -169,6 +170,20 @@ async function handleSend() {
 
     try {
         abortController = new AbortController();
+        const contextMessages = getContextMessages();
+        const ragMessage = dialogueContext.scene === 'daily'
+            ? await buildRagReferenceMessage({
+                mode: 'daily',
+                query: msg,
+                recentMessages: contextMessages
+            })
+            : null;
+        const messages = [
+            { role: 'system', content: buildSystemPrompt() },
+            ...(ragMessage ? [ragMessage] : []),
+            ...contextMessages
+        ];
+
         const response = await fetch(`${settings.baseUrl}/chat/completions`, {
             method: 'POST',
             headers: {
@@ -177,10 +192,7 @@ async function handleSend() {
             },
             body: JSON.stringify({
                 model: settings.model,
-                messages: [
-                    { role: 'system', content: buildSystemPrompt() },
-                    ...getContextMessages()
-                ],
+                messages,
                 stream: true,
                 temperature: 0.85,
                 max_tokens: 350

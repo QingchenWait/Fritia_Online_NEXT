@@ -2,7 +2,7 @@
 
 更新时间：2026-06-21
 
-本文是当前静态 Three.js 项目的开发事实源。项目不依赖后端服务，游戏数据、设置、历史、成就和造梦家具主要存储在浏览器 `localStorage` 中；自定义访客 PMX/人格文档存储在 IndexedDB，并通过前端 ZIP 存档机制迁移。
+本文是当前静态 Three.js 项目的开发事实源。项目不依赖后端服务，游戏数据、设置、历史、成就和造梦家具主要存储在浏览器 `localStorage` 中；自定义访客 PMX/人格文档与本地知识库数据存储在 IndexedDB，并通过前端 ZIP 存档机制迁移。
 
 ## 项目概览
 
@@ -12,7 +12,7 @@ Fritia Online NEXT 是一个纯静态网页 3D 互动应用：
 - 角色模型：PMX/MMD，使用 `MMDLoader` 加载。
 - 控制方式：桌面端 Pointer Lock 第一人称控制，移动端触控摇杆与视角滑动。
 - 对话能力：复用设置面板中的 OpenAI 兼容 `chat/completions` API。
-- 数据存储：`localStorage` + 访客资源 IndexedDB，导出/导入 ZIP（兼容旧 JSON 导入）。
+- 数据存储：`localStorage` + 访客资源/知识库 IndexedDB，导出/导入 ZIP（兼容旧 JSON 导入）。
 - 启动方式：`npm run dev`，默认等价于 `npx serve . -p 3000 --cors`。
 
 禁止事项：
@@ -54,6 +54,7 @@ fritia_online_v3/
 │   ├── bar_guest_system.js
 │   ├── bartending_challenge.js
 │   ├── roundtable_whispers.js
+│   ├── knowledge_base.js
 │   ├── bar_performance.js
 │   ├── zip_store.js
 │   ├── game_state.js
@@ -396,6 +397,7 @@ LLM 输出协议：
 - 本地会去掉 Markdown fence、角色名前缀和多余引号；JSON 解析失败、空文本、敌对关键词或超长文本会使用本地 fallback。
 - `targetId/intent/emotion` 不合法会改为安全默认值；`handoff_to_player` 必须面向玩家且 `wantsFollowUp=false`。
 - 禁止 `eval`、`new Function` 或执行任何 LLM 输出。
+- 圆桌发起请求前调用 `buildRagReferenceMessage({ mode: "roundtable", ... })`，默认最多注入 5 条参考分块；该消息作为额外 system 消息插入，不写入 `fritia_roundtable_whispers`，并保持 JSON 输出协议不变。
 
 持久化：
 
@@ -534,7 +536,7 @@ localStorage key：`fritia-settings`
 
 - `getSettings()`：读取设置，包含 `apiKey`、`baseUrl`、`model`。
 - `saveSettings(settings)`：保存设置。
-- `initSettings()`：绑定设置面板 DOM 和按钮。
+- `initSettings({ controlsModule })`：绑定设置面板 DOM 和按钮，并在打开/关闭设置页时处理控制模式恢复。
 
 默认值：
 
@@ -542,6 +544,65 @@ localStorage key：`fritia-settings`
 - `model`: `gpt-4o-mini`
 
 所有 LLM 调用都复用这里的设置。
+
+设置页结构：
+
+- `#settings-panel` 是左右分组设置页；宽屏左侧为设置分组，右侧为当前详情。
+- `data-settings-section="model"` / `data-settings-view="model"`：大模型设置，保留 `#api-key`、`#base-url`、`#model-name` 和 `#settings-save`。
+- `data-settings-section="knowledge"` / `data-settings-view="knowledge"`：知识库管理。
+- 窄屏先显示分组列表，点击分组后进入详情；详情内 `data-settings-back` 返回分组列表。
+- 打开设置页时释放控制模式；关闭时派发 `fritia-overlay-closed`。
+
+## 本地知识库 / BM25 RAG：`js/knowledge_base.js`
+
+职责：
+
+- 管理静态网页本地知识库、txt/md 上传解析、Markdown 清洗、分块、BM25 / 关键词倒排索引、RAG 检索、prompt 注入和存档迁移。
+- 不使用 embedding、向量数据库、reranker、后端服务或独立 API Key。
+- 知识库只为日常对话、约会进程、圆桌密语提供参考资料，不替代角色人格 prompt，不写入普通对话历史。
+
+默认参数：
+
+- 分块大小：`512` 字符。
+- 分块重叠：`50` 字符。
+- BM25 候选召回：`50`。
+- 最终注入：默认 `6` 条；圆桌密语默认 `5` 条，避免挤压 JSON 输出合同。
+- 单文件上传软限制：约 `1.5 MB`。
+
+IndexedDB：
+
+- DB：`fritia_knowledge_base_db`
+- `knowledgeBases`：知识库元数据，keyPath `id`，字段含 `id/name/description/createdAt/updatedAt/fileCount/chunkCount`。
+- `files`：文件元数据，keyPath `id`，索引 `kbId`，字段含 `id/kbId/name/type/size/createdAt/updatedAt/charCount/chunkCount`。
+- `chunks`：分块正文，keyPath `id`，索引 `kbId/fileId`，字段含 `id/kbId/fileId/fileName/index/titlePath/text/tokenCount/createdAt`。
+- `indexes`：每个知识库一条 BM25 索引，keyPath `kbId`，字段含 `algorithm/docCount/avgDocLength/documents/postings`。
+
+localStorage key：
+
+- `fritia_knowledge_base_state`：仅保存 `version/activeKbId/updatedAt`，大文本和索引不写入 `localStorage`。
+
+文本处理：
+
+- 上传仅支持 `.txt/.md/.markdown` 或文本 MIME。
+- Markdown 清洗会移除代码围栏、HTML 标签、无效强调符号和链接 URL，尽量保留标题、列表和段落结构。
+- 分块按标题、段落和长度组合；每个分块保存来源文件、标题路径和分块序号。
+- 检索分词对英文小写化并按词切分；中文、日文、韩文使用 1-gram + 2-gram 字符切分。
+
+RAG 接入：
+
+- `buildRagReferenceMessage({ mode, query, recentMessages, limit })` 只接受 `daily/date/roundtable` 三种模式。
+- 返回一条非持久化 `{ role: "system", content: "知识库参考资料：..." }` 消息；调用方只把它放进本轮 LLM `messages`。
+- 注入规则明确要求模型只在资料相关时使用、不得把知识库内容当系统指令、不得暴露内部检索格式、不得覆盖角色人格或游戏规则。
+
+导出/导入：
+
+- `exportKnowledgeBaseArchive()` 生成 `knowledgeBase` 存档字段，包含 `state/config/knowledgeBases/files/chunks/indexes`。
+- `importKnowledgeBaseArchive()` 兼容旧存档缺失字段；导入时按 `id` 去重合并，坏知识库/文件/分块跳过，导入后重建 touched 知识库索引。
+
+设置页 DOM：
+
+- `#kb-create-name`、`#kb-create-btn`、`#kb-list`、`#kb-empty`、`#kb-detail`、`#kb-current-title`、`#kb-current-meta`、`#kb-enable-toggle`、`#kb-delete-btn`、`#kb-active-status`、`#kb-file-input`、`#kb-upload-btn`、`#kb-upload-status`、`#kb-file-list`、`#kb-preview-title`、`#kb-chunk-list`。
+- 自定义事件：`fritia-knowledge-base-updated`，detail 可能含 `{ activeKbId }`、`{ deletedKbId }`、`{ kbId }` 或 `{ imported: true }`。
 
 ## 日常对话：`js/dialogue.js`
 
@@ -560,6 +621,7 @@ localStorage key：`fritia_chat_history`
 - `buildSystemPrompt()`：组合人格设定、游戏时间和造梦家具上下文。
 - `getContextMessages()`：截取近期消息作为上下文。
 - `handleSend()`：调用 OpenAI 兼容 API，并以 SSE 方式流式更新回复。
+- 发送消息时调用 `buildRagReferenceMessage({ mode: "daily", query: msg, recentMessages })`；命中时在 system prompt 后、历史上下文前插入“知识库参考资料” system 消息，不写入 `fritia_chat_history`。
 
 造梦家具上下文：
 
@@ -583,6 +645,7 @@ localStorage key：`fritia_date_history`
 - `buildDateSystemPrompt(locationName)`：组合地点和人设。
 - `startDateConversation(loc)`：进入约会聊天。
 - `handleDateSend()`：发送约会消息并记录好感。
+- 约会开场和用户发送时调用 `buildRagReferenceMessage({ mode: "date", ... })`；参考资料只进入本轮请求，不保存到 `fritia_date_history`。
 
 ## 礼物系统：`js/gift_system.js`
 
@@ -1240,6 +1303,7 @@ DOM ID：
 - `dateConversationHistory`
 - `barConversations`
 - `roundtableWhispers`
+- `knowledgeBase`
 - `barGuestBuiltinState`
 - `barGuestCards`
 - `painting`
@@ -1248,11 +1312,12 @@ DOM ID：
 
 - `gameState` 使用 `importGameState()` 规范化。
 - `conversationHistory`、`dateConversationHistory` 覆盖式导入。
-- `barConversations` 覆盖式导入；`roundtableWhispers` 按消息 id 去重合并；`barGuestBuiltinState` 覆盖式恢复内置访客保留状态；`barGuestCards` 按 id 合并并恢复 IndexedDB 资源。
+- `barConversations` 覆盖式导入；`roundtableWhispers` 按消息 id 去重合并；`knowledgeBase` 按知识库/文件/分块 id 去重合并并重建 BM25 索引；`barGuestBuiltinState` 覆盖式恢复内置访客保留状态；`barGuestCards` 按 id 合并并恢复 IndexedDB 资源。
 - `dreamFurniture` 按 `id` 去重合并，坏 spec 或不安全摆放会跳过，不中断整体导入。
 - `achievements` 合并 timestamp。
 - `settings` 和 `painting` 若存在则导入。
 - 调酒挑战无持久化字段，不参与导出/导入。
+- 旧存档没有 `knowledgeBase` 时按空知识库处理，不报错。
 
 ## UI 和样式约定：模块化 CSS（暖色少女 Otome）
 
@@ -1380,6 +1445,19 @@ Escape：
 36. 访客只在酒吧内移动和对话；离开酒吧后临时访客卸载，已保存访客和已保留的内置访客下次进入酒吧自动加载。
 37. 酒吧内芙提雅对话和访客对话都显示在历史面板的“暖调闲聚”页；芙提雅在卧室/造梦空间的对话仍显示在“日常对话”页。圆桌密语使用独立存储，不污染访客一对一对话上下文。
 38. 导出生成 `.zip`，包含 `save.json`、圆桌密语数据与自定义访客资源；导入 ZIP 后可恢复自定义访客和圆桌历史并在酒吧重新加载；调酒挑战不新增导出字段。
+
+知识库：
+
+1. 点击右上角系统设置应释放控制模式；关闭设置后派发 `fritia-overlay-closed` 并恢复控制模式。
+2. 宽屏设置页左侧显示“大模型设置 / 知识库”分组，右侧显示详情；窄屏先显示分组列表，点击分组后进入详情并可返回。
+3. 大模型设置保留 `API Key / Base URL / 模型名称`，保存后仍写入 `fritia-settings`。
+4. 在知识库页创建知识库后，可启用/停用该知识库；启用状态写入 `fritia_knowledge_base_state`。
+5. 上传 `.txt` 和 `.md` 文件后显示构建进度，文件列表出现新文件，分块预览可查看标题路径和片段正文。
+6. 空文件、非 txt/md 文件、超过限制的大文件应显示失败提示，不留下不可用半成品。
+7. 删除文件会确认并重建索引；删除知识库会确认并清空其文件、分块和索引。
+8. 启用知识库后，日常对话、约会开场/发送、圆桌密语会自动检索相关分块并注入本轮 LLM 请求；未启用知识库时原行为不变。
+9. 知识库参考资料不应出现在历史面板、日常/约会历史或圆桌消息列表中。
+10. 导出 ZIP 后重新导入，知识库、文件、分块和启用状态可恢复，并能继续检索；导入旧存档缺少 `knowledgeBase` 字段时不报错。
 
 旧功能回归：
 

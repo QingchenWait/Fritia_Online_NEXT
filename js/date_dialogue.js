@@ -1,5 +1,6 @@
 import { getSettings } from './settings.js';
 import { addAffinity, getGameTimeContext, recordDialogueInteraction } from './game_state.js';
+import { buildRagReferenceMessage } from './knowledge_base.js';
 
 const DATE_HISTORY_KEY = 'fritia_date_history';
 const DATE_LOCATIONS = [
@@ -274,6 +275,16 @@ async function startDateConversation(loc) {
     try {
         dateAbortController = new AbortController();
         const systemPrompt = buildDateSystemPrompt(loc.name);
+        const ragMessage = await buildRagReferenceMessage({
+            mode: 'date',
+            query: `${loc.name} 约会开场`,
+            recentMessages: []
+        });
+        const messages = [
+            { role: 'system', content: systemPrompt },
+            ...(ragMessage ? [ragMessage] : [])
+        ];
+
         const response = await fetch(`${settings.baseUrl}/chat/completions`, {
             method: 'POST',
             headers: {
@@ -282,7 +293,7 @@ async function startDateConversation(loc) {
             },
             body: JSON.stringify({
                 model: settings.model,
-                messages: [{ role: 'system', content: systemPrompt }],
+                messages,
                 stream: true,
                 temperature: 0.9,
                 max_tokens: 350
@@ -372,6 +383,11 @@ async function handleDateSend() {
 
         const history = dateConversationHistory[currentLocationId];
         const contextMsgs = history.slice(-20).map(m => ({ role: m.role, content: m.content }));
+        const ragMessage = await buildRagReferenceMessage({
+            mode: 'date',
+            query: msg,
+            recentMessages: contextMsgs
+        });
 
         const response = await fetch(`${settings.baseUrl}/chat/completions`, {
             method: 'POST',
@@ -383,6 +399,7 @@ async function handleDateSend() {
                 model: settings.model,
                 messages: [
                     { role: 'system', content: systemPrompt },
+                    ...(ragMessage ? [ragMessage] : []),
                     ...contextMsgs
                 ],
                 stream: true,
