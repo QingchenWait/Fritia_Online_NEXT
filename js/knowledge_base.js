@@ -118,31 +118,76 @@ async function getAllByIndex(storeName, indexName, value) {
 function loadState() {
     try {
         const data = JSON.parse(localStorage.getItem(STATE_KEY) || '{}');
-        return data && typeof data === 'object' ? data : {};
+        if (!data || typeof data !== 'object') return {};
+        const activeKbIds = normalizeActiveKnowledgeBaseIds(data.activeKbIds, data.activeKbId);
+        return {
+            ...data,
+            activeKbId: activeKbIds[0] || '',
+            activeKbIds
+        };
     } catch {
         return {};
     }
 }
 
+function normalizeActiveKnowledgeBaseIds(value, legacyValue = '') {
+    const ids = Array.isArray(value) ? value : [legacyValue];
+    return [...new Set(ids
+        .map(id => String(id || '').trim())
+        .filter(Boolean)
+        .slice(0, 50)
+    )];
+}
+
 function saveState(next) {
+    const activeKbIds = normalizeActiveKnowledgeBaseIds(next.activeKbIds, next.activeKbId);
     try {
         localStorage.setItem(STATE_KEY, JSON.stringify({
-            version: 1,
-            activeKbId: next.activeKbId || '',
+            version: 2,
+            activeKbId: activeKbIds[0] || '',
+            activeKbIds,
             updatedAt: Date.now()
         }));
     } catch {}
 }
 
+function getActiveKnowledgeBaseIds() {
+    return loadState().activeKbIds || [];
+}
+
 function getActiveKnowledgeBaseId() {
-    return String(loadState().activeKbId || '').trim();
+    return getActiveKnowledgeBaseIds()[0] || '';
+}
+
+function setActiveKnowledgeBaseIds(ids) {
+    saveState({ activeKbIds: normalizeActiveKnowledgeBaseIds(ids) });
+    document.dispatchEvent(new CustomEvent('fritia-knowledge-base-updated', {
+        detail: {
+            activeKbId: getActiveKnowledgeBaseId(),
+            activeKbIds: getActiveKnowledgeBaseIds()
+        }
+    }));
 }
 
 function setActiveKnowledgeBaseId(id) {
-    saveState({ activeKbId: String(id || '').trim() });
-    document.dispatchEvent(new CustomEvent('fritia-knowledge-base-updated', {
-        detail: { activeKbId: getActiveKnowledgeBaseId() }
-    }));
+    setActiveKnowledgeBaseIds(id ? [id] : []);
+}
+
+function toggleActiveKnowledgeBaseId(id) {
+    const cleanId = String(id || '').trim();
+    if (!cleanId) return;
+    const ids = getActiveKnowledgeBaseIds();
+    setActiveKnowledgeBaseIds(ids.includes(cleanId)
+        ? ids.filter(item => item !== cleanId)
+        : [...ids, cleanId]
+    );
+}
+
+function removeActiveKnowledgeBaseId(id) {
+    const cleanId = String(id || '').trim();
+    if (!cleanId) return;
+    const ids = getActiveKnowledgeBaseIds();
+    if (ids.includes(cleanId)) setActiveKnowledgeBaseIds(ids.filter(item => item !== cleanId));
 }
 
 function createId(prefix) {
@@ -518,7 +563,9 @@ function debugKnowledgeSearch(payload) {
         console.log('queryTokens:', payload.queryTokens || []);
         console.log('primaryImportantTokens:', payload.primaryImportantTokens || []);
         console.log('importantTokens:', payload.importantTokens || []);
+        console.log('knowledgeBaseIds:', payload.knowledgeBaseIds || []);
         console.table((payload.candidates || []).map(item => ({
+            kb: item.knowledgeBaseName,
             chunkId: item.chunkId,
             file: item.fileName,
             title: item.titlePath,
@@ -638,7 +685,7 @@ export async function createKnowledgeBase(name) {
         chunkCount: 0
     };
     await putRecord('knowledgeBases', record);
-    if (!getActiveKnowledgeBaseId()) setActiveKnowledgeBaseId(record.id);
+    if (getActiveKnowledgeBaseIds().length === 0) setActiveKnowledgeBaseIds([record.id]);
     return record;
 }
 
@@ -654,7 +701,7 @@ export async function deleteKnowledgeBase(kbId) {
     for (const file of files) tx.objectStore('files').delete(file.id);
     for (const chunk of chunks) tx.objectStore('chunks').delete(chunk.id);
     await txDone(tx);
-    if (getActiveKnowledgeBaseId() === kbId) setActiveKnowledgeBaseId('');
+    removeActiveKnowledgeBaseId(kbId);
     document.dispatchEvent(new CustomEvent('fritia-knowledge-base-updated', { detail: { deletedKbId: kbId } }));
 }
 
@@ -836,21 +883,22 @@ function buildSelectedCandidates(ranked, docs, queryInfo, limit) {
     return selected.slice(0, limit);
 }
 
-export async function searchKnowledgeBase(query, options = {}) {
-    const kbId = options.knowledgeBaseId || getActiveKnowledgeBaseId();
-    if (!kbId) return [];
+function getSearchKnowledgeBaseIds(options = {}) {
+    if (Array.isArray(options.knowledgeBaseIds)) return normalizeActiveKnowledgeBaseIds(options.knowledgeBaseIds);
+    if (options.knowledgeBaseId) return normalizeActiveKnowledgeBaseIds([options.knowledgeBaseId]);
+    return getActiveKnowledgeBaseIds();
+}
+
+async function searchSingleKnowledgeBase(kbId, queryInfo, options = {}) {
     const kb = await getRecord('knowledgeBases', kbId);
     if (!kb) {
-        if (getActiveKnowledgeBaseId() === kbId) setActiveKnowledgeBaseId('');
+        removeActiveKnowledgeBaseId(kbId);
         return [];
     }
 
     const indexRecord = await ensureIndex(kbId);
     const docs = Array.isArray(indexRecord.documents) ? indexRecord.documents : [];
     if (docs.length === 0) return [];
-
-    const queryInfo = analyzeSearchQuery(query, options);
-    if (queryInfo.queryTokens.length === 0) return [];
 
     const candidateScores = new Map();
     const candidateMatches = new Map();
@@ -883,7 +931,6 @@ export async function searchKnowledgeBase(query, options = {}) {
     });
 
     const candidateLimit = Math.max(1, Number(options.candidateLimit) || DEFAULT_CANDIDATE_LIMIT);
-    const limit = Math.max(1, Number(options.limit) || DEFAULT_INJECT_LIMIT);
     const ranked = [...candidateScores.entries()]
         .map(([docIndex, bm25Score]) => createCandidate(
             docIndex,
@@ -896,6 +943,7 @@ export async function searchKnowledgeBase(query, options = {}) {
         .sort(sortCandidates)
         .slice(0, candidateLimit);
 
+    const limit = Math.max(1, Number(options.limit) || DEFAULT_INJECT_LIMIT);
     const selected = buildSelectedCandidates(ranked, docs, queryInfo, limit);
 
     const results = [];
@@ -919,12 +967,38 @@ export async function searchKnowledgeBase(query, options = {}) {
             text: chunk.text
         });
     }
+    return results;
+}
+
+export async function searchKnowledgeBase(query, options = {}) {
+    const kbIds = getSearchKnowledgeBaseIds(options);
+    if (kbIds.length === 0) return [];
+
+    const queryInfo = analyzeSearchQuery(query, options);
+    if (queryInfo.queryTokens.length === 0) return [];
+
+    const perKbLimit = Math.max(1, Number(options.perKnowledgeBaseLimit) || Number(options.limit) || DEFAULT_INJECT_LIMIT);
+    const allResults = [];
+    for (const kbId of kbIds) {
+        const results = await searchSingleKnowledgeBase(kbId, queryInfo, {
+            ...options,
+            limit: perKbLimit
+        });
+        allResults.push(...results);
+    }
+
+    const limit = Math.max(1, Number(options.limit) || DEFAULT_INJECT_LIMIT);
+    const results = allResults
+        .sort(sortCandidates)
+        .slice(0, limit);
+
     debugKnowledgeSearch({
         query: queryInfo.text,
         primaryQuery: queryInfo.primaryText,
         queryTokens: queryInfo.queryTokens,
         primaryImportantTokens: queryInfo.primaryImportantTokens,
         importantTokens: queryInfo.importantTokens,
+        knowledgeBaseIds: kbIds,
         candidates: results
     });
     return results;
@@ -1160,9 +1234,10 @@ export async function importKnowledgeBaseArchive(archive) {
         await rebuildKnowledgeBaseIndex(kbId);
     }
 
-    const incomingActive = clampString(payload.state?.activeKbId, 100);
-    if (!getActiveKnowledgeBaseId() && incomingActive && validKbIds.has(incomingActive)) {
-        setActiveKnowledgeBaseId(incomingActive);
+    const incomingActiveIds = normalizeActiveKnowledgeBaseIds(payload.state?.activeKbIds, payload.state?.activeKbId)
+        .filter(id => validKbIds.has(id));
+    if (getActiveKnowledgeBaseIds().length === 0 && incomingActiveIds.length > 0) {
+        setActiveKnowledgeBaseIds(incomingActiveIds);
     }
     document.dispatchEvent(new CustomEvent('fritia-knowledge-base-updated', { detail: { imported: true } }));
     return { knowledgeBases: kbAdded, files: fileAdded, chunks: chunkAdded, skipped };
@@ -1214,20 +1289,21 @@ function bindCollapsibleKnowledgePanel(panel) {
     });
 }
 
-function renderKnowledgeBaseList(kbs, activeId) {
+function renderKnowledgeBaseList(kbs, activeIds) {
     if (!ui.kbList) return;
+    const activeSet = new Set(activeIds || []);
     ui.kbList.innerHTML = '';
     for (const kb of kbs) {
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'kb-list-item';
         if (kb.id === uiState.selectedKbId) button.classList.add('active');
-        if (kb.id === activeId) button.classList.add('enabled');
+        if (activeSet.has(kb.id)) button.classList.add('enabled');
         button.dataset.kbId = kb.id;
         button.innerHTML = `
             <span class="kb-list-item__name">${escapeHtml(kb.name)}</span>
             <span class="kb-list-item__meta">${kb.fileCount || 0} 文件 · ${kb.chunkCount || 0} 片段</span>
-            <span class="kb-list-item__signal">${kb.id === activeId ? 'RAG ON' : 'STANDBY'}</span>
+            <span class="kb-list-item__signal">${activeSet.has(kb.id) ? 'RAG ON' : 'STANDBY'}</span>
         `;
         ui.kbList.appendChild(button);
     }
@@ -1297,7 +1373,8 @@ async function renderChunkPreview(kbId, fileId) {
 }
 
 async function renderKnowledgeBaseDetail(kb) {
-    const activeId = getActiveKnowledgeBaseId();
+    const activeIds = getActiveKnowledgeBaseIds();
+    const isActive = Boolean(kb && activeIds.includes(kb.id));
     ui.empty?.classList.toggle('hidden', Boolean(kb));
     ui.detail?.classList.toggle('hidden', !kb);
     if (!kb) {
@@ -1309,13 +1386,15 @@ async function renderKnowledgeBaseDetail(kb) {
         ui.currentMeta.textContent = `${kb.fileCount || 0} 文件 · ${kb.chunkCount || 0} 片段 · 更新 ${formatDate(kb.updatedAt)}`;
     }
     if (ui.activeStatus) {
-        ui.activeStatus.textContent = activeId === kb.id ? '当前知识库已启用，会参与对话检索。' : '当前知识库未启用，不会注入对话。';
-        ui.activeStatus.dataset.kind = activeId === kb.id ? 'ok' : 'info';
+        ui.activeStatus.textContent = isActive
+            ? `当前知识库已启用，会参与对话检索。当前共启用 ${activeIds.length} 个知识库。`
+            : `当前知识库未启用，不会注入对话。当前共启用 ${activeIds.length} 个知识库。`;
+        ui.activeStatus.dataset.kind = isActive ? 'ok' : 'info';
     }
     if (ui.enableBtn) {
-        ui.enableBtn.textContent = activeId === kb.id ? '停用检索' : '启用此知识库';
-        ui.enableBtn.classList.toggle('btn--gold', activeId !== kb.id);
-        ui.enableBtn.classList.toggle('btn--ghost', activeId === kb.id);
+        ui.enableBtn.textContent = isActive ? '停用检索' : '启用此知识库';
+        ui.enableBtn.classList.toggle('btn--gold', !isActive);
+        ui.enableBtn.classList.toggle('btn--ghost', isActive);
     }
     await renderFileList(kb.id);
 }
@@ -1325,15 +1404,17 @@ export async function refreshKnowledgeBasePanel() {
     try {
         collapseKnowledgeMobilePanels();
         const kbs = await listKnowledgeBases();
-        const activeId = getActiveKnowledgeBaseId();
+        const storedActiveIds = getActiveKnowledgeBaseIds();
+        const activeIds = storedActiveIds.filter(id => kbs.some(kb => kb.id === id));
+        if (activeIds.length !== storedActiveIds.length) setActiveKnowledgeBaseIds(activeIds);
         if (uiState.selectedKbId && !kbs.some(kb => kb.id === uiState.selectedKbId)) {
             uiState.selectedKbId = '';
             uiState.selectedFileId = '';
         }
         if (!uiState.selectedKbId) {
-            uiState.selectedKbId = activeId && kbs.some(kb => kb.id === activeId) ? activeId : (kbs[0]?.id || '');
+            uiState.selectedKbId = activeIds.find(id => kbs.some(kb => kb.id === id)) || (kbs[0]?.id || '');
         }
-        renderKnowledgeBaseList(kbs, activeId);
+        renderKnowledgeBaseList(kbs, activeIds);
         const current = kbs.find(kb => kb.id === uiState.selectedKbId) || null;
         await renderKnowledgeBaseDetail(current);
     } catch (err) {
@@ -1405,8 +1486,7 @@ function bindKnowledgeBaseUi() {
     });
     ui.enableBtn?.addEventListener('click', () => {
         if (!uiState.selectedKbId) return;
-        const activeId = getActiveKnowledgeBaseId();
-        setActiveKnowledgeBaseId(activeId === uiState.selectedKbId ? '' : uiState.selectedKbId);
+        toggleActiveKnowledgeBaseId(uiState.selectedKbId);
         void refreshKnowledgeBasePanel();
     });
     ui.deleteKbBtn?.addEventListener('click', () => {

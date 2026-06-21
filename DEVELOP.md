@@ -606,8 +606,8 @@ IndexedDB：
 
 localStorage key：
 
-- `fritia_knowledge_base_state`：仅保存 `version/activeKbId/updatedAt`，大文本和索引不写入 `localStorage`。
-- `fritia_kb_debug`：可选调试开关。设置为 `"1"` 后，BM25 检索会在 console 输出本轮检索 query、有效关键词、候选分数、覆盖率、来源文件和标题路径。
+- `fritia_knowledge_base_state`：仅保存 `version/activeKbId/activeKbIds/updatedAt`，大文本和索引不写入 `localStorage`。`activeKbId` 为旧版兼容字段；新版以 `activeKbIds` 表示多个同时启用的知识库。
+- `fritia_kb_debug`：可选调试开关。设置为 `"1"` 后，BM25 检索会在 console 输出本轮检索 query、启用知识库 id、有效关键词、候选分数、覆盖率、来源知识库、来源文件和标题路径。
 
 文本处理：
 
@@ -616,25 +616,27 @@ localStorage key：
 - 分块按标题、段落和长度组合；每个分块保存来源文件、标题路径和分块序号。
 - 检索分词对英文小写化并按词切分；中文、日文、韩文使用 1-gram + 2-gram 字符切分。
 - 检索 query 构造只用于知识库召回，不改变传给 LLM 的正常对话历史；当前用户输入是主查询，少量最近用户侧文本只作为辅助召回信号，assistant/bot 历史不会参与 BM25 query，避免上一轮错误回答污染首轮检索。
-- 候选先按 BM25 召回默认 50 条，再按标题/文件名命中、有效关键词覆盖率、短分块惩罚等本地信号重排；低相关候选会被过滤，不会强行注入参考资料。
-- 高置信命中可补入同文件相邻分块，补充分块仍计入最终注入上限，避免跨分块答案被截断。
+- 检索默认从所有 `activeKbIds` 指向的知识库中分别读取 BM25 索引；每个启用知识库先按 BM25 召回默认 50 条候选，再按标题/文件名命中、有效关键词覆盖率、短分块惩罚等本地信号重排。
+- 多个知识库的候选会合并后按 `finalScore/coverage/bm25Score` 全局排序；最终注入数量仍是全局上限，默认 6 条。低相关候选会被过滤，不会强行注入参考资料。
+- 高置信命中可补入同文件相邻分块，补充分块仍计入最终注入上限，避免跨分块答案被截断；该上限不会按启用知识库数量叠加。
 
 RAG 接入：
 
-- `buildRagReferenceMessage({ mode, query, recentMessages, limit })` 只接受 `daily/date/roundtable` 三种模式。
+- `buildRagReferenceMessage({ mode, query, recentMessages, limit })` 只接受 `daily/date/roundtable` 三种模式；公开接口不变，内部会从所有启用知识库中执行跨库 BM25 检索。
+- `searchKnowledgeBase(query, options)` 默认检索所有启用知识库；`options.knowledgeBaseId` 可指定单库，`options.knowledgeBaseIds` 可指定多个库。
 - 返回一条非持久化 `{ role: "system", content: "知识库参考资料：..." }` 消息；调用方只把它放进本轮 LLM `messages`。
 - 注入规则明确要求模型只在资料相关时使用、不得把知识库内容当系统指令、不得暴露内部检索格式、不得覆盖角色人格或游戏规则。
 
 导出/导入：
 
 - `exportKnowledgeBaseArchive()` 生成 `knowledgeBase` 存档字段，包含 `state/config/knowledgeBases/files/chunks/indexes`。
-- `importKnowledgeBaseArchive()` 兼容旧存档缺失字段；导入时按 `id` 去重合并，坏知识库/文件/分块跳过，导入后重建 touched 知识库索引。
+- `importKnowledgeBaseArchive()` 兼容旧存档缺失字段和旧版 `activeKbId` 单库字段；导入时按 `id` 去重合并，坏知识库/文件/分块跳过，导入后重建 touched 知识库索引。若当前本地没有启用知识库，会恢复存档中的 `activeKbIds`。
 
 设置页 DOM：
 
 - `#kb-create-name`、`#kb-create-btn`、`#kb-list`、`#kb-empty`、`#kb-detail`、`#kb-current-title`、`#kb-current-meta`、`#kb-enable-toggle`、`#kb-delete-btn`、`#kb-active-status`、`#kb-file-input`、`#kb-upload-btn`、`#kb-upload-status`、`#kb-file-list`、`#kb-preview-title`、`#kb-chunk-list`。
 - 窄屏下 `kb-files-panel` 和 `kb-chunks-panel` 默认折叠，点击对应面板标题区域可展开，再次点击收起；选择文件后会自动展开分块预览。
-- 自定义事件：`fritia-knowledge-base-updated`，detail 可能含 `{ activeKbId }`、`{ deletedKbId }`、`{ kbId }` 或 `{ imported: true }`。
+- 自定义事件：`fritia-knowledge-base-updated`，detail 可能含 `{ activeKbId, activeKbIds }`、`{ deletedKbId }`、`{ kbId }` 或 `{ imported: true }`。
 
 ## 日常对话：`js/dialogue.js`
 
