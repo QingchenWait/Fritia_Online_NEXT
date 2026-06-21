@@ -51,6 +51,7 @@ import {
     getBarExitInteractionMesh,
     getBarInviteInteractionMesh,
     getBarPlayerColliders,
+    getBarRoundtableInteractionMeshes,
     getBarSpawn,
     getBarWaypoints,
     isPointInBarBounds,
@@ -76,6 +77,7 @@ import {
     exportBarGuestCards,
     exportBarGuestCardsByPaths,
     findNearestGuest,
+    getActiveBarGuestParticipants,
     getBarConversationHistory,
     getGuestPosition,
     importBarConversationHistory,
@@ -97,6 +99,15 @@ import {
     isBartendingChallengeVisible,
     openBartendingChallenge
 } from './bartending_challenge.js';
+import {
+    closeRoundtableWhispers,
+    exportRoundtableWhispers,
+    importRoundtableWhispers,
+    initRoundtableWhispers,
+    isRoundtableWhispersVisible,
+    openRoundtableWhispers,
+    updateRoundtableWhispers
+} from './roundtable_whispers.js';
 import { createZip, readZip, readZipText } from './zip_store.js';
 
 let scene, camera, renderer;
@@ -442,6 +453,12 @@ async function init() {
         getBarColliders: getBarCharacterColliders,
         getPlayerPosition: () => camera?.position || new THREE.Vector3()
     });
+    initRoundtableWhispers({
+        controlsModule,
+        isBarActive: () => isBarSceneActive,
+        getGuestParticipants: getActiveBarGuestParticipants,
+        getGameTimeInfo
+    });
     initPainting();
     refreshCharacterRoomScope(true);
     updateGameHud(true);
@@ -584,6 +601,7 @@ function onKeyDown(e) {
         if (isDanceOverlayVisible()) return;
         if (isInvitePanelVisible()) return;
         if (isBartendingChallengeVisible()) return;
+        if (isRoundtableWhispersVisible()) return;
         if (isUtilityOverlayVisible()) return;
 
         if (isSleeping) {
@@ -618,6 +636,7 @@ function onKeyDown(e) {
         if (isDanceOverlayVisible()) return;
         if (isInvitePanelVisible()) return;
         if (isBartendingChallengeVisible()) return;
+        if (isRoundtableWhispersVisible()) return;
         if (isUtilityOverlayVisible()) return;
         if (controlsModule && controlsModule.state.isLocked) {
             const barLook = isBarSceneActive ? getBarInteractionLookState(true) : null;
@@ -626,6 +645,8 @@ function onKeyDown(e) {
             } else if (barLook?.bartending && !isDanceFlowActive()) {
                 openBartendingChallenge();
                 controlsModule.releaseControlMode({ resumeOnClose: true });
+            } else if (barLook?.roundtable && !isDanceFlowActive()) {
+                void openRoundtableWhispers();
             } else if (barLook?.invite && !isDanceFlowActive()) {
                 openInvitePanel();
             } else if (barLook?.dance && !isDanceFlowActive()) {
@@ -686,6 +707,10 @@ function onKeyDown(e) {
         }
         if (isBartendingChallengeVisible()) {
             closeBartendingChallenge();
+            return;
+        }
+        if (isRoundtableWhispersVisible()) {
+            closeRoundtableWhispers();
             return;
         }
         if (isInvitePanelVisible()) {
@@ -1143,6 +1168,8 @@ async function exitBarScene() {
     if (barTransitionInProgress) return;
     barTransitionInProgress = true;
     controlsModule?.setMovementLocked?.(true);
+    closeRoundtableWhispers({ dispatch: false });
+    controlsModule?.cancelOverlayResume?.();
     let needsFadeIn = false;
 
     try {
@@ -1343,6 +1370,7 @@ function animate() {
             }
             if (isBarSceneActive && !isDanceFlowActive()) {
                 updateBarGuests(delta);
+                updateRoundtableWhispers();
             }
         }
         if (!dreamCinematic) updateInteractionPrompt();
@@ -1383,7 +1411,7 @@ function updateInteractionPrompt() {
         stackPromptButtons(prompt, paintingPrompt, dreamPaintingPrompt);
         return;
     }
-    if (isSleeping || isInteracting || isDialogueVisible() || isDatePanelVisible() || isGiftOverlayVisible() || isDreamOverlayVisible() || isDanceOverlayVisible() || isInvitePanelVisible() || isBartendingChallengeVisible() || isGuestInteracting() || isUtilityOverlayVisible()) {
+    if (isSleeping || isInteracting || isDialogueVisible() || isDatePanelVisible() || isGiftOverlayVisible() || isDreamOverlayVisible() || isDanceOverlayVisible() || isInvitePanelVisible() || isBartendingChallengeVisible() || isRoundtableWhispersVisible() || isGuestInteracting() || isUtilityOverlayVisible()) {
         hideActionPrompts();
         return;
     }
@@ -1552,6 +1580,10 @@ function updateBarInteractionPromptV2(prompt, paintingPrompt, dreamPaintingPromp
     const look = getBarInteractionLookState();
     if (look.bartending && !isDanceFlowActive()) {
         paintingPrompt.innerHTML = '按 <kbd>E</kbd> 请琴诺帮忙调酒';
+        paintingPrompt.dataset.promptKey = 'KeyE';
+        paintingPrompt.classList.remove('hidden');
+    } else if (look.roundtable && !isDanceFlowActive()) {
+        paintingPrompt.innerHTML = '按 <kbd>E</kbd> 加入圆桌密语';
         paintingPrompt.dataset.promptKey = 'KeyE';
         paintingPrompt.classList.remove('hidden');
     } else if (look.invite && !isDanceFlowActive()) {
@@ -1903,6 +1935,7 @@ function getBarInteractionLookState(force = false) {
         danceMesh: getBarDanceInteractionMesh(),
         inviteMesh: getBarInviteInteractionMesh(),
         bartendingMesh: getBarBartendingInteractionMesh(),
+        roundtableMeshes: getBarRoundtableInteractionMeshes(),
         force
     });
 }
@@ -2571,6 +2604,7 @@ function buildExportPayloadV3(options = {}) {
         conversations: getConversationHistory(),
         dateConversations: getDateConversationHistory(),
         barConversations: getBarConversationHistory(),
+        roundtableWhispers: exportRoundtableWhispers(),
         barGuestBuiltinState: exportBarGuestBuiltinState(),
         barGuestCards: options.barGuestCards || exportBarGuestCards()
     };
@@ -2627,6 +2661,7 @@ async function applyImportedDataV3(data, assetFiles = new Map()) {
     if (data.barConversations && Array.isArray(data.barConversations)) {
         importBarConversationHistory(data.barConversations);
     }
+    const roundtableImport = importRoundtableWhispers(data.roundtableWhispers || data.barRoundtableWhispers || {});
 
     const guestAssets = [];
     for (const card of data.barGuestCards || []) {
@@ -2648,7 +2683,7 @@ async function applyImportedDataV3(data, assetFiles = new Map()) {
     refreshDreamFurnitureAfterImport();
     updateGameHud(true);
     renderGiftCollection();
-    return { importResult, dreamImport, guestImport };
+    return { importResult, dreamImport, guestImport, roundtableImport };
 }
 
 async function handleImportFileV2(e) {
@@ -2664,8 +2699,8 @@ async function handleImportFileV2(e) {
         } else {
             data = JSON.parse(await file.text());
         }
-        const { importResult, dreamImport, guestImport } = await applyImportedDataV3(data, assetFiles);
-        alert(`导入成功！礼物新增 ${importResult.giftsAdded || 0} 条，造梦家具新增 ${dreamImport.added || 0} 件，访客角色导入 ${guestImport.imported || 0} 个。刷新页面以应用设置。`);
+        const { importResult, dreamImport, guestImport, roundtableImport } = await applyImportedDataV3(data, assetFiles);
+        alert(`导入成功！礼物新增 ${importResult.giftsAdded || 0} 条，造梦家具新增 ${dreamImport.added || 0} 件，访客角色导入 ${guestImport.imported || 0} 个，圆桌消息新增 ${roundtableImport.imported || 0} 条。刷新页面以应用设置。`);
     } catch (err) {
         alert('导入失败：文件格式不正确或资源缺失');
         console.error('Import error:', err);
@@ -2690,6 +2725,7 @@ function handleImportFile(e) {
             if (data.dateConversations && typeof data.dateConversations === 'object') {
                 importDateConversationHistory(data.dateConversations);
             }
+            importRoundtableWhispers(data.roundtableWhispers || data.barRoundtableWhispers || {});
             const importResult = importGameState(data, { suppressEvent: true });
             const dreamImport = importDreamFurniture(data.dreamFurniture || data.gameState?.dreamFurniture || []);
             importAchievements(data.achievements);

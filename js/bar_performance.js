@@ -10,6 +10,7 @@ const _exitHits = [];
 const _danceHits = [];
 const _inviteHits = [];
 const _bartendingHits = [];
+const _roundtableHits = [];
 
 function colliderKey(ix, iz) {
     return `${ix},${iz}`;
@@ -106,20 +107,22 @@ export function createBarInteractionProbe(options = {}) {
     let lastDance = false;
     let lastInvite = false;
     let lastBartending = false;
+    let lastRoundtable = false;
 
-    return function probeBarInteractions({ active, camera, raycaster, exitMesh, danceMesh, inviteMesh, bartendingMesh, force = false }) {
+    return function probeBarInteractions({ active, camera, raycaster, exitMesh, danceMesh, inviteMesh, bartendingMesh, roundtableMeshes, force = false }) {
         if (!active || !camera || !raycaster) {
             lastExit = false;
             lastDance = false;
             lastInvite = false;
             lastBartending = false;
-            return { exit: false, dance: false, invite: false, bartending: false };
+            lastRoundtable = false;
+            return { exit: false, dance: false, invite: false, bartending: false, roundtable: false };
         }
 
         const now = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
         const interval = Number.isFinite(options.intervalMs) ? options.intervalMs : BAR_INTERACTION_INTERVAL_MS;
         if (!force && now - lastTime < interval) {
-            return { exit: lastExit, dance: lastDance, invite: lastInvite, bartending: lastBartending };
+            return { exit: lastExit, dance: lastDance, invite: lastInvite, bartending: lastBartending, roundtable: lastRoundtable };
         }
         lastTime = now;
 
@@ -150,11 +153,24 @@ export function createBarInteractionProbe(options = {}) {
             raycaster.intersectObject(bartendingMesh, true, _bartendingHits);
         }
 
+        _roundtableHits.length = 0;
+        const roundtableTargets = Array.isArray(roundtableMeshes)
+            ? roundtableMeshes.filter(Boolean)
+            : (roundtableMeshes ? [roundtableMeshes] : []);
+        if (roundtableTargets.length > 0) {
+            raycaster.far = 60;
+            for (const mesh of roundtableTargets) {
+                raycaster.intersectObject(mesh, true, _roundtableHits);
+                if (_roundtableHits.length > 0) break;
+            }
+        }
+
         raycaster.far = oldFar;
         lastExit = _exitHits.length > 0;
         lastDance = _danceHits.length > 0;
         lastInvite = _inviteHits.length > 0;
         lastBartending = _bartendingHits.length > 0;
-        return { exit: lastExit, dance: lastDance, invite: lastInvite, bartending: lastBartending };
+        lastRoundtable = _roundtableHits.length > 0;
+        return { exit: lastExit, dance: lastDance, invite: lastInvite, bartending: lastBartending, roundtable: lastRoundtable };
     };
 }

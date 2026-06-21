@@ -86,6 +86,7 @@ export function initControls(camera, domElement, colliders) {
         'dance-panel',
         'bar-guest-panel',
         'bartending-challenge-panel',
+        'roundtable-whispers-panel',
         'sleep-ui',
         'date-panel',
         'gift-terminal-panel',
@@ -564,6 +565,12 @@ export function initControls(camera, domElement, colliders) {
         return requestPointerLockForResume();
     }
 
+    function cancelOverlayResume() {
+        resumeAfterOverlay = false;
+        resumeInProgress = false;
+        syncEntryPrompt();
+    }
+
     return {
         controls,
         state,
@@ -578,6 +585,7 @@ export function initControls(camera, domElement, colliders) {
         rotateView,
         releaseControlMode,
         resumeControlMode,
+        cancelOverlayResume,
         enterControlMode,
         forceEnterControlMode
     };

@@ -660,7 +660,10 @@ export function createRoom(scene) {
     wardrobeGroup.position.set(2.4, 0, 2.2);
     wardrobeGroup.rotation.y = Math.PI;
     group.add(wardrobeGroup);
-    colliders.push(makeAABB(2.4, 0, 2.2, 0.55, 1.05, 0.32));
+    const wardrobeCollider = makeAABB(2.4, 0, 2.12, 0.62, 1.05, 0.46);
+    wardrobeCollider.userData = { label: 'bedroom-wardrobe' };
+    colliders.push(wardrobeCollider);
+    playerColliders.push(wardrobeCollider);
     const wardrobeMesh = wdBody;
 
     const paintingZone = new THREE.Vector3(0, 0, 1.8);

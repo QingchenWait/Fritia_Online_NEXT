@@ -92,6 +92,24 @@
 @media (max-width: 820px) {
     .dream-grid { grid-template-columns: 1fr; }
     #dream-furniture-description { min-height: 200px; }
+    .roundtable-shell { height: 94vh; }
+    .roundtable-setup-grid { grid-template-columns: 1fr; overflow-y: auto; }
+    .roundtable-participant-list { max-height: 330px; }
+    .roundtable-chat-layout { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+    .roundtable-roster { min-height: auto; cursor: pointer; }
+    .roundtable-participant-strip {
+        display: flex;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding-bottom: 10px;
+    }
+    .roundtable-strip-member { min-width: 128px; }
+    .roundtable-roster-actions { margin: 0 12px 12px; justify-content: flex-start; }
+    .roundtable-mini-picker--members {
+        left: 0;
+        right: auto;
+        transform: none;
+    }
 }
 
 /* ===== 小屏 ===== */
@@ -208,6 +226,153 @@
     .bar-guest-file-card { min-height: 98px; padding: 14px; }
     .bar-guest-foot { flex-direction: column; align-items: stretch; }
     .bar-guest-foot .btn { width: 100%; }
+    .roundtable-head .otome-panel__actions {
+        width: 100%;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+    }
+    .roundtable-head .otome-panel__sub { display: none; }
+    .roundtable-head .otome-panel__kicker {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 150px;
+    }
+    .roundtable-head.otome-panel__head,
+    .roundtable-head {
+        min-height: auto;
+        padding-top: 12px;
+        padding-bottom: 12px;
+    }
+    .roundtable-head .otome-panel__actions {
+        width: auto;
+        align-self: center;
+    }
+    .roundtable-head .otome-chip {
+        padding: 7px 10px;
+        min-height: 32px;
+        font-size: 0.78rem;
+    }
+    .roundtable-setup-grid,
+    .roundtable-chat-layout { padding: 10px; gap: 10px; }
+    .roundtable-roster.is-collapsed {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        overflow: hidden;
+    }
+    .roundtable-roster.is-collapsed .roundtable-panel-label {
+        order: 2;
+        flex: 0 0 auto;
+        min-width: auto;
+        padding: 0;
+        gap: 0;
+    }
+    .roundtable-roster.is-collapsed .roundtable-panel-label span {
+        font-size: 0.86rem;
+        white-space: nowrap;
+    }
+    .roundtable-roster.is-collapsed .roundtable-panel-label strong {
+        display: none;
+    }
+    .roundtable-roster.is-collapsed .roundtable-participant-strip {
+        order: 3;
+        display: flex;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        justify-content: flex-end;
+        gap: 4px;
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        padding: 0;
+    }
+    .roundtable-roster.is-collapsed .roundtable-strip-member {
+        min-width: 0;
+        width: 28px;
+        height: 28px;
+        flex: 0 0 28px;
+        padding: 0;
+        border-radius: 50%;
+        background: transparent;
+        border-color: transparent;
+    }
+    .roundtable-roster.is-collapsed .roundtable-strip-member span:not(.roundtable-avatar) {
+        display: none;
+    }
+    .roundtable-roster.is-collapsed .roundtable-avatar--sm {
+        width: 28px;
+        height: 28px;
+    }
+    .roundtable-roster.is-collapsed .roundtable-roster-actions {
+        order: 1;
+        flex: 0 0 auto;
+        margin: 0;
+        padding: 0;
+        justify-content: flex-end;
+        min-width: 30px;
+    }
+    .roundtable-roster.is-collapsed #roundtable-add-member,
+    .roundtable-roster.is-collapsed #roundtable-remove-member,
+    .roundtable-roster.is-collapsed .roundtable-card-remove,
+    .roundtable-roster.is-collapsed .roundtable-mini-picker {
+        display: none;
+    }
+    .roundtable-roster.is-collapsed #roundtable-back {
+        display: inline-flex;
+        width: 30px;
+        height: 30px;
+        font-size: 0.95rem;
+    }
+    .roundtable-roster.is-expanded {
+        position: relative;
+        cursor: default;
+    }
+    .roundtable-roster.is-expanded .roundtable-panel-label {
+        min-height: 42px;
+        padding-left: 58px;
+        align-items: center;
+    }
+    .roundtable-roster.is-expanded .roundtable-roster-actions {
+        position: static;
+    }
+    .roundtable-roster.is-expanded #roundtable-back {
+        position: absolute;
+        left: 14px;
+        top: 12px;
+        width: 32px;
+        height: 32px;
+        font-size: 1rem;
+    }
+    .roundtable-participant-list { grid-template-columns: 1fr; max-height: 250px; padding-inline: 10px; }
+    .roundtable-rule-board { padding: 12px; }
+    .roundtable-message-list { min-height: 300px; padding: 12px; }
+    .roundtable-bubble { max-width: 82%; }
+    .roundtable-input-console { grid-template-columns: 1fr; }
+    .roundtable-mini-picker--mentions {
+        left: 12px;
+        right: auto;
+        max-width: calc(100% - 24px);
+    }
+    .roundtable-mini-picker__grid { grid-template-columns: repeat(3, minmax(62px, 1fr)); }
+    #roundtable-input { font-size: 16px; min-height: 72px; }
+    #roundtable-send { min-height: 44px; }
+    .roundtable-foot {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+    }
+    .roundtable-foot #roundtable-chat-status { min-width: 0; }
+    .roundtable-game-time {
+        justify-self: end;
+        font-size: 0.82rem;
+    }
+    .roundtable-foot .btn { width: 100%; }
+    #roundtable-continue,
+    #roundtable-start { grid-column: span 1; }
     #bartending-challenge-panel.ui-overlay {
         align-items: flex-start;
         justify-content: center;
@@ -311,6 +476,8 @@
     .bar-guest-card-list { max-height: 170px; }
     .bar-guest-file-grid { grid-template-columns: 1fr; }
     .bar-guest-file-card .dance-file-card__title { white-space: normal; }
+    .roundtable-setup-grid { grid-template-columns: 1fr; }
+    .roundtable-participant-list { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 420px) {

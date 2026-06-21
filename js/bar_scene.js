@@ -58,6 +58,14 @@ const BAR_BARTENDING_BOX_MIN_Y = 0.65;
 const BAR_BARTENDING_BOX_MAX_Y = 2.85;
 const BAR_BARTENDING_BOX_MIN_Z = 40.0;
 const BAR_BARTENDING_BOX_MAX_Z = 45.0;
+const BAR_ROUNDTABLE_BOX_MIN_X = -7.9;
+const BAR_ROUNDTABLE_BOX_MAX_X = -5.3;
+const BAR_ROUNDTABLE_BOX_MIN_Y = 0.5;
+const BAR_ROUNDTABLE_BOX_MAX_Y = 0.8;
+const BAR_ROUNDTABLE_BOXES = Object.freeze([
+    { minZ: 36.7, maxZ: 39.4 },
+    { minZ: 42.6, maxZ: 45.2 }
+]);
 
 let barScenePromise = null;
 let barSceneData = null;
@@ -716,6 +724,32 @@ function createBartendingMarker() {
     return { interactionMesh: mesh };
 }
 
+function createRoundtableMarkers() {
+    return BAR_ROUNDTABLE_BOXES.map((box, index) => {
+        const geometry = new THREE.BoxGeometry(
+            BAR_ROUNDTABLE_BOX_MAX_X - BAR_ROUNDTABLE_BOX_MIN_X,
+            BAR_ROUNDTABLE_BOX_MAX_Y - BAR_ROUNDTABLE_BOX_MIN_Y,
+            box.maxZ - box.minZ
+        );
+        const material = new THREE.MeshBasicMaterial({
+            transparent: true,
+            opacity: 0,
+            depthWrite: false,
+            side: THREE.DoubleSide
+        });
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.name = `BarRoundtableWhispersInvisibleBox${index + 1}`;
+        mesh.position.set(
+            (BAR_ROUNDTABLE_BOX_MIN_X + BAR_ROUNDTABLE_BOX_MAX_X) * 0.5,
+            (BAR_ROUNDTABLE_BOX_MIN_Y + BAR_ROUNDTABLE_BOX_MAX_Y) * 0.5,
+            (box.minZ + box.maxZ) * 0.5
+        );
+        mesh.visible = false;
+        mesh.userData.interactionCenter = mesh.position.clone();
+        return mesh;
+    });
+}
+
 function createBarLights() {
     const group = new THREE.Group();
     group.name = 'BarSceneLights';
@@ -880,6 +914,8 @@ async function loadBarSceneInternal(scene, options = {}) {
     group.add(invite.interactionMesh);
     const bartending = createBartendingMarker();
     group.add(bartending.interactionMesh);
+    const roundtableInteractionMeshes = createRoundtableMarkers();
+    for (const mesh of roundtableInteractionMeshes) group.add(mesh);
 
     scene.add(group);
     hideResidualMmdToonObjects(scene);
@@ -911,6 +947,7 @@ async function loadBarSceneInternal(scene, options = {}) {
         danceInteractionMesh: dance.interactionMesh,
         inviteInteractionMesh: invite.interactionMesh,
         bartendingInteractionMesh: bartending.interactionMesh,
+        roundtableInteractionMeshes,
         spawn
     };
     return barSceneData;
@@ -976,6 +1013,10 @@ export function getBarInviteInteractionMesh() {
 
 export function getBarBartendingInteractionMesh() {
     return barSceneData?.bartendingInteractionMesh || null;
+}
+
+export function getBarRoundtableInteractionMeshes() {
+    return barSceneData?.roundtableInteractionMeshes || [];
 }
 
 export function getBarSpawn() {

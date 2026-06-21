@@ -1,6 +1,6 @@
 ﻿# Fritia Online NEXT 开发文档
 
-更新时间：2026-06-19
+更新时间：2026-06-21
 
 本文是当前静态 Three.js 项目的开发事实源。项目不依赖后端服务，游戏数据、设置、历史、成就和造梦家具主要存储在浏览器 `localStorage` 中；自定义访客 PMX/人格文档存储在 IndexedDB，并通过前端 ZIP 存档机制迁移。
 
@@ -53,6 +53,7 @@ fritia_online_v3/
 │   ├── dance_system.js
 │   ├── bar_guest_system.js
 │   ├── bartending_challenge.js
+│   ├── roundtable_whispers.js
 │   ├── bar_performance.js
 │   ├── zip_store.js
 │   ├── game_state.js
@@ -129,6 +130,7 @@ npm run dev
 - `updateInteractionPrompt()`：复用 `#painting-prompt` 和 `#interaction-prompt` 显示当前可用交互；造梦家具显示 `按 E 管理 [家具名]`；暖调闲聚准入浮窗显示时改为 `按 E 关闭`。
 - 暖调闲聚舞台：看向 `BarDanceInvisiblePlane` 时显示 `按 E 观看跳舞`，打开 `#dance-panel`；舞蹈流程中 `updateDanceSystem(delta)` 接管 VMD 动作，暂停角色日常 AI，但玩家移动/视角仍由 `controls.js` 正常更新。
 - 暖调闲聚调酒：看向 `BarBartendingChallengeInvisibleBox` 时显示 `按 E 请琴诺帮忙调酒`，打开 `#bartending-challenge-panel` 并释放控制模式；Escape 或关闭按钮退出并派发 `fritia-overlay-closed`。
+- 暖调闲聚圆桌密语：看向 `BarRoundtableWhispersInvisibleBox1/2` 时显示 `按 E 加入圆桌密语`，打开 `#roundtable-whispers-panel` 并释放控制模式；面板关闭或离开酒吧时会清空圆桌请求队列并中断当前 LLM 请求。
 - `hasClearLineOfSight(targetPoint, targetDistance)`：按 E 交互视线遮挡判断。玩家视角到目标点之间如果被当前碰撞体阻挡，则不显示也不触发按 E 管理/交互。睡眠模式的 `按 E 起床` 不走这个规则。
 - `isLookingAtTerminal()` / `isLookingAtDreamTerminal()` / `isLookingAtDreamDoor()` / `isLookingAtPainting()` 等：各类准星交互检测。
 - `toggleDreamDoor()`：切换造梦空间推拉门开关状态，并刷新玩家/角色碰撞作用域。
@@ -141,6 +143,7 @@ npm run dev
 - `tryEnterBarSceneWithAdmission()`：旧房间南侧门的暖调闲聚准入检查。需要完成 3 次日常对话、1 次约会、1 次睡觉模式、送出 1 件礼物和制造 1 件造梦家具；未完成时在门位置投影 `#bar-admission-panel`，隐藏进入提示并显示 `按 E 关闭`，全部完成后直接调用 `enterBarScene()`。
 - `refreshActiveHistoryTab()`：打开历史对话浮层时按当前激活栏目刷新内容，确保停留在“暖调闲聚”页后再次打开也能看到最新访客/酒吧对话。
 - `enterBarScene()` / `exitBarScene()`：通过黑屏转场进入/离开暖调闲聚；切换旧房间组显示、scene background/fog、玩家碰撞体和芙提雅导航作用域。
+- `exitBarScene()` 会强制关闭圆桌密语并取消 overlay 自动恢复控制标记，避免转场结束后旧面板状态抢回 Pointer Lock。
 - `exitBarScene()` 在舞蹈流程未结束前会被拦截；出口提示保留但置灰且不携带 `data-prompt-key`，避免点击或按 E 触发返回。
 - `exportData()`：导出设置、游戏状态、日常对话、约会对话、成就、礼物、造梦家具、挂画。
 - `handleImportFile(e)`：导入 JSON，兼容旧存档，导入后刷新 HUD、成就、礼物、造梦家具。
@@ -226,6 +229,7 @@ npm run dev
 - 提供不可见出口交互平面；酒吧内看向出口显示 `按 E 返回卧室`。
 - 提供不可见舞台互动平面 `BarDanceInvisiblePlane`：范围固定为 `X=-4.0~4.0`、`Y=0.0~4.5`、`Z=32.5`，只用于准星命中检测，不加入碰撞体。
 - 提供不可见邀请互动体 `BarInviteInvisibleBox`：范围固定为 `X=-1.0~1.0`、`Y=0.67~1.07`、`Z=46.5~49.1`，只用于准星命中检测，不加入碰撞体。
+- 提供圆桌密语不可见互动体 `BarRoundtableWhispersInvisibleBox1/2`：两个范围固定为 `X=-5.3~-7.9`、`Y=0.5~0.8`、`Z=36.7~39.4` 和 `Z=42.6~45.2`，只用于准星命中检测，不加入碰撞体。
 
 导出：
 
@@ -236,6 +240,7 @@ npm run dev
 - `getBarExitInteractionMesh()`：返回出口不可见交互平面。
 - `getBarDanceInteractionMesh()`：返回舞台不可见交互平面。
 - `getBarInviteInteractionMesh()`：返回邀请不可见交互体。
+- `getBarRoundtableInteractionMeshes()`：返回圆桌密语两个不可见交互体。
 
 运行约定：
 
@@ -251,7 +256,7 @@ npm run dev
 - `createBarColliderSpatialIndex(colliders)`：按 X/Z 网格为酒吧 AABB 碰撞体建立空间索引，避免每帧遍历完整 PMX 碰撞体数组。
 - `attachBarColliderSpatialIndex(colliders, index)`：把索引以不可枚举属性挂到酒吧 colliders 数组上；非酒吧数组没有该属性，原功能不受影响。
 - `getBarCollisionCandidates(colliders, position, radius)`：玩家和芙提雅每次按当前位置实时查询附近碰撞候选，支持角色被瞬移到舞台等位置后立即按新位置查询。
-- `createBarInteractionProbe()`：酒吧出口/舞台准星检测降频缓存，默认约 90ms 刷新；按键触发时强制刷新，避免缓存延迟影响交互。
+- `createBarInteractionProbe()`：酒吧出口/舞台/邀请/调酒/圆桌密语准星检测降频缓存，默认约 90ms 刷新；按键触发时强制刷新，避免缓存延迟影响交互。
 
 运行约定：
 
@@ -333,6 +338,7 @@ LLM JSON 协议：
 - 琴诺接近玩家时会在固定点转身并让头部看向玩家镜头；玩家离开判定范围后，身体会平滑转回初始朝向；对话使用独立紫色主题。玩家按 `F` 与琴诺开始对话时，会在 `src/_voices/Cherno_welcome_1.wav` 与 `src/_voices/Cherno_welcome_2.wav` 中随机播放一段欢迎语，该语音仅限琴诺角色。
 - 访客对话使用设置面板中的 OpenAI 兼容 `chat/completions` 配置，不新增后端和独立 API Key；请求不设置本地 `max_tokens` 硬上限，避免琴诺、芬妮和自定义访客回复被截断。
 - 暖调闲聚访客对话开始后，全局 `F/E/1/2` 等功能键不再触发游戏交互，按键会保留给文本输入；访客对话只通过 `Esc` 或右上角关闭按钮手动结束。
+- `getActiveBarGuestParticipants()` 提供当前已加载且可见访客的只读快照，供圆桌密语读取自定义参与者；只返回 `id/name/prompt/type/avatarText/isBuiltin/isSpecial`，不暴露 runtime、mesh、object URL 或 IndexedDB 句柄。
 
 存储：
 
@@ -340,6 +346,61 @@ LLM JSON 协议：
 - `localStorage.fritia_bar_guest_builtin_state`：内置访客保留状态，目前记录已邀请并应在重进酒吧时自动加载的内置角色 id，例如 `builtin:fenny`。
 - `localStorage.fritia_bar_conversation_history`：暖调闲聚中访客对话历史；芙提雅在酒吧中的对话仍保存在 `fritia_chat_history`，但记录 `scene:"bar"` 并在历史 UI 中归入暖调闲聚。
 - IndexedDB `fritia_bar_guest_assets/assets`：保存用户导入的 PMX 和人格文档 Blob，key 使用 JSON 中记录的相对路径，例如 `bar_guests/<id>/<file>.pmx`。
+
+## 圆桌密语：`js/roundtable_whispers.js`
+
+职责：
+
+- 管理暖调闲聚多人 LLM 群聊浮层 `#roundtable-whispers-panel`；看向 `BarRoundtableWhispersInvisibleBox1/2` 时显示 `按 E 加入圆桌密语`。
+- 第一步为邀请组局界面，玩家可选择芙提雅、琴诺、芬妮以及当前暖调闲聚已加载的自定义访客，并设置是否允许 bot 自动接话、是否允许 idle 主动搭话、玩家未回话时最多连续互聊次数。
+- 第二步为群聊界面，显示参与者列表、消息流、不同头像/颜色气泡、玩家输入框和发送按钮；移动端折叠为单列布局。
+- 窄屏下隐藏圆桌标题栏副标题，圆桌头部使用与调酒挑战一致的酒红/金色调；聊天界面的“当前圆桌”默认压缩为单行小头像和小型重新组局按钮，点击栏目标题或空白区域后展开成员卡片、邀请和移除按钮。
+- 所有 API 调用复用 `settings.js#getSettings()` 中的 `apiKey/baseUrl/model`，不新增后端、不新增独立 Key。
+
+角色来源：
+
+- 芙提雅：`src/_queries/system_prompt.txt` + `src/_logos/Profile_Fritia.png`。
+- 琴诺：`src/_char_card/Cherno/char_cherno_prompt.txt` + `src/_logos/Profile_Cherno.png`。
+- 芬妮：`src/_char_card/fenny/char_fenny_prompt.txt` + `src/_logos/Profile_Fenny.png`。
+- 自定义访客：通过 `getActiveBarGuestParticipants()` 读取当前已加载访客的名字和 prompt；头像使用名称首字。
+
+调度规则：
+
+- 所有 bot 发言必须经过本地中央调度器，任意时刻最多 1 个 LLM 请求。
+- 两次 LLM 请求完成到下一次发起之间至少约 `4s` 硬冷却。
+- 请求队列上限为 `3`；玩家消息优先，会丢弃或合并低优先级 idle/follow-up。
+- 玩家消息默认触发 1 个主回复；玩家可在一句话里 `@` 多人、`@全体`，或用“大家/各位/都说说”等关键词召唤全体成员，被点名成员会按中央队列逐个回复。
+- 玩家或 bot 文本中提到成员名字时，调度器会把被提到的成员加入回复队列；玩家批量 `@` 产生的 bot 回复正文如果点到其他成员，也会启动 bot-to-bot 互聊链；bot 提到自己的名字不会再次唤醒自己。
+- bot 开头的 `@某人` 显示前缀默认会被忽略，但正文仍会扫描成员名；例如默认设置下 `@芬妮 早上好` 不唤醒芬妮，`@芬妮 芬妮早上好` 会唤醒芬妮。开启“bot 开头 @ 也触发回复”后，开头 `@芬妮` 也会唤醒芬妮。
+- 预算充足且概率命中时，bot 回复后可追加自然 follow-up，默认概率约 `55%`；显式点名队列优先于随机 follow-up，只要未触发硬预算、API 错误或互聊上限，就不会被概率分支吞掉。
+- bot-to-bot 互聊链可由系统主动 follow-up 或 bot 正文点名其他成员启动；互聊链启动后，模型过早输出 `handoff_to_player` 会被本地延后；默认互聊上限为 `3` 时，通常第 `2~3` 轮才会交还话题。达到上限前最后一轮会被本地强制为 handoff，让该轮主动把话题交还给分析员。
+- idle 主动发言只在面板打开、仍在酒吧、已开启 idle、长时间无对话且预算允许时触发，默认间隔约 `45s`。
+- 3 分钟滑动窗口预算：总调用 soft/hard 约为 `16/22`，粗略 token soft/hard 约为 `42000/68000`，soft limit 后禁用 idle/follow-up，idle 调用上限约 `3`。本地阻塞、冷却等待和 API 错误会在 console 输出 `[Roundtable]` / `[Roundtable][blocked]` / `[Roundtable][api-error]` 日志，便于区分本地调度限制和服务端错误。
+- 遇到 `429/rate limit/too many requests` 会临时拉长冷却，并在状态栏提示“圆桌稍微放慢了语速”。
+- 面板关闭、离开酒吧、设置缺失或预算超限时会清空队列、清空低优先级候选并 abort 当前请求。
+
+bot 间对话债务：
+
+- `interBotDebt` 记录玩家未回话时的连续 bot-to-bot 自主接话次数，默认上限为 `3`，玩家可在圆桌规则中调为 `1~6`。
+- follow-up 视为 bot-to-bot 时增加 debt；达到玩家设定上限后排入 `handoff_to_player`，下一条 bot 消息必须把话题交还给分析员。
+- handoff 后进入 `playerFloorLock`，玩家下一次发言只允许触发 1 个主回复，禁止额外 follow-up、idle 和 bot-to-bot 链。
+- 玩家短回复如“嗯”“继续”“你们说”不会降低 debt；较明确的新话题只会逐步降低 debt，不会直接清零。
+
+LLM 输出协议：
+
+- 每次只选择一个 speaker 调用 LLM。
+- 模型只允许输出一条 JSON 消息，字段为 `text/targetId/intent/emotion/wantsFollowUp/suggestedFollowUpTargetId/topicHint`。
+- bot 文本必须以 `@回复对象` 开头，例如 `@分析员`、`@琴诺`；bot 不会直接 `@大家`，只有玩家输入 `@全体成员` 或“大家/各位/都说说”等关键词时才会让全体 bot 入队。本地会强制补齐或修正这个显示前缀。默认情况下该前缀不代表真实 @ 请求；玩家可在圆桌设置中开启“bot 开头 @ 也触发回复”。
+- 本地会去掉 Markdown fence、角色名前缀和多余引号；JSON 解析失败、空文本、敌对关键词或超长文本会使用本地 fallback。
+- `targetId/intent/emotion` 不合法会改为安全默认值；`handoff_to_player` 必须面向玩家且 `wantsFollowUp=false`。
+- 禁止 `eval`、`new Function` 或执行任何 LLM 输出。
+
+持久化：
+
+- localStorage key：`fritia_roundtable_whispers`。
+- 保存最近 5 天内最多 240 条完整圆桌消息、`topicSummary`、参与者选择和圆桌设置（自动接话、空闲搭话、bot 开头 @ 是否触发回复、互聊上限）；“组建群聊”创建的临时空白窗口会在重新组局或关闭时迁移回完整上下文，“继续对话”直接打开完整上下文。
+- 圆桌消息不写入 `fritia_bar_conversation_history`，避免污染访客一对一聊天上下文。
+- 导出字段为 `roundtableWhispers`；导入时按消息 id 去重合并，旧存档缺失该字段时使用空默认数据。
 
 ## ZIP 存档：`js/zip_store.js`
 
@@ -367,6 +428,7 @@ LLM JSON 协议：
 - `rotateView(deltaX, deltaY)`：家具快捷编辑时在非 Pointer Lock 状态下拖动视角。
 - `releaseControlMode({ resumeOnClose })`：打开 overlay 前释放控制模式。
 - `resumeControlMode()`：overlay 关闭后恢复控制模式。
+- `cancelOverlayResume()`：取消 overlay 关闭后的自动恢复控制标记；离开酒吧强制关闭圆桌密语时使用，避免转场后抢回 Pointer Lock。
 - `enterControlMode()`：只切换内部操作状态，用于触控或 Pointer Lock 已存在的场景。
 - `forceEnterControlMode()`：主动请求 Pointer Lock 并恢复操作模式；造梦家具特写过场结束后使用该接口，避免出现可移动但鼠标未锁定的半激活状态。
 
@@ -377,6 +439,7 @@ overlay 管理列表：
 - `history-panel`
 - `model-selector`
 - `dance-panel`
+- `roundtable-whispers-panel`
 - `sleep-ui`
 - `date-panel`
 - `gift-terminal-panel`
@@ -1018,6 +1081,34 @@ DOM ID：
 - `#bartending-status`
 - `#bartending-start-btn`
 
+圆桌密语：
+
+- `#roundtable-whispers-panel`
+- `#roundtable-whispers-close`
+- `#roundtable-debt`
+- `#roundtable-queue`
+- `#roundtable-step-setup`
+- `#roundtable-step-chat`
+- `#roundtable-participant-list`
+- `#roundtable-selected-count`
+- `#roundtable-auto-talk`
+- `#roundtable-idle-talk`
+- `#roundtable-chain-limit`
+- `#roundtable-chain-limit-value`
+- `#roundtable-start`
+- `#roundtable-continue`
+- `#roundtable-back`
+- `#roundtable-add-member`
+- `#roundtable-remove-member`
+- `#roundtable-member-picker`
+- `#roundtable-mention-picker`
+- `#roundtable-status`
+- `#roundtable-chat-status`
+- `#roundtable-participant-strip`
+- `#roundtable-message-list`
+- `#roundtable-input`
+- `#roundtable-send`
+
 家具位置 overlay：
 
 - `#dream-placement-editor-panel`
@@ -1075,6 +1166,7 @@ DOM ID：
 - `fritia_bar_conversation_history`：暖调闲聚访客对话历史。
 - `fritia_bar_guest_cards`：暖调闲聚自定义访客元数据；PMX/人格文档 Blob 存储于 IndexedDB `fritia_bar_guest_assets/assets`。
 - `fritia_bar_guest_builtin_state`：暖调闲聚内置访客保留状态；当前用于记录芬妮是否应随酒吧场景自动加载。
+- `fritia_roundtable_whispers`：圆桌密语完整消息历史 `fullMessages/messages`、`fullTopicSummary/topicSummary`、参与者选择、自动接话/idle 设置和 `botChainLimit`；消息仅保留最近 5 天内最多 240 条，旧存档的 `messages/topicSummary` 会自动迁移。
 - `fritia_achievements`：成就解锁与通知状态。
 - `fritia_painting`：挂画图片 data URL。
 - `fritia_dream_furniture`：造梦家具记录数组。
@@ -1114,6 +1206,7 @@ DOM ID：
   - detail：`{ id }`。
   - 用途：恢复控制模式和清理互动状态。
   - 调酒挑战关闭时 detail 为 `{ id: "bartending-challenge-panel" }`。
+  - 圆桌密语关闭时 detail 为 `{ id: "roundtable-whispers-panel" }`；离开酒吧强制关闭时不派发该事件，并由 `controlsModule.cancelOverlayResume()` 清理恢复标记。
 - `fritia-game-state-updated`
   - 来源：数据金变化、统计变化、礼物变化。
   - detail 可包含 `{ moneyDelta, reason }`。
@@ -1142,6 +1235,7 @@ DOM ID：
 - `conversationHistory`
 - `dateConversationHistory`
 - `barConversations`
+- `roundtableWhispers`
 - `barGuestBuiltinState`
 - `barGuestCards`
 - `painting`
@@ -1150,7 +1244,7 @@ DOM ID：
 
 - `gameState` 使用 `importGameState()` 规范化。
 - `conversationHistory`、`dateConversationHistory` 覆盖式导入。
-- `barConversations` 覆盖式导入；`barGuestBuiltinState` 覆盖式恢复内置访客保留状态；`barGuestCards` 按 id 合并并恢复 IndexedDB 资源。
+- `barConversations` 覆盖式导入；`roundtableWhispers` 按消息 id 去重合并；`barGuestBuiltinState` 覆盖式恢复内置访客保留状态；`barGuestCards` 按 id 合并并恢复 IndexedDB 资源。
 - `dreamFurniture` 按 `id` 去重合并，坏 spec 或不安全摆放会跳过，不中断整体导入。
 - `achievements` 合并 timestamp。
 - `settings` 和 `painting` 若存在则导入。
@@ -1202,6 +1296,7 @@ DOM ID：
 - 看向旧房间南侧门：进入暖调闲聚；如果入场券任务未完成，则在门位置显示准入任务浮窗，提示切换为 `按 E 关闭`，再次按 E 或触摸提示关闭浮窗。
 - 暖调闲聚中看向出口平面：返回卧室。
 - 暖调闲聚中看向舞台平面：打开舞曲选择；舞蹈流程未结束前返回卧室置灰不可用。
+- 暖调闲聚中看向圆桌密语互动体：打开 `#roundtable-whispers-panel`，可选择参与者并进入多人群聊。
 - 看向挂画：上传图片。
 - 看向衣柜：换装。
 
@@ -1266,9 +1361,21 @@ Escape：
 21. 点击 `这杯先放过我` 不改变 HP、不增加已饮用杯数，可无限跳过；本杯仍会揭示调制结果，黑暗料理显示 `危险回避`，正常饮品显示 `错失良机`，再点 `下一杯` 回到材料选择。
 22. HP ≤ 0 时显示失败文案；喝满 8 杯且 HP > 0 时显示成功文案，并为“安全撤离”计入 1 次胜利；点击重新挑战重置为 HP 100。
 23. 调酒挑战进行中点击右上关闭或按 Escape，会关闭浮层、丢弃本局状态、恢复控制模式；请求仍在进行时应中断或忽略结果。
-24. 访客只在酒吧内移动和对话；离开酒吧后临时访客卸载，已保存访客和已保留的内置访客下次进入酒吧自动加载。
-25. 酒吧内芙提雅对话和访客对话都显示在历史面板的“暖调闲聚”页；芙提雅在卧室/造梦空间的对话仍显示在“日常对话”页。
-26. 导出生成 `.zip`，包含 `save.json` 与自定义访客资源；导入 ZIP 后可恢复自定义访客并在酒吧重新加载；调酒挑战不新增导出字段。
+24. 酒吧内看向 `X=-5.3~-7.9, Y=0.5~0.8, Z=36.7~39.4` 或 `Z=42.6~45.2` 圆桌密语互动体，提示 `按 E 加入圆桌密语`，按 E 打开 `#roundtable-whispers-panel` 并释放控制模式。
+25. 圆桌密语邀请界面应显示芙提雅、琴诺、芬妮和当前已加载的自定义访客；可勾选角色自动接话和 idle 主动搭话，并调整玩家未回话时连续互聊上限。
+26. 点击 `组建群聊` 会进入空白临时群聊窗口；点击 `继续对话` 会先迁移上次临时窗口内容，再打开完整群聊上下文。
+27. 当前圆桌侧栏提供圆形 `+` 添加成员、`-` 删除成员、`↩` 重新组局按钮；点击 `+` 在按钮上方打开成员邀请小浮窗，点击成员卡片加入；点击 `-` 进入移除模式，每个当前成员卡片显示红色圆形 `-`，点击后移出对应成员。
+28. 圆桌成员头像可点击并把 `@成员名` 补入输入框；输入框内键入 `@` 会在上方打开成员选择浮窗，点击后同样补齐 `@成员名`。
+29. 圆桌密语聊天界面中，玩家发送消息后只发起中央调度队列；`@角色名`、`@全体`、包含多个成员名或“大家/各位/都说说”等全体关键词时，被点名成员会按队列逐个回复。
+30. bot 不会直接 `@大家`，bot 的 `@` 前缀只指向分析员或某个具体成员；bot 开头 `@某人` 前缀默认不触发对方，开启设置后可触发；正文中再次提到其他成员名字会确定性触发对方排队回复；bot-to-bot follow-up 概率高于初版，但达到玩家设定互聊上限后下一条 bot 消息应把话题交还给分析员，并进入 `playerFloorLock`。
+31. 窄屏下圆桌标题栏不显示副标题，“当前圆桌”默认压缩为一行小头像和小型 `↩`；点击标题或空白区域后展开角色卡片、`+` 和 `-`。
+32. 圆桌密语任意时刻最多 1 个 LLM 请求；快速连续输入不会积压大量低优先级请求；429/rate limit 后状态栏提示放慢语速。
+33. 圆桌密语未配置 API Key 时不会卡死，会插入本地系统提示；LLM 输出非法、敌对争风吃醋内容或 JSON 解析失败时使用本地 fallback。
+34. 关闭圆桌密语或离开酒吧时，请求队列清空，正在进行的请求被中断；返回卧室后不会继续后台调用 LLM。
+35. 刷新页面后圆桌密语可恢复最近完整消息、topicSummary 和开关设置；导出/导入存档包含 `roundtableWhispers` 并按消息 id 去重合并。
+36. 访客只在酒吧内移动和对话；离开酒吧后临时访客卸载，已保存访客和已保留的内置访客下次进入酒吧自动加载。
+37. 酒吧内芙提雅对话和访客对话都显示在历史面板的“暖调闲聚”页；芙提雅在卧室/造梦空间的对话仍显示在“日常对话”页。圆桌密语使用独立存储，不污染访客一对一对话上下文。
+38. 导出生成 `.zip`，包含 `save.json`、圆桌密语数据与自定义访客资源；导入 ZIP 后可恢复自定义访客和圆桌历史并在酒吧重新加载；调酒挑战不新增导出字段。
 
 旧功能回归：
 

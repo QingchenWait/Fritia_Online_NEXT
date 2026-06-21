@@ -1098,6 +1098,20 @@ export function getGuestPosition(runtime) {
     return getCharacterPosition(runtime?.cd);
 }
 
+export function getActiveBarGuestParticipants() {
+    return [...state.runtimes.values()]
+        .filter(runtime => runtime?.cd?.root?.visible && runtime?.card?.id && runtime?.card?.name)
+        .map(runtime => ({
+            id: runtime.card.id,
+            name: runtime.card.name,
+            prompt: runtime.prompt || runtime.cd?.dialoguePrompt || '',
+            type: runtime.card.builtin ? 'builtin_guest' : 'custom_guest',
+            avatarText: String(runtime.card.name || '?').trim().slice(0, 1) || '?',
+            isBuiltin: Boolean(runtime.card.builtin),
+            isSpecial: Boolean(runtime.card.special)
+        }));
+}
+
 function createMessage(role, content, characterId, characterName) {
     return { role, content, characterId, characterName, scene: 'bar', ts: Date.now() };
 }
