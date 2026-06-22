@@ -741,6 +741,7 @@ localStorage key：`fritia_date_history`
 - `requestGiftEvaluation(detail, settings)`：请求 LLM。
 - `buildGiftRequestBody(detail, settings, mode)`：构造 OpenAI 兼容请求体。
 - `fetchGiftCompletionStream(settings, body)`：兼容 SSE 流式响应。
+- 礼物评估请求不设置本地 `max_tokens` 硬上限，避免推理模型把最终 `AMOUNT/SCORE/COMMENT` 截断；流式解析会提取 `chat.completion.chunk` 中的正文内容，若只收到原始 `data: {...}` SSE 结构而没有正文，会报错而不会把该 JSON chunk 当作礼物评价保存。
 - `parseGiftEvaluation(content)`：解析礼物名称、价格、评分、理由。
 - `handlePurchaseGift()`：扣款、加好感、加入礼物库存。
 
