@@ -572,6 +572,7 @@ localStorage key：`fritia-settings`
 - `data-settings-section="controls"` / `data-settings-view="controls"`：操作设置，包含 `#mouse-sensitivity`、`#touch-sensitivity`、`#localization-sensitivity` 及对应数值显示。
 - `data-settings-section="knowledge"` / `data-settings-view="knowledge"`：知识库管理。
 - `data-settings-section="advanced"` / `data-settings-view="advanced"`：高级设置，包含游戏时间速度、造梦空间、圆桌密语和知识库 BM25 参数；配置项标题后用浅色括号显示内部变量名，风险提示直接显示在原变量名说明行位置；“恢复本页默认设置”只重置高级设置项。
+- 高级设置页的数字输入框在窄屏移动端保持 16px computed font-size 以避免 Safari 自动放大；若输入完成后页面仍处于放大状态，会在 blur/change 后通过临时 viewport meta 调整无刷新复位。
 - `data-settings-section="resources"` / `data-settings-view="resources"`：更多资源与制作信息。
 - 设置标题栏副标题会随分组切换；底栏作者文案为 `青尘工作室 | BiliBili @CyanDust_青尘`，宽屏显示 `#settings-site-link` 访问官网，窄屏隐藏。
 - 大模型设置页提供 DeepSeek、MiMO、Qwen 千问、Kimi 的官方 API 入口按钮，仅打开外部控制台，不保存任何额外凭据。

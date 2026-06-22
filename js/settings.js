@@ -196,6 +196,37 @@ export function initSettings(options = {}) {
         return normalizeAdvancedSettings(draft);
     }
 
+    function isMobileViewport() {
+        return Boolean(window.matchMedia?.('(max-width: 820px), (pointer: coarse)')?.matches);
+    }
+
+    function resetViewportZoomAfterInput() {
+        if (!isMobileViewport()) return;
+        const meta = document.querySelector('meta[name="viewport"]');
+        if (!meta) return;
+        const original = meta.dataset.originalContent || meta.getAttribute('content') || 'width=device-width, initial-scale=1.0, viewport-fit=cover';
+        meta.dataset.originalContent = original;
+        const visualScale = Number(window.visualViewport?.scale || 1);
+        if (window.visualViewport && visualScale <= 1.01) return;
+        const scrollX = window.scrollX;
+        const scrollY = window.scrollY;
+        meta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover');
+        requestAnimationFrame(() => {
+            window.scrollTo(scrollX, scrollY);
+            setTimeout(() => {
+                meta.setAttribute('content', original);
+                window.scrollTo(scrollX, scrollY);
+            }, 80);
+        });
+    }
+
+    function scheduleAdvancedInputViewportReset() {
+        setTimeout(() => {
+            if (document.activeElement?.matches?.('.advanced-setting-control input[type="number"]')) return;
+            resetViewportZoomAfterInput();
+        }, 140);
+    }
+
     function updateDeepSeekIntimateVisibility() {
         if (!intimateCard) return;
         const visible = isDeepSeekIntimateModeAvailable(getDraftSettings());
@@ -271,6 +302,10 @@ export function initSettings(options = {}) {
             const normalized = getDraftAdvancedSettings();
             advancedInputs.forEach(item => updateAdvancedValueLabel(item, normalized));
         });
+        if (input.type === 'number') {
+            input.addEventListener('blur', scheduleAdvancedInputViewportReset);
+            input.addEventListener('change', scheduleAdvancedInputViewportReset);
+        }
     });
 
     advancedReset?.addEventListener('click', () => {

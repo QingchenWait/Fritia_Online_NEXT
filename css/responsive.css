@@ -346,6 +346,11 @@
         grid-template-columns: auto minmax(0, 1fr);
         gap: 8px;
     }
+    .advanced-setting-control input[type="number"] {
+        min-height: 34px;
+        padding-block: 4px;
+        font-size: 16px;
+    }
     .settings-foot-actions {
         display: grid;
         grid-template-columns: 1fr;
