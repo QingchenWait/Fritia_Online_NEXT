@@ -1,4 +1,11 @@
 import { initKnowledgeBasePanel, refreshKnowledgeBasePanel } from './knowledge_base.js';
+import {
+    ADVANCED_SETTING_DEFAULTS,
+    getAdvancedSettings,
+    normalizeAdvancedSettings,
+    resetAdvancedSettings,
+    saveAdvancedSettings
+} from './advanced_settings.js';
 
 const DEFAULTS = {
     apiKey: '',
@@ -16,10 +23,11 @@ const SECTION_SUBTITLES = {
     model: '配置对话模型连接，所有密钥只保存在当前浏览器。',
     controls: '设置鼠标和触控的灵敏度。',
     knowledge: '导入外部文本知识库，进一步扩展世界观与人物设定。',
+    advanced: '调整进阶运行参数，仅建议在了解风险时修改。',
     resources: '查看游戏信息、制作鸣谢与相关资源。'
 };
 
-const SETTINGS_SECTIONS = ['model', 'controls', 'knowledge', 'resources'];
+const SETTINGS_SECTIONS = ['model', 'controls', 'knowledge', 'advanced', 'resources'];
 
 function clampSensitivity(value) {
     const next = Number(value);
@@ -108,6 +116,8 @@ export function initSettings(options = {}) {
     const intimateCard = document.getElementById('deepseek-intimate-mode-card');
     const intimateToggle = document.getElementById('deepseek-intimate-mode');
     const aboutText = document.getElementById('settings-about-text');
+    const advancedInputs = [...document.querySelectorAll('[data-advanced-setting]')];
+    const advancedReset = document.getElementById('advanced-reset-defaults');
 
     const panel = document.getElementById('settings-panel');
     const toggle = document.getElementById('settings-toggle');
@@ -117,6 +127,30 @@ export function initSettings(options = {}) {
 
     function formatSensitivity(value) {
         return `${clampSensitivity(value).toFixed(2)}x`;
+    }
+
+    function formatAdvancedValue(key, value) {
+        if (key === 'timeSpeed') return `${Math.round(Number(value) || ADVANCED_SETTING_DEFAULTS.timeSpeed)} 分钟/秒`;
+        if (key === 'dreamDialogueCooldownMs') return `${Math.round((Number(value) || 0) / 1000)} 秒`;
+        if (key === 'roundtableFollowUpRate') return `${Math.round((Number(value) || 0) * 100)}%`;
+        return String(value);
+    }
+
+    function updateAdvancedValueLabel(input, settings = getDraftAdvancedSettings()) {
+        const key = input?.dataset?.advancedSetting;
+        if (!key) return;
+        const label = document.getElementById(`${input.id}-value`);
+        if (label) label.textContent = formatAdvancedValue(key, settings[key]);
+    }
+
+    function applyAdvancedSettingsInputs(nextSettings = getAdvancedSettings()) {
+        const normalized = normalizeAdvancedSettings(nextSettings);
+        advancedInputs.forEach(input => {
+            const key = input.dataset.advancedSetting;
+            if (!key || normalized[key] === undefined) return;
+            input.value = String(normalized[key]);
+            updateAdvancedValueLabel(input, normalized);
+        });
     }
 
     function applySensitivityInputs(nextSettings = getSettings()) {
@@ -150,6 +184,16 @@ export function initSettings(options = {}) {
             localizationSensitivity: clampLocalizationSensitivity(localizationSlider?.value),
             deepseekIntimateMode: Boolean(intimateToggle?.checked)
         };
+    }
+
+    function getDraftAdvancedSettings() {
+        const draft = {};
+        advancedInputs.forEach(input => {
+            const key = input.dataset.advancedSetting;
+            if (!key) return;
+            draft[key] = input.value;
+        });
+        return normalizeAdvancedSettings(draft);
     }
 
     function updateDeepSeekIntimateVisibility() {
@@ -214,12 +258,25 @@ export function initSettings(options = {}) {
 
     initKnowledgeBasePanel();
     applySensitivityInputs(settings);
+    applyAdvancedSettingsInputs();
     void loadAboutText();
 
     mouseSlider?.addEventListener('input', updateSensitivityPreview);
     touchSlider?.addEventListener('input', updateSensitivityPreview);
     localizationSlider?.addEventListener('input', updateSensitivityPreview);
     document.getElementById('model-name')?.addEventListener('input', updateDeepSeekIntimateVisibility);
+
+    advancedInputs.forEach(input => {
+        input.addEventListener('input', () => {
+            const normalized = getDraftAdvancedSettings();
+            advancedInputs.forEach(item => updateAdvancedValueLabel(item, normalized));
+        });
+    });
+
+    advancedReset?.addEventListener('click', () => {
+        const next = resetAdvancedSettings();
+        applyAdvancedSettingsInputs(next);
+    });
 
     toggle.addEventListener('click', () => {
         if (panel.classList.contains('hidden')) {
@@ -246,6 +303,7 @@ export function initSettings(options = {}) {
         if (!s.baseUrl) s.baseUrl = DEFAULTS.baseUrl;
         if (!s.model) s.model = DEFAULTS.model;
         saveSettings(s);
+        saveAdvancedSettings(getDraftAdvancedSettings());
         closePanel();
     });
 

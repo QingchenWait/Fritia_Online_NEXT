@@ -1,11 +1,10 @@
+import { getKnowledgeBaseAdvancedSettings } from './advanced_settings.js';
+
 const DB_NAME = 'fritia_knowledge_base_db';
 const DB_VERSION = 1;
 const STATE_KEY = 'fritia_knowledge_base_state';
 const PRELOADED_STATE_KEY = 'fritia_preloaded_knowledge_base_state';
 
-const DEFAULT_CHUNK_SIZE = 512;
-const DEFAULT_CHUNK_OVERLAP = 50;
-const DEFAULT_CANDIDATE_LIMIT = 50;
 const DEFAULT_INJECT_LIMIT = 6;
 const MAX_UPLOAD_BYTES = 1.5 * 1024 * 1024;
 const MAX_PREVIEW_CHUNKS = 80;
@@ -386,8 +385,9 @@ function splitLongText(text, size, overlap) {
 }
 
 function chunkMarkdownText(rawText, options = {}) {
-    const chunkSize = Math.max(200, Number(options.chunkSize) || DEFAULT_CHUNK_SIZE);
-    const overlap = Math.max(0, Math.min(chunkSize - 1, Number(options.overlap) || DEFAULT_CHUNK_OVERLAP));
+    const defaults = getKnowledgeBaseAdvancedSettings();
+    const chunkSize = Math.max(200, Number(options.chunkSize) || defaults.chunkSize);
+    const overlap = Math.max(0, Math.min(chunkSize - 1, Number(options.overlap) || defaults.chunkOverlap));
     const cleaned = cleanMarkdown(rawText);
     if (!cleaned) return { cleaned, chunks: [] };
 
@@ -1011,7 +1011,7 @@ async function searchSingleKnowledgeBase(kbId, queryInfo, options = {}) {
         }
     });
 
-    const candidateLimit = Math.max(1, Number(options.candidateLimit) || DEFAULT_CANDIDATE_LIMIT);
+    const candidateLimit = Math.max(1, Number(options.candidateLimit) || getKnowledgeBaseAdvancedSettings().candidateLimit);
     const ranked = [...candidateScores.entries()]
         .map(([docIndex, bm25Score]) => createCandidate(
             docIndex,
@@ -1159,14 +1159,15 @@ export async function exportKnowledgeBaseArchive() {
             getAll('chunks'),
             getAll('indexes')
         ]);
+        const kbDefaults = getKnowledgeBaseAdvancedSettings();
         return {
             version: 1,
             exportedAt: Date.now(),
             state: loadState(),
             config: {
-                chunkSize: DEFAULT_CHUNK_SIZE,
-                chunkOverlap: DEFAULT_CHUNK_OVERLAP,
-                candidateLimit: DEFAULT_CANDIDATE_LIMIT,
+                chunkSize: kbDefaults.chunkSize,
+                chunkOverlap: kbDefaults.chunkOverlap,
+                candidateLimit: kbDefaults.candidateLimit,
                 injectLimit: DEFAULT_INJECT_LIMIT,
                 algorithm: 'bm25-keyword-cjk-1g2g'
             },

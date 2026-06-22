@@ -1,3 +1,4 @@
+import { getRoundtableAdvancedSettings } from './advanced_settings.js';
 import { getSettings } from './settings.js';
 import { getGameTimeContext, recordDialogueInteraction } from './game_state.js';
 import { buildRagReferenceMessage } from './knowledge_base.js';
@@ -8,21 +9,16 @@ import {
 
 const STORAGE_KEY = 'fritia_roundtable_whispers';
 const MESSAGE_TTL_MS = 5 * 24 * 60 * 60 * 1000;
-const MAX_STORED_MESSAGES = 240;
-const MAX_SELECTED_PARTICIPANTS = 6;
 const QUEUE_LIMIT = 8;
 const HARD_COOLDOWN_MS = 4000;
 const IDLE_COOLDOWN_MS = 45000;
 const CALL_WINDOW_MS = 3 * 60 * 1000;
-const TOTAL_CALL_LIMIT_10M = 20;
 const SOFT_CALL_LIMIT_10M = 15;
 const IDLE_CALL_LIMIT_10M = 3;
 const TOKEN_SOFT_LIMIT_10M = 300000;
-const TOKEN_HARD_LIMIT_10M = 400000;
 const DEFAULT_INTER_BOT_TURN_LIMIT = 3;
 const MIN_INTER_BOT_TURN_LIMIT = 1;
 const MAX_INTER_BOT_TURN_LIMIT = 6;
-const FOLLOW_UP_RATE = 0.55;
 const IDLE_CHECK_INTERVAL_MS = 3500;
 const MIN_HANDOFF_CHAIN_RATIO = 0.6;
 
@@ -32,6 +28,26 @@ const HANDOFF_INTENT = 'handoff_to_player';
 const ALLOWED_INTENTS = new Set(['answer', 'react', 'tease', 'ask', 'shift_topic', 'idle', HANDOFF_INTENT]);
 const ALLOWED_EMOTIONS = new Set(['neutral', 'happy', 'shy', 'jealous', 'teasing', 'serious']);
 const LOW_PRIORITY_TYPES = new Set(['followup', 'idle']);
+
+function getRoundtableMaxStoredMessages() {
+    return getRoundtableAdvancedSettings().maxStoredMessages;
+}
+
+function getRoundtableMaxParticipants() {
+    return getRoundtableAdvancedSettings().maxParticipants;
+}
+
+function getRoundtableTotalCallLimit() {
+    return getRoundtableAdvancedSettings().totalCallLimit;
+}
+
+function getRoundtableTokenHardLimit() {
+    return getRoundtableAdvancedSettings().tokenHardLimit;
+}
+
+function getRoundtableFollowUpRate() {
+    return getRoundtableAdvancedSettings().followUpRate;
+}
 
 const BUILTIN_DEFS = Object.freeze([
     {
@@ -91,8 +107,8 @@ const SAFE_FALLBACKS = Object.freeze({
         '分析员来定吧，是继续这个话题，还是换个更亲密的？'
     ],
     error: [
-        '刚才那句有点乱，我重新靠近分析员一点再说。',
-        '我先把话收回来，还是让分析员来稳住圆桌吧。',
+        '分析员刚刚的话，我好像没听清楚呢，让我靠近分析员一点 ~',
+        '圆桌的服务器好像出问题了，小老师去修一修 ~',
         '圆桌稍微慢半拍，但我还在认真听分析员说话。'
     ]
 });
@@ -152,6 +168,11 @@ const state = {
     playerFloorLock: false,
     participantStats: new Map(),
     messageSeq: 0,
+    sessionSeq: 0,
+    currentSessionId: '',
+    currentSessionHasContent: false,
+    bug: null,
+    bugPopoverOpen: false,
     lastSystemNoticeKey: '',
     lastClockText: '',
     memberPickerOpen: false,
@@ -318,6 +339,11 @@ function createMessageId(prefix = 'rt') {
     return `${prefix}_${Date.now().toString(36)}_${state.messageSeq.toString(36)}`;
 }
 
+function createSessionId(mode = 'full') {
+    state.sessionSeq += 1;
+    return `rt_session_${mode}_${Date.now().toString(36)}_${state.sessionSeq.toString(36)}`;
+}
+
 function participantColor(id) {
     return getParticipantById(id)?.accent || '#e58aa6';
 }
@@ -333,6 +359,18 @@ function getActiveParticipants() {
     return state.participants.filter(item => state.selectedIds.has(item.id));
 }
 
+function getParticipantSnapshot(ids = []) {
+    const lookup = new Map(state.participants.map(item => [item.id, item]));
+    return ids
+        .map(id => lookup.get(id) || null)
+        .filter(Boolean)
+        .map(item => ({
+            id: item.id,
+            name: item.name,
+            accent: item.accent || colorFromString(item.id)
+        }));
+}
+
 function normalizeParticipantIdList(ids) {
     const available = new Set(state.participants.map(item => item.id));
     const result = [];
@@ -342,7 +380,7 @@ function normalizeParticipantIdList(ids) {
         if (!id || seen.has(id) || !available.has(id)) continue;
         seen.add(id);
         result.push(id);
-        if (result.length >= MAX_SELECTED_PARTICIPANTS) break;
+        if (result.length >= getRoundtableMaxParticipants()) break;
     }
     return result;
 }
@@ -436,7 +474,7 @@ function pruneMessages(messages = state.messages) {
     const cutoff = nowMs() - MESSAGE_TTL_MS;
     return messages
         .filter(item => Number(item.ts) >= cutoff)
-        .slice(-MAX_STORED_MESSAGES);
+        .slice(-getRoundtableMaxStoredMessages());
 }
 
 function mergeMessages(base = [], incoming = []) {
@@ -446,6 +484,58 @@ function mergeMessages(base = [], incoming = []) {
         if (message) merged.set(message.id, message);
     }
     return pruneMessages([...merged.values()].sort((a, b) => a.ts - b.ts));
+}
+
+function hasCurrentSessionContent() {
+    if (!state.currentSessionId) return false;
+    return state.messages.some(item => item.sessionId === state.currentSessionId && item.role !== 'system');
+}
+
+function removeEmptyCurrentSessionMessages() {
+    if (!state.currentSessionId) return false;
+    if (state.currentSessionHasContent || hasCurrentSessionContent()) return false;
+    const beforeMessages = state.messages.length;
+    const beforeFull = state.fullMessages.length;
+    state.messages = state.messages.filter(item => item.sessionId !== state.currentSessionId);
+    state.fullMessages = state.fullMessages.filter(item => item.sessionId !== state.currentSessionId);
+    const changed = beforeMessages !== state.messages.length || beforeFull !== state.fullMessages.length;
+    if (changed) {
+        state.topicSummary = summarizeMessages(state.messages);
+        state.fullTopicSummary = summarizeMessages(state.fullMessages);
+        state.freshSessionDirty = false;
+    }
+    state.currentSessionId = '';
+    state.currentSessionHasContent = false;
+    return changed;
+}
+
+function removeEmptyRoundtableSessions(options = {}) {
+    const includeCurrent = options.includeCurrent === true;
+    const hasContent = new Set(
+        [...state.messages, ...state.fullMessages]
+            .filter(item => item?.sessionId && item.role !== 'system')
+            .map(item => item.sessionId)
+    );
+    const shouldKeep = (item) => {
+        if (!item?.sessionId) return true;
+        if (!includeCurrent && item.sessionId === state.currentSessionId) return true;
+        return hasContent.has(item.sessionId);
+    };
+    const beforeMessages = state.messages.length;
+    const beforeFull = state.fullMessages.length;
+    state.messages = state.messages.filter(shouldKeep);
+    state.fullMessages = state.fullMessages.filter(shouldKeep);
+    const changed = beforeMessages !== state.messages.length || beforeFull !== state.fullMessages.length;
+    if (changed) {
+        state.topicSummary = summarizeMessages(state.messages);
+        state.fullTopicSummary = summarizeMessages(state.fullMessages);
+        if (includeCurrent && state.currentSessionId && !hasContent.has(state.currentSessionId)) {
+            state.currentSessionId = '';
+            state.currentSessionHasContent = false;
+            state.freshSessionDirty = false;
+        }
+    }
+    return changed;
 }
 
 function summarizeMessages(messages = []) {
@@ -489,6 +579,7 @@ function persistCurrentSessionToFull() {
 }
 
 function activateFullContext() {
+    removeEmptyCurrentSessionMessages();
     persistCurrentSessionToFull();
     state.sessionMode = 'full';
     state.messages = pruneMessages(state.fullMessages);
@@ -497,10 +588,13 @@ function activateFullContext() {
 }
 
 function activateFreshSession() {
+    removeEmptyCurrentSessionMessages();
     persistCurrentSessionToFull();
     state.sessionMode = 'fresh';
     state.messages = [];
     state.topicSummary = '';
+    state.currentSessionId = '';
+    state.currentSessionHasContent = false;
     state.freshSessionDirty = false;
 }
 
@@ -523,6 +617,7 @@ function loadStorage() {
         if (Array.isArray(storedMessages)) {
             state.fullMessages = pruneMessages(storedMessages.map(normalizeStoredMessage).filter(Boolean));
         }
+        removeEmptyRoundtableSessions({ includeCurrent: true });
         state.fullTopicSummary = clampText(data.fullTopicSummary || data.topicSummary, 300) || summarizeMessages(state.fullMessages);
         activateFullContext();
     } catch (err) {
@@ -569,8 +664,113 @@ function normalizeStoredMessage(item) {
         emotion: ALLOWED_EMOTIONS.has(item.emotion) ? item.emotion : 'neutral',
         ts: Number(item.ts) || nowMs(),
         fallback: Boolean(item.fallback),
-        deepseekIntimateMode: item.deepseekIntimateMode === true
+        deepseekIntimateMode: item.deepseekIntimateMode === true,
+        sessionId: clampText(item.sessionId, 80),
+        sessionMode: item.sessionMode === 'fresh' ? 'fresh' : (item.sessionMode === 'full' ? 'full' : ''),
+        eventType: clampText(item.eventType, 40),
+        memberIds: Array.isArray(item.memberIds)
+            ? item.memberIds.map(id => String(id || '').trim()).filter(Boolean).slice(0, getRoundtableMaxParticipants())
+            : [],
+        memberNames: Array.isArray(item.memberNames)
+            ? item.memberNames.map(name => clampText(name, 24)).filter(Boolean).slice(0, getRoundtableMaxParticipants())
+            : []
     };
+}
+
+function formatRoundtableBugDetails(kind, details = {}) {
+    const lines = [];
+    const advanced = getRoundtableAdvancedSettings();
+    if (kind === 'api-error') {
+        lines.push('API 请求失败。');
+        if (details.status) lines.push(`HTTP 状态：${details.status} ${details.statusText || ''}`.trim());
+        if (details.message) lines.push(`错误信息：${details.message}`);
+        if (details.body) lines.push('', 'API Error 内容：', details.body);
+    } else if (kind === 'missing-api-settings') {
+        lines.push('圆桌准备让角色发言，但大模型连接配置不完整。');
+        lines.push(`API Key：${details.hasApiKey ? '已填写' : '未填写'}`);
+        lines.push(`Base URL：${details.hasBaseUrl ? '已填写' : '未填写'}`);
+        lines.push(`模型名称：${details.hasModel ? '已填写' : '未填写'}`);
+    } else if (kind === 'budget-hard-limit') {
+        lines.push('圆桌准备继续发言，但触发了程序内部 3 分钟硬限制。');
+        lines.push(`TOTAL_CALL_LIMIT_10M：${advanced.totalCallLimit}`);
+        lines.push(`TOKEN_HARD_LIMIT_10M：${advanced.tokenHardLimit}`);
+        lines.push(`当前调用数：${details.budget?.total ?? 0}`);
+        lines.push(`当前估算 token：${details.budget?.tokenTotal ?? 0}`);
+    } else if (kind === 'request-token-hard-limit') {
+        lines.push('圆桌准备发送本轮请求，但本轮预估 token 会超过程序内部硬上限。');
+        lines.push(`TOKEN_HARD_LIMIT_10M：${advanced.tokenHardLimit}`);
+        lines.push(`请求前已累计 token：${details.budget?.tokenTotal ?? 0}`);
+        lines.push(`本轮预估 token：${details.estimatedTokens ?? 0}`);
+        lines.push(`合计预估 token：${(details.budget?.tokenTotal || 0) + (details.estimatedTokens || 0)}`);
+    } else if (kind === 'no-speaker') {
+        lines.push('圆桌准备让角色发言，但当前找不到可发言成员。');
+        lines.push(`activeParticipantIds：${JSON.stringify(details.activeParticipantIds || [])}`);
+    } else {
+        lines.push(details.message || '圆桌密语遇到了未分类的内部异常。');
+    }
+    if (details.event) {
+        lines.push('', '触发事件：', JSON.stringify(details.event, null, 2));
+    }
+    lines.push('', '若频繁出现报错，可向青尘工作室反馈');
+    return lines.filter(line => line !== undefined && line !== null).join('\n');
+}
+
+function setRoundtableBug(kind, title, details = {}) {
+    state.bug = {
+        kind,
+        title: title || '圆桌密语异常',
+        detail: formatRoundtableBugDetails(kind, details),
+        ts: nowMs()
+    };
+    state.bugPopoverOpen = false;
+    renderBugWarning();
+}
+
+function clearRoundtableBug() {
+    if (!state.bug && !state.bugPopoverOpen) return;
+    state.bug = null;
+    state.bugPopoverOpen = false;
+    renderBugWarning();
+}
+
+function renderBugWarning() {
+    if (!els.bugWarning || !els.bugPopover) return;
+    const visible = Boolean(state.bug);
+    els.bugWarning.classList.toggle('hidden', !visible);
+    els.bugPopover.classList.toggle('hidden', !visible || !state.bugPopoverOpen);
+    if (els.bugTitle) els.bugTitle.textContent = state.bug?.title || '圆桌密语异常';
+    if (els.bugDetail) els.bugDetail.textContent = state.bug?.detail || '';
+    if (visible && state.bugPopoverOpen) {
+        requestAnimationFrame(positionRoundtableBugPopover);
+    }
+}
+
+function toggleRoundtableBugPopover() {
+    if (!state.bug) return;
+    state.bugPopoverOpen = !state.bugPopoverOpen;
+    renderBugWarning();
+}
+
+function positionRoundtableBugPopover() {
+    if (!els.bugPopover || !els.bugWarning || els.bugPopover.classList.contains('hidden')) return;
+    const margin = 10;
+    const anchor = els.bugWarning.getBoundingClientRect();
+    const popover = els.bugPopover;
+    popover.style.left = '0px';
+    popover.style.top = '0px';
+    const rect = popover.getBoundingClientRect();
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+    const preferredLeft = anchor.right - rect.width;
+    const preferredTop = anchor.top - rect.height - 10;
+    const fallbackTop = anchor.bottom + 10;
+    const maxLeft = Math.max(margin, viewportWidth - rect.width - margin);
+    const maxTop = Math.max(margin, viewportHeight - rect.height - margin);
+    const left = Math.min(maxLeft, Math.max(margin, preferredLeft));
+    const topSource = preferredTop >= margin ? preferredTop : fallbackTop;
+    const top = Math.min(maxTop, Math.max(margin, topSource));
+    popover.style.left = `${left}px`;
+    popover.style.top = `${top}px`;
 }
 
 async function loadPrompt(path, fallback) {
@@ -700,6 +900,10 @@ function cacheElements() {
     els.mentionPicker = document.getElementById('roundtable-mention-picker');
     els.status = document.getElementById('roundtable-status');
     els.chatStatus = document.getElementById('roundtable-chat-status');
+    els.bugWarning = document.getElementById('roundtable-bug-warning');
+    els.bugPopover = document.getElementById('roundtable-bug-popover');
+    els.bugTitle = document.getElementById('roundtable-bug-title');
+    els.bugDetail = document.getElementById('roundtable-bug-detail');
     els.gameTime = document.getElementById('roundtable-game-time');
     els.roster = document.querySelector('.roundtable-roster');
     els.participantStrip = document.getElementById('roundtable-participant-strip');
@@ -715,6 +919,7 @@ function bindEvents() {
     els.start?.addEventListener('click', () => startChat('fresh'));
     els.continue?.addEventListener('click', () => startChat('full'));
     els.back?.addEventListener('click', () => {
+        removeEmptyCurrentSessionMessages();
         persistCurrentSessionToFull();
         syncSetupSelectionFromActiveRoundtable();
         state.step = 'setup';
@@ -757,6 +962,16 @@ function bindEvents() {
         saveStorage();
         renderStatus();
     });
+    els.bugWarning?.addEventListener('click', (event) => {
+        event.stopPropagation();
+        toggleRoundtableBugPopover();
+    });
+    els.bugWarning?.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        event.stopPropagation();
+        toggleRoundtableBugPopover();
+    });
     els.send?.addEventListener('click', handlePlayerSend);
     els.input?.addEventListener('keydown', (event) => {
         if (event.key !== 'Enter' || event.shiftKey) return;
@@ -768,6 +983,7 @@ function bindEvents() {
     els.input?.addEventListener('focus', collapseRoster);
     els.input?.addEventListener('click', collapseRoster);
     document.addEventListener('click', handleRoundtableDocumentClick);
+    window.addEventListener('resize', positionRoundtableBugPopover);
 }
 
 function renderAll() {
@@ -804,6 +1020,7 @@ function renderRuleControls() {
 
 function renderParticipantList() {
     if (!els.participantList) return;
+    state.selectedIds = new Set(normalizeParticipantIdList([...state.selectedIds]));
     els.participantList.innerHTML = '';
     const selectedCount = state.selectedIds.size;
     for (const participant of state.participants) {
@@ -831,7 +1048,7 @@ function renderParticipantList() {
         const name = document.createElement('strong');
         name.textContent = participant.name;
         const meta = document.createElement('small');
-        meta.textContent = participant.type === 'custom_guest' ? '暖调闲聚访客' : '固定席位';
+        meta.textContent = participant.type === 'custom_guest' ? '暖调闲聚访客' : '大厅常客';
         body.append(name, meta);
 
         const mark = document.createElement('span');
@@ -843,7 +1060,7 @@ function renderParticipantList() {
         els.participantList.appendChild(item);
     }
     if (els.selectedCount) {
-        els.selectedCount.textContent = `${selectedCount}/${Math.min(MAX_SELECTED_PARTICIPANTS, state.participants.length)}`;
+        els.selectedCount.textContent = `${selectedCount}/${Math.min(getRoundtableMaxParticipants(), state.participants.length)}`;
     }
     if (els.start) els.start.disabled = selectedCount <= 0;
 }
@@ -856,8 +1073,9 @@ function toggleParticipant(id) {
         }
         state.selectedIds.delete(id);
     } else {
-        if (state.selectedIds.size >= MAX_SELECTED_PARTICIPANTS) {
-            setSetupStatus(`圆桌本轮最多 ${MAX_SELECTED_PARTICIPANTS} 位恋人入席。`, 'warn');
+        const maxParticipants = getRoundtableMaxParticipants();
+        if (state.selectedIds.size >= maxParticipants) {
+            setSetupStatus(`圆桌本轮最多 ${maxParticipants} 位恋人入席。`, 'warn');
             return;
         }
         state.selectedIds.add(id);
@@ -902,7 +1120,7 @@ function renderParticipantStrip() {
         }
         els.participantStrip.appendChild(item);
     }
-    const canAdd = state.activeParticipantIds.length < Math.min(MAX_SELECTED_PARTICIPANTS, state.participants.length);
+    const canAdd = state.activeParticipantIds.length < Math.min(getRoundtableMaxParticipants(), state.participants.length);
     const canRemove = getActiveParticipants().length > 1;
     if (els.addMember) els.addMember.disabled = !canAdd;
     if (els.removeMember) els.removeMember.disabled = !canRemove;
@@ -937,13 +1155,18 @@ function addRoundtableMember(id) {
         setChatStatus('当前没有可加入的新成员。', 'warn');
         return;
     }
-    if (state.activeParticipantIds.length >= MAX_SELECTED_PARTICIPANTS) {
-        setChatStatus(`当前圆桌最多 ${MAX_SELECTED_PARTICIPANTS} 位成员。`, 'warn');
+    const maxParticipants = getRoundtableMaxParticipants();
+    if (state.activeParticipantIds.length >= maxParticipants) {
+        setChatStatus(`当前圆桌最多 ${maxParticipants} 位成员。`, 'warn');
         return;
     }
     state.activeParticipantIds = [...state.activeParticipantIds, next.id];
     syncSetupSelectionFromActiveRoundtable();
-    appendSystemMessage(`${next.name} 加入了当前圆桌。`, `member-add-${next.id}-${nowMs()}`);
+    appendSystemMessage(`[${next.name}] 加入了群聊`, `member-add-${next.id}-${nowMs()}`, {
+        eventType: 'member-join',
+        memberIds: [next.id],
+        memberNames: [next.name]
+    });
     saveStorage();
     renderParticipantList();
     renderParticipantStrip();
@@ -961,7 +1184,11 @@ function removeRoundtableMember(id) {
     if (!removed) return;
     state.activeParticipantIds = state.activeParticipantIds.filter(id => id !== removed.id);
     syncSetupSelectionFromActiveRoundtable();
-    appendSystemMessage(`${removed.name} 暂时离开了当前圆桌。`, `member-remove-${removed.id}-${nowMs()}`);
+    appendSystemMessage(`[${removed.name}] 离开了群聊`, `member-remove-${removed.id}-${nowMs()}`, {
+        eventType: 'member-leave',
+        memberIds: [removed.id],
+        memberNames: [removed.name]
+    });
     state.queue = state.queue.filter(event => event.forcedSpeakerId !== removed.id && event.suggestedSpeakerId !== removed.id);
     if (getActiveParticipants().length <= 1) state.removeMode = false;
     saveStorage();
@@ -1104,8 +1331,13 @@ function handleRoundtableDocumentClick(event) {
     const target = event.target;
     if (els.memberPicker?.contains(target) || els.addMember?.contains(target)) return;
     if (els.mentionPicker?.contains(target) || els.input?.contains(target)) return;
+    if (els.bugPopover?.contains(target) || els.bugWarning?.contains(target)) return;
     if (state.memberPickerOpen) hideMemberPicker();
     if (state.mentionPickerOpen) hideMentionPicker();
+    if (state.bugPopoverOpen) {
+        state.bugPopoverOpen = false;
+        renderBugWarning();
+    }
 }
 
 function renderMessages() {
@@ -1226,6 +1458,7 @@ function renderStatus() {
 }
 
 function startChat(mode = 'fresh') {
+    state.selectedIds = new Set(normalizeParticipantIdList([...state.selectedIds]));
     if (state.selectedIds.size <= 0) {
         setSetupStatus('至少选择一位圆桌成员。', 'warn');
         return;
@@ -1236,12 +1469,22 @@ function startChat(mode = 'fresh') {
     } else {
         activateFreshSession();
     }
+    state.currentSessionId = createSessionId(mode);
     state.step = 'chat';
     state.interBotDebt = 0;
     state.playerFloorLock = false;
     state.rosterExpanded = false;
     state.lastAnyMessageAt = nowMs();
     state.lastPlayerMessageAt = state.lastPlayerMessageAt || nowMs();
+    const members = getParticipantSnapshot(state.activeParticipantIds);
+    const names = members.map(item => item.name).join('、') || '圆桌成员';
+    appendSystemMessage(`[分析员, ${names}] 开始群聊`, `session-start-${state.currentSessionId}`, {
+        sessionId: state.currentSessionId,
+        sessionMode: mode === 'fresh' ? 'fresh' : 'full',
+        eventType: 'session-start',
+        memberIds: members.map(item => item.id),
+        memberNames: members.map(item => item.name)
+    });
     saveStorage();
     renderAll();
     setTimeout(() => els.input?.focus(), 80);
@@ -1269,7 +1512,7 @@ function handlePlayerSend() {
         speakerId: PLAYER_ID,
         includeKeywords: true,
         excludeSelf: false
-    }).slice(0, MAX_SELECTED_PARTICIPANTS);
+    }).slice(0, getRoundtableMaxParticipants());
     if (mentioned.length > 0) {
         mentioned.forEach((participant, index) => {
             enqueueEvent({
@@ -1296,7 +1539,7 @@ function handlePlayerSend() {
     }
 }
 
-function appendSystemMessage(text, key = '') {
+function appendSystemMessage(text, key = '', meta = {}) {
     if (key && state.lastSystemNoticeKey === key) return;
     state.lastSystemNoticeKey = key;
     appendMessage({
@@ -1307,7 +1550,8 @@ function appendSystemMessage(text, key = '') {
         targetId: ALL_ID,
         intent: 'react',
         emotion: 'neutral',
-        fallback: true
+        fallback: true,
+        ...meta
     });
 }
 
@@ -1315,11 +1559,16 @@ function appendMessage(partial) {
     const message = normalizeStoredMessage({
         id: partial.id || createMessageId(partial.role || 'msg'),
         ts: partial.ts || nowMs(),
+        sessionId: partial.sessionId || state.currentSessionId,
+        sessionMode: partial.sessionMode || state.sessionMode,
         ...partial
     });
     if (!message) return null;
     state.messages.push(message);
     state.messages = pruneMessages();
+    if (message.sessionId && message.sessionId === state.currentSessionId && message.role !== 'system') {
+        state.currentSessionHasContent = true;
+    }
     if (state.sessionMode === 'fresh') {
         state.freshSessionDirty = true;
     }
@@ -1434,6 +1683,10 @@ async function processNextEvent() {
 
     const speaker = chooseSpeaker(event);
     if (!speaker) {
+        setRoundtableBug('no-speaker', '圆桌密语无法选择发言成员', {
+            event: describeEvent(event),
+            activeParticipantIds: state.activeParticipantIds
+        });
         logRoundtableBlock('no-speaker', {
             event: describeEvent(event),
             activeParticipantIds: state.activeParticipantIds
@@ -1458,13 +1711,20 @@ async function processNextEvent() {
         if (requestToken !== state.requestToken || !isActiveSession()) return;
         const estimatedTokens = estimateRequestTokens(speaker, event, ragMessage, intimateMessage, settings);
         const budgetBeforeRequest = getBudgetState();
-        if (budgetBeforeRequest.tokenTotal + estimatedTokens >= TOKEN_HARD_LIMIT_10M) {
+        const tokenHardLimit = getRoundtableTokenHardLimit();
+        if (budgetBeforeRequest.tokenTotal + estimatedTokens >= tokenHardLimit) {
+            setRoundtableBug('request-token-hard-limit', '圆桌密语触发 token 硬上限', {
+                event: describeEvent(event),
+                speakerId: speaker.id,
+                estimatedTokens,
+                budget: budgetBeforeRequest
+            });
             logRoundtableBlock('token-hard-limit-before-request', {
                 event: describeEvent(event),
                 speakerId: speaker.id,
                 estimatedTokens,
                 budget: budgetBeforeRequest,
-                tokenHardLimit: TOKEN_HARD_LIMIT_10M
+                tokenHardLimit
             });
             if (event.type === 'player') appendSystemMessage('大家今天有点聊累了，稍后再继续吧。', 'hard-token-limit');
             stopLowPriorityEvents();
@@ -1518,6 +1778,7 @@ async function processNextEvent() {
         });
         updateSpeakerStats(speaker.id);
         if (message?.text) recordDialogueInteraction('bar', message.text);
+        if (message?.text) clearRoundtableBug();
         handlePostBotEvent(event, speaker, payload);
         debugRoundtable('request success', {
             event: describeEvent(event),
@@ -1575,6 +1836,12 @@ function canRunEvent(event) {
     const settings = getSettings();
     const baseUrl = normalizeBaseUrl(settings.baseUrl);
     if (!settings.apiKey || !baseUrl || !settings.model) {
+        setRoundtableBug('missing-api-settings', '圆桌密语缺少大模型配置', {
+            event: describeEvent(event),
+            hasApiKey: Boolean(settings.apiKey),
+            hasBaseUrl: Boolean(baseUrl),
+            hasModel: Boolean(settings.model)
+        });
         logRoundtableBlock('missing-api-settings', {
             event: describeEvent(event),
             hasApiKey: Boolean(settings.apiKey),
@@ -1589,11 +1856,16 @@ function canRunEvent(event) {
 
     const budget = getBudgetState();
     if (budget.hardLimited) {
+        const advanced = getRoundtableAdvancedSettings();
+        setRoundtableBug('budget-hard-limit', '圆桌密语触发 3 分钟硬限制', {
+            event: describeEvent(event),
+            budget
+        });
         logRoundtableBlock('budget-hard-limit', {
             event: describeEvent(event),
             budget,
-            totalCallLimit: TOTAL_CALL_LIMIT_10M,
-            tokenHardLimit: TOKEN_HARD_LIMIT_10M
+            totalCallLimit: advanced.totalCallLimit,
+            tokenHardLimit: advanced.tokenHardLimit
         });
         if (event.type === 'player') {
             appendSystemMessage('大家今天有点聊累了，稍后再继续吧。', 'hard-limit');
@@ -1632,12 +1904,13 @@ function getBudgetState() {
     const total = state.callHistory.length;
     const idleCalls = state.callHistory.filter(item => item.type === 'idle').length;
     const tokenTotal = state.callHistory.reduce((sum, item) => sum + (Number(item.tokens) || 0), 0);
+    const advanced = getRoundtableAdvancedSettings();
     return {
         total,
         idleCalls,
         tokenTotal,
         softLimited: total >= SOFT_CALL_LIMIT_10M || tokenTotal >= TOKEN_SOFT_LIMIT_10M,
-        hardLimited: total >= TOTAL_CALL_LIMIT_10M || tokenTotal >= TOKEN_HARD_LIMIT_10M
+        hardLimited: total >= advanced.totalCallLimit || tokenTotal >= advanced.tokenHardLimit
     };
 }
 
@@ -1839,11 +2112,12 @@ function handlePostBotEvent(event, speaker, payload) {
         debugRoundtable('followup skipped: budget soft limit', { event: describeEvent(event), budget: getBudgetState() });
         return;
     }
-    if (!payload.wantsFollowUp || Math.random() > FOLLOW_UP_RATE) {
+    const followUpRate = getRoundtableFollowUpRate();
+    if (!payload.wantsFollowUp || Math.random() > followUpRate) {
         debugRoundtable('followup skipped: model/probability', {
             event: describeEvent(event),
             wantsFollowUp: payload.wantsFollowUp,
-            followUpRate: FOLLOW_UP_RATE
+            followUpRate
         });
         return;
     }
@@ -1863,6 +2137,13 @@ function handlePostBotEvent(event, speaker, payload) {
 function handleRequestError(err, speaker, event, intimateMessage = null) {
     const message = String(err?.message || '');
     const isRateLimit = err?.status === 429 || /429|rate limit|too many requests/i.test(message);
+    setRoundtableBug('api-error', isRateLimit ? '圆桌密语 API 触发限速' : '圆桌密语 API 请求失败', {
+        status: err?.status || 0,
+        statusText: err?.statusText || '',
+        message,
+        body: err?.body || err?.fullBody || '',
+        event: describeEvent(event)
+    });
     if (isRateLimit) {
         state.cooldownUntil = Math.max(state.cooldownUntil, nowMs() + 20000);
         setChatStatus('圆桌稍微放慢了语速。', 'warn');
@@ -1922,10 +2203,10 @@ async function requestRoundtableCompletion({ settings, speaker, event, ragMessag
 
     if (!response.ok) {
         const body = await response.text().catch(() => '');
-        const error = new Error(`API 请求失败 (${response.status}): ${body.slice(0, 160)}`);
+        const error = new Error(`API 请求失败 (${response.status}): ${body}`);
         error.status = response.status;
         error.statusText = response.statusText || '';
-        error.body = body.slice(0, 500);
+        error.body = body;
         throw error;
     }
 
@@ -2283,6 +2564,8 @@ export async function openRoundtableWhispers() {
     if (!els.panel) return false;
     if (!state.isBarActive?.()) return false;
     await refreshParticipants();
+    clearRoundtableBug();
+    removeEmptyCurrentSessionMessages();
     state.step = 'setup';
     els.panel.classList.remove('hidden');
     state.controlsModule?.releaseControlMode?.({ resumeOnClose: true });
@@ -2293,6 +2576,7 @@ export async function openRoundtableWhispers() {
 export function closeRoundtableWhispers(options = {}) {
     if (!els.panel || els.panel.classList.contains('hidden')) return false;
     const closingFromChat = state.step === 'chat';
+    removeEmptyCurrentSessionMessages();
     persistCurrentSessionToFull();
     if (closingFromChat) syncSetupSelectionFromActiveRoundtable();
     stopAllRequests('close');
@@ -2351,6 +2635,8 @@ export function updateRoundtableWhispers() {
 
 export function exportRoundtableWhispers() {
     if (state.step === 'chat') syncSetupSelectionFromActiveRoundtable();
+    removeEmptyCurrentSessionMessages();
+    removeEmptyRoundtableSessions({ includeCurrent: true });
     persistCurrentSessionToFull();
     state.fullMessages = pruneMessages(state.fullMessages);
     state.fullTopicSummary = state.fullTopicSummary || summarizeMessages(state.fullMessages);
@@ -2364,6 +2650,30 @@ export function exportRoundtableWhispers() {
         fullTopicSummary: state.fullTopicSummary,
         messages: state.fullMessages,
         fullMessages: state.fullMessages
+    };
+}
+
+export function getRoundtableWhispersHistory() {
+    removeEmptyCurrentSessionMessages();
+    removeEmptyRoundtableSessions({ includeCurrent: true });
+    persistCurrentSessionToFull();
+    const participantMap = new Map(state.participants.map(item => [item.id, {
+        id: item.id,
+        name: item.name,
+        accent: item.accent || colorFromString(item.id)
+    }]));
+    const messages = pruneMessages(state.fullMessages)
+        .map(normalizeStoredMessage)
+        .filter(Boolean)
+        .sort((a, b) => (a.ts || 0) - (b.ts || 0));
+
+    return {
+        participants: Object.fromEntries(participantMap),
+        messages: messages.map(item => ({
+            ...item,
+            speakerColor: item.role === 'player' ? '#b89bd6' : (participantMap.get(item.speakerId)?.accent || participantColor(item.speakerId)),
+            memberColors: (item.memberIds || []).map(id => participantMap.get(id)?.accent || colorFromString(id))
+        }))
     };
 }
 

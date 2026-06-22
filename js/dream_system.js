@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { getDreamDialogueCooldownMs } from './advanced_settings.js';
 import { getSettings } from './settings.js';
 import {
     addAffinity,
@@ -29,7 +30,6 @@ const DREAM_COST = 500;
 const DREAM_REVISION_COST = 100;
 const DREAM_REVISION_REFUND = 50;
 const DREAM_DELETE_REFUND = 400;
-const DIALOGUE_COOLDOWN_MS = 20 * 1000;
 const FURNITURE_DIALOGUE_LLM_RATE = 0.5;
 const SEAT_INTERACTION_RATE = 0.42;
 const BED_INTERACTION_RATE = 0.42;
@@ -2107,7 +2107,7 @@ async function handleFurnitureVisited(event) {
     if (!record) return;
     if (!canShowFurnitureDialogue()) return;
     const now = Date.now();
-    if (now - (Number(record.lastDialogueAt) || 0) < DIALOGUE_COOLDOWN_MS) return;
+    if (now - (Number(record.lastDialogueAt) || 0) < getDreamDialogueCooldownMs()) return;
 
     let line = '';
     const shouldCallLlm = Math.random() < FURNITURE_DIALOGUE_LLM_RATE;

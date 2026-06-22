@@ -1,11 +1,11 @@
 import * as THREE from 'three';
+import { getDreamMaxComponents } from './advanced_settings.js';
 
 export const DREAM_FURNITURE_SCHEMA_VERSION = 1;
 
 const ALLOWED_CATEGORIES = new Set(['seat', 'table', 'bed', 'storage', 'lighting', 'decor', 'plant', 'toy', 'hanging', 'painting', 'custom']);
 const ALLOWED_PRIMITIVES = new Set(['box', 'cylinder', 'sphere', 'cone', 'torus', 'plane']);
 const ALLOWED_FRONT_DIRECTIONS = new Set(['+X', '-X', '+Z', '-Z']);
-const MAX_COMPONENTS = 24;
 const DEFAULT_COLOR = '#b8c7e8';
 const MAX_DIMENSIONS = { width: 4.2, depth: 3.2, height: 2.6 };
 const MIN_COMPONENT_SIZE = 0.03;
@@ -170,11 +170,12 @@ export function normalizeFurnitureSpec(rawSpec) {
     };
 
     const rawComponents = Array.isArray(rawSpec.components) ? rawSpec.components : [];
+    const maxComponents = getDreamMaxComponents();
     if (rawComponents.length < 1) {
         throw new Error('家具至少需要 1 个组件。');
     }
-    if (rawComponents.length > MAX_COMPONENTS) {
-        throw new Error(`家具组件数量不能超过 ${MAX_COMPONENTS}。`);
+    if (rawComponents.length > maxComponents) {
+        throw new Error(`家具组件数量不能超过 ${maxComponents}。`);
     }
 
     // Component positions are center-based and +Y is up. During style revision the LLM often
@@ -309,11 +310,12 @@ export function validateFurnitureSpec(rawSpec) {
     }
 
     const rawComponents = Array.isArray(rawSpec.components) ? rawSpec.components : null;
+    const maxComponents = getDreamMaxComponents();
     if (!rawComponents) {
         errors.push('components 必须是数组。');
     } else {
-        if (rawComponents.length < 1 || rawComponents.length > MAX_COMPONENTS) {
-            errors.push(`家具组件数量必须为 1 到 ${MAX_COMPONENTS}。`);
+        if (rawComponents.length < 1 || rawComponents.length > maxComponents) {
+            errors.push(`家具组件数量必须为 1 到 ${maxComponents}。`);
         }
         rawComponents.forEach((component, index) => {
             if (!component || typeof component !== 'object') {
@@ -344,8 +346,8 @@ export function validateFurnitureSpec(rawSpec) {
     if (width > MAX_DIMENSIONS.width || depth > MAX_DIMENSIONS.depth || height > MAX_DIMENSIONS.height) {
         errors.push('家具尺寸过大。');
     }
-    if (spec.components.length < 1 || spec.components.length > MAX_COMPONENTS) {
-        errors.push(`家具组件数量必须为 1 到 ${MAX_COMPONENTS}。`);
+    if (spec.components.length < 1 || spec.components.length > maxComponents) {
+        errors.push(`家具组件数量必须为 1 到 ${maxComponents}。`);
     }
 
     return { valid: errors.length === 0, errors, spec };

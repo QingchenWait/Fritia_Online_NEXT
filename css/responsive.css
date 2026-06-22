@@ -118,6 +118,13 @@
         overflow-y: auto;
         overflow-x: hidden;
     }
+    #settings-panel.is-detail .settings-view[data-settings-view="advanced"].active {
+        display: block;
+        height: 100%;
+        min-height: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
     #settings-panel.is-detail .settings-view[data-settings-view="resources"].active {
         display: block;
         height: 100%;
@@ -134,6 +141,10 @@
         font-size: 0.78rem;
     }
     .settings-view[data-settings-view="knowledge"] {
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+    .settings-view[data-settings-view="advanced"] {
         overflow-y: auto;
         overflow-x: hidden;
     }
@@ -301,6 +312,40 @@
     .settings-slider-row em {
         justify-self: start;
     }
+    .advanced-settings-page {
+        padding: 12px 14px 18px;
+        gap: 10px;
+    }
+    .advanced-settings-toolbar {
+        position: static;
+        grid-template-columns: 1fr;
+        gap: 8px;
+        padding: 10px 11px;
+    }
+    .advanced-settings-toolbar p {
+        font-size: 0.8rem;
+    }
+    .advanced-settings-toolbar .btn {
+        justify-self: start;
+    }
+    .advanced-settings-group h3 {
+        padding: 9px 11px;
+    }
+    .advanced-setting-row {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 7px;
+        padding: 9px 11px;
+    }
+    .advanced-setting-copy label {
+        font-size: 0.8rem;
+    }
+    .advanced-setting-copy small {
+        font-size: 0.7rem;
+    }
+    .advanced-setting-control {
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 8px;
+    }
     .settings-foot-actions {
         display: grid;
         grid-template-columns: 1fr;
@@ -346,7 +391,7 @@
     /* 历史 */
     .history-toolbar { padding: var(--sp-3) var(--sp-4); }
     .history-toolbar .custom-select { margin-left: 0; }
-    #history-list, #date-history-list, #bar-history-list { padding: var(--sp-4); }
+    #history-list, #date-history-list, #bar-history-list, #roundtable-history-list { padding: var(--sp-4); }
 
     /* 约会 */
     #date-locations { grid-template-columns: 1fr 1fr; padding: var(--sp-3); }
@@ -545,8 +590,11 @@
         align-items: center;
     }
     .roundtable-foot #roundtable-chat-status { min-width: 0; }
-    .roundtable-game-time {
+    .roundtable-foot-timebar {
         justify-self: end;
+        grid-column: 2;
+    }
+    .roundtable-game-time {
         font-size: 0.82rem;
     }
     .roundtable-foot .btn { width: 100%; }

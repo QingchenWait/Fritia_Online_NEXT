@@ -1,7 +1,7 @@
+import { getGameTimeSpeedSettings } from './advanced_settings.js';
+
 const STORAGE_KEY = 'fritia_game_state';
 const INITIAL_GAME_MINUTES = 12 * 60;
-const GAME_MINUTES_PER_REAL_SECOND = 5;
-const DISPLAY_STEP_MINUTES = 5;
 const DAY_MINUTES = 24 * 60;
 const DAILY_SALARY = 4000;
 const INITIAL_MONEY = 40000;
@@ -24,7 +24,7 @@ let state = {
     stats: createDefaultStats()
 };
 
-let lastDisplayBucket = Math.floor(INITIAL_GAME_MINUTES / DISPLAY_STEP_MINUTES);
+let lastDisplayBucket = Math.floor(INITIAL_GAME_MINUTES / getGameTimeSpeedSettings().displayStepMinutes);
 
 function saveState() {
     try {
@@ -180,7 +180,7 @@ function getFestival(month, day) {
 export function initGameState() {
     loadState();
     deriveStatsFromCurrentData();
-    lastDisplayBucket = Math.floor(state.gameMinutes / DISPLAY_STEP_MINUTES);
+    lastDisplayBucket = Math.floor(state.gameMinutes / getGameTimeSpeedSettings().displayStepMinutes);
     saveState();
 }
 
@@ -189,7 +189,8 @@ export function updateGameTime(realDeltaSeconds) {
         return { displayChanged: false, salary: 0 };
     }
 
-    state.gameMinutes += realDeltaSeconds * GAME_MINUTES_PER_REAL_SECOND;
+    const timeSettings = getGameTimeSpeedSettings();
+    state.gameMinutes += realDeltaSeconds * timeSettings.gameMinutesPerRealSecond;
     let salary = 0;
     const currentDay = Math.floor(state.gameMinutes / DAY_MINUTES);
     if (currentDay > state.lastSalaryDay) {
@@ -199,7 +200,7 @@ export function updateGameTime(realDeltaSeconds) {
         state.lastSalaryDay = currentDay;
     }
 
-    const displayBucket = Math.floor(state.gameMinutes / DISPLAY_STEP_MINUTES);
+    const displayBucket = Math.floor(state.gameMinutes / timeSettings.displayStepMinutes);
     const displayChanged = displayBucket !== lastDisplayBucket;
     if (displayChanged) lastDisplayBucket = displayBucket;
     if (displayChanged || salary > 0) saveState();
@@ -208,7 +209,7 @@ export function updateGameTime(realDeltaSeconds) {
 }
 
 export function getGameTimeInfo(options = {}) {
-    const step = options.quantize === 5 ? DISPLAY_STEP_MINUTES : 1;
+    const step = options.quantize === 5 ? getGameTimeSpeedSettings().displayStepMinutes : 1;
     const info = getCalendarFromMinutes(state.gameMinutes, step);
     const festival = getFestival(info.month, info.day);
     return {
@@ -502,7 +503,7 @@ export function importGameState(data, options = {}) {
     const minutes = Number(source.gameMinutes ?? source.gameTime?.totalMinutes);
     if (Number.isFinite(minutes)) {
         state.gameMinutes = Math.max(0, minutes);
-        lastDisplayBucket = Math.floor(state.gameMinutes / DISPLAY_STEP_MINUTES);
+        lastDisplayBucket = Math.floor(state.gameMinutes / getGameTimeSpeedSettings().displayStepMinutes);
     }
 
     const moneyAmount = Number(source.money?.amount ?? source.money);

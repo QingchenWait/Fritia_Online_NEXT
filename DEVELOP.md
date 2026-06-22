@@ -56,6 +56,7 @@ fritia_online_v3/
 │   ├── roundtable_whispers.js
 │   ├── deepseek_intimate_mode.js
 │   ├── knowledge_base.js
+│   ├── advanced_settings.js
 │   ├── bar_performance.js
 │   ├── zip_store.js
 │   ├── game_state.js
@@ -405,6 +406,9 @@ LLM 输出协议：
 
 - localStorage key：`fritia_roundtable_whispers`。
 - 保存最近 5 天内最多 240 条完整圆桌消息、`topicSummary`、参与者选择和圆桌设置（自动接话、空闲搭话、bot 开头 @ 是否触发回复、互聊上限）；“组建群聊”创建的临时空白窗口会在重新组局或关闭时迁移回完整上下文，“继续对话”直接打开完整上下文。
+- 圆桌消息字段在 `id/role/speakerId/speakerName/text/targetId/intent/emotion/ts/fallback/deepseekIntimateMode` 基础上，可带 `sessionId/sessionMode/eventType/memberIds/memberNames`。`session-start` 标记玩家点击“组建群聊”或“继续对话”的开始状态，`member-join/member-leave` 标记中途成员变化；这些字段用于历史面板“圆桌密语”页分组和成员颜色展示。
+- 圆桌窗口 footer 含 `#roundtable-bug-warning` / `#roundtable-bug-popover`。当某条已准备发送的圆桌发言因 API 错误、缺少模型配置、3 分钟硬调用/硬 token 限制、请求前预估 token 超过 `TOKEN_HARD_LIMIT_10M` 或无法选择发言成员而被拦截时，会在右下角时间左侧显示低调闪烁的 `⚠️` emoji 热区，并始终与时间、信号和电量图标保持同一行；点击后展示完整 API Error 或内部限制参数，并提示可向青尘工作室反馈。错误弹窗会限制在屏幕范围内，正文可选择复制。成功收到 bot 回复或重新打开圆桌会清除该告警。正常 handoff、冷却等待、soft limit 下低优先级 follow-up/idle 被跳过不算 BUG。
+- 仅含 `session-start/member-join/member-leave` 且没有任何 player/bot 正文的空圆桌 session 会在关闭、重新进入、导出和历史读取时清理，不显示在“历史对话”圆桌密语页，也不会污染“继续对话”的上下文。
 - 圆桌消息不写入 `fritia_bar_conversation_history`，避免污染访客一对一聊天上下文。
 - 导出字段为 `roundtableWhispers`；导入时按消息 id 去重合并，旧存档缺失该字段时使用空默认数据。
 
@@ -567,11 +571,34 @@ localStorage key：`fritia-settings`
 - `data-settings-section="model"` / `data-settings-view="model"`：大模型设置，保留 `#api-key`、`#base-url`、`#model-name` 和 `#settings-save`。
 - `data-settings-section="controls"` / `data-settings-view="controls"`：操作设置，包含 `#mouse-sensitivity`、`#touch-sensitivity`、`#localization-sensitivity` 及对应数值显示。
 - `data-settings-section="knowledge"` / `data-settings-view="knowledge"`：知识库管理。
+- `data-settings-section="advanced"` / `data-settings-view="advanced"`：高级设置，包含游戏时间速度、造梦空间、圆桌密语和知识库 BM25 参数；配置项标题后用浅色括号显示内部变量名，风险提示直接显示在原变量名说明行位置；“恢复本页默认设置”只重置高级设置项。
+- `data-settings-section="resources"` / `data-settings-view="resources"`：更多资源与制作信息。
 - 设置标题栏副标题会随分组切换；底栏作者文案为 `青尘工作室 | BiliBili @CyanDust_青尘`，宽屏显示 `#settings-site-link` 访问官网，窄屏隐藏。
 - 大模型设置页提供 DeepSeek、MiMO、Qwen 千问、Kimi 的官方 API 入口按钮，仅打开外部控制台，不保存任何额外凭据。
 - 自定义事件：`fritia-settings-updated`，保存设置后派发，detail 为 `getSettings()` 规范化后的设置对象；`controls.js` 用它同步灵敏度缓存。
 - 窄屏先显示分组列表，点击分组后进入详情；详情内 `data-settings-back` 返回分组列表。
 - 打开设置页时释放控制模式；关闭时派发 `fritia-overlay-closed`。
+
+## 高级设置：`js/advanced_settings.js`
+
+localStorage key：`fritia_advanced_settings`
+
+- `getAdvancedSettings()`：读取并 clamp 进阶运行参数；旧存档或缺失字段使用默认值。
+- `saveAdvancedSettings(settings)`：仅保存高级设置项，并派发 `fritia-advanced-settings-updated`。
+- `resetAdvancedSettings()`：仅删除 `fritia_advanced_settings` 并恢复本页默认值，不重置 API、操作灵敏度、知识库或其他存档数据。
+- 导出 ZIP / JSON 时写入 `advancedSettings` 字段；导入旧存档缺失该字段时不报错并继续使用默认值。
+
+默认参数：
+
+- `timeSpeed: 5`：同步控制游戏分钟推进速度和 HUD 显示步长，UI 范围 `1~60`。
+- `dreamMaxComponents: 24`：造梦家具最大组件数量，UI 范围 `4~80`，同时影响 LLM 家具 JSON 提示和本地校验。
+- `dreamDialogueCooldownMs: 20000`：造梦家具访问台词冷却，UI 范围 `0~600000`。
+- `roundtableMaxParticipants: 6`：圆桌密语最大成员数量，UI 范围 `1~12`。
+- `roundtableTokenHardLimit: 400000`：圆桌密语 3 分钟内最大 token 硬上限，UI 范围 `10000~2000000`。
+- `roundtableTotalCallLimit: 20`：圆桌密语 3 分钟内最大请求次数，UI 范围 `1~100`。
+- `roundtableFollowUpRate: 0.55`：圆桌密语自动接话概率，UI 范围 `0~1`，步进 `0.05`。
+- `roundtableMaxStoredMessages: 500`：圆桌密语最大消息存储数量，UI 范围 `50~3000`。
+- `kbChunkSize: 512`、`kbChunkOverlap: 50`、`kbCandidateLimit: 50`：知识库上传分块和 BM25 候选召回默认值。
 
 DeepSeek 亲密模式：`js/deepseek_intimate_mode.js`
 
@@ -590,9 +617,9 @@ DeepSeek 亲密模式：`js/deepseek_intimate_mode.js`
 
 默认参数：
 
-- 分块大小：`512` 字符。
-- 分块重叠：`50` 字符。
-- BM25 候选召回：`50`。
+- 分块大小：默认 `512` 字符，可由高级设置 `kbChunkSize` 覆盖。
+- 分块重叠：默认 `50` 字符，可由高级设置 `kbChunkOverlap` 覆盖。
+- BM25 候选召回：默认 `50`，可由高级设置 `kbCandidateLimit` 覆盖。
 - 最终注入：默认 `6` 条；圆桌密语默认 `5` 条，避免挤压 JSON 输出合同。
 - 单文件上传软限制：约 `1.5 MB`。
 
@@ -1279,6 +1306,7 @@ DOM ID：
 ## localStorage Key
 
 - `fritia-settings`：API 设置、操作灵敏度、亲密模式开关与 `deepseekIntimateModeStartedAt/deepseekIntimateModeDisabledAt` 切换时间。
+- `fritia_advanced_settings`：高级设置页运行参数，包含游戏时间速度、造梦组件/冷却、圆桌密语限制和知识库 BM25 默认参数。
 - `fritia_game_state`：游戏时间、数据金、好感、统计、礼物；`stats` 包含入场券/成就用的 `sleepModeCount`、`danceWatchCount`、`bartendingChallengeWins`。
 - `fritia_chat_history`：日常对话历史；亲密模式有效时生成的 assistant 回复可带 `deepseekIntimateMode: true`。
 - `fritia_date_history`：约会对话历史；亲密模式有效时生成的 assistant 回复可带 `deepseekIntimateMode: true`。

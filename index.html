@@ -8,8 +8,8 @@
     <link rel="stylesheet" href="css/base.css?v=20260621-loading-size">
     <link rel="stylesheet" href="css/components.css?v=20260619-otome">
     <link rel="stylesheet" href="css/effects.css?v=20260619-otome">
-    <link rel="stylesheet" href="css/panels.css?v=20260622-more-resources">
-    <link rel="stylesheet" href="css/responsive.css?v=20260622-more-resources">
+    <link rel="stylesheet" href="css/panels.css?v=20260622-advanced-settings">
+    <link rel="stylesheet" href="css/responsive.css?v=20260622-advanced-settings">
     <script type="importmap">
     {
         "imports": {
@@ -398,7 +398,14 @@
 
             <div class="otome-panel__foot roundtable-foot">
                 <div id="roundtable-chat-status" class="roundtable-status" data-kind="info">圆桌待命。</div>
-                <div id="roundtable-game-time" class="roundtable-game-time" aria-label="当前游戏时间">🕗 --:-- 📶🔋</div>
+                <div class="roundtable-foot-timebar">
+                    <span id="roundtable-bug-warning" class="roundtable-bug-warning hidden" role="button" tabindex="0" aria-label="查看圆桌密语错误">⚠️</span>
+                    <div id="roundtable-game-time" class="roundtable-game-time" aria-label="当前游戏时间">🕗 --:-- 📶🔋</div>
+                </div>
+                <div id="roundtable-bug-popover" class="roundtable-bug-popover hidden" role="dialog" aria-live="polite">
+                    <strong id="roundtable-bug-title">圆桌密语异常</strong>
+                    <pre id="roundtable-bug-detail"></pre>
+                </div>
                 <button id="roundtable-continue" class="btn btn--ghost" type="button">继续对话</button>
                 <button id="roundtable-start" class="btn btn--primary" type="button">组建群聊</button>
             </div>
@@ -580,6 +587,10 @@
                         <span class="settings-nav-item__icon">RAG</span>
                         <span>知识库</span>
                     </button>
+                    <button class="settings-nav-item" type="button" data-settings-section="advanced">
+                        <span class="settings-nav-item__icon">ADV</span>
+                        <span>高级设置</span>
+                    </button>
                     <button class="settings-nav-item" type="button" data-settings-section="resources">
                         <span class="settings-nav-item__icon">INFO</span>
                         <span>更多资源</span>
@@ -721,6 +732,139 @@
                     </div>
                 </section>
 
+                <section class="settings-view" data-settings-view="advanced" aria-label="高级设置">
+                    <button class="settings-back-btn btn btn--ghost" type="button" data-settings-back>返回设置分组</button>
+                    <div class="advanced-settings-page">
+                        <div class="advanced-settings-toolbar">
+                            <p>⚠️ 修改本页的配置，可能导致游戏不稳定！</p>
+                            <button id="advanced-reset-defaults" class="btn btn--ghost" type="button">恢复本页默认设置</button>
+                        </div>
+
+                        <section class="advanced-settings-group">
+                            <h3>游戏进程</h3>
+                            <div class="advanced-setting-row">
+                                <div class="advanced-setting-copy">
+                                    <label for="advanced-time-speed">时间速度 <span class="advanced-setting-var">(GAME_MINUTES_PER_REAL_SECOND)</span></label>
+                                    <small class="advanced-risk-note">过快的速度会扰乱 bot 的游戏内时间感知</small>
+                                </div>
+                                <div class="advanced-setting-control">
+                                    <em id="advanced-time-speed-value">5 分钟/秒</em>
+                                    <input id="advanced-time-speed" data-advanced-setting="timeSpeed" type="range" min="1" max="60" step="1" value="5">
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="advanced-settings-group">
+                            <h3>造梦空间</h3>
+                            <div class="advanced-setting-row">
+                                <div class="advanced-setting-copy">
+                                    <label for="advanced-dream-max-components">构造家具的最大组件数量 <span class="advanced-setting-var">(MAX_COMPONENTS)</span></label>
+                                    <small class="advanced-risk-note">更大的值会让家具更拟真，但会降低家具生成速度</small>
+                                </div>
+                                <div class="advanced-setting-control">
+                                    <em id="advanced-dream-max-components-value">24</em>
+                                    <input id="advanced-dream-max-components" data-advanced-setting="dreamMaxComponents" type="number" min="4" max="80" step="1" value="24">
+                                </div>
+                            </div>
+                            <div class="advanced-setting-row">
+                                <div class="advanced-setting-copy">
+                                    <label for="advanced-dream-dialogue-cooldown">家具发言冷却时间 <span class="advanced-setting-var">(DIALOGUE_COOLDOWN_MS)</span></label>
+                                    <small class="advanced-risk-note">更大的值会让芙提雅在造梦空间进行更多发言，但增加 token 消耗</small>
+                                </div>
+                                <div class="advanced-setting-control">
+                                    <em id="advanced-dream-dialogue-cooldown-value">20 秒</em>
+                                    <input id="advanced-dream-dialogue-cooldown" data-advanced-setting="dreamDialogueCooldownMs" type="number" min="0" max="600000" step="1000" value="20000">
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="advanced-settings-group">
+                            <h3>圆桌密语</h3>
+                            <div class="advanced-setting-row">
+                                <div class="advanced-setting-copy">
+                                    <label for="advanced-roundtable-max-participants">群聊中的最大成员数量 <span class="advanced-setting-var">(MAX_SELECTED_PARTICIPANTS)</span></label>
+                                    <small class="advanced-risk-note">过大的值可能导致群聊系统不稳定</small>
+                                </div>
+                                <div class="advanced-setting-control">
+                                    <em id="advanced-roundtable-max-participants-value">6</em>
+                                    <input id="advanced-roundtable-max-participants" data-advanced-setting="roundtableMaxParticipants" type="number" min="1" max="12" step="1" value="6">
+                                </div>
+                            </div>
+                            <div class="advanced-setting-row">
+                                <div class="advanced-setting-copy">
+                                    <label for="advanced-roundtable-token-hard-limit">3分钟内最大token消耗总量 <span class="advanced-setting-var">(TOKEN_HARD_LIMIT_10M)</span></label>
+                                    <small class="advanced-risk-note">更大的值会产生更高的用量</small>
+                                </div>
+                                <div class="advanced-setting-control">
+                                    <em id="advanced-roundtable-token-hard-limit-value">400000</em>
+                                    <input id="advanced-roundtable-token-hard-limit" data-advanced-setting="roundtableTokenHardLimit" type="number" min="10000" max="2000000" step="10000" value="400000">
+                                </div>
+                            </div>
+                            <div class="advanced-setting-row">
+                                <div class="advanced-setting-copy">
+                                    <label for="advanced-roundtable-total-call-limit">3 分钟内最大发言次数 <span class="advanced-setting-var">(TOTAL_CALL_LIMIT_10M)</span></label>
+                                    <small class="advanced-risk-note">更大的值会产生更高的用量，并可能导致 API 请求拥塞</small>
+                                </div>
+                                <div class="advanced-setting-control">
+                                    <em id="advanced-roundtable-total-call-limit-value">20</em>
+                                    <input id="advanced-roundtable-total-call-limit" data-advanced-setting="roundtableTotalCallLimit" type="number" min="1" max="100" step="1" value="20">
+                                </div>
+                            </div>
+                            <div class="advanced-setting-row">
+                                <div class="advanced-setting-copy">
+                                    <label for="advanced-roundtable-follow-up-rate">自动接话概率 <span class="advanced-setting-var">(FOLLOW_UP_RATE)</span></label>
+                                    <small class="advanced-risk-note">更大的值会产生更高的用量，并可能导致 API 请求拥塞</small>
+                                </div>
+                                <div class="advanced-setting-control">
+                                    <em id="advanced-roundtable-follow-up-rate-value">55%</em>
+                                    <input id="advanced-roundtable-follow-up-rate" data-advanced-setting="roundtableFollowUpRate" type="range" min="0" max="1" step="0.05" value="0.55">
+                                </div>
+                            </div>
+                            <div class="advanced-setting-row">
+                                <div class="advanced-setting-copy">
+                                    <label for="advanced-roundtable-max-stored-messages">群聊最大消息存储数量 <span class="advanced-setting-var">(MAX_STORED_MESSAGES)</span></label>
+                                    <small class="advanced-risk-note">更大的值会导致更多的存储空间占用</small>
+                                </div>
+                                <div class="advanced-setting-control">
+                                    <em id="advanced-roundtable-max-stored-messages-value">500</em>
+                                    <input id="advanced-roundtable-max-stored-messages" data-advanced-setting="roundtableMaxStoredMessages" type="number" min="50" max="3000" step="50" value="500">
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="advanced-settings-group">
+                            <h3>知识库</h3>
+                            <div class="advanced-setting-row">
+                                <div class="advanced-setting-copy">
+                                    <label for="advanced-kb-chunk-size">分块字符数 <span class="advanced-setting-var">(DEFAULT_CHUNK_SIZE)</span></label>
+                                </div>
+                                <div class="advanced-setting-control">
+                                    <em id="advanced-kb-chunk-size-value">512</em>
+                                    <input id="advanced-kb-chunk-size" data-advanced-setting="kbChunkSize" type="number" min="200" max="2000" step="1" value="512">
+                                </div>
+                            </div>
+                            <div class="advanced-setting-row">
+                                <div class="advanced-setting-copy">
+                                    <label for="advanced-kb-chunk-overlap">分块重叠字符数 <span class="advanced-setting-var">(DEFAULT_CHUNK_OVERLAP)</span></label>
+                                </div>
+                                <div class="advanced-setting-control">
+                                    <em id="advanced-kb-chunk-overlap-value">50</em>
+                                    <input id="advanced-kb-chunk-overlap" data-advanced-setting="kbChunkOverlap" type="number" min="0" max="500" step="1" value="50">
+                                </div>
+                            </div>
+                            <div class="advanced-setting-row">
+                                <div class="advanced-setting-copy">
+                                    <label for="advanced-kb-candidate-limit">稀疏检索数量 <span class="advanced-setting-var">(DEFAULT_CANDIDATE_LIMIT)</span></label>
+                                </div>
+                                <div class="advanced-setting-control">
+                                    <em id="advanced-kb-candidate-limit-value">50</em>
+                                    <input id="advanced-kb-candidate-limit" data-advanced-setting="kbCandidateLimit" type="number" min="1" max="200" step="1" value="50">
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                </section>
+
                 <section class="settings-view" data-settings-view="resources" aria-label="更多资源">
                     <button class="settings-back-btn btn btn--ghost" type="button" data-settings-back>返回设置分组</button>
                     <div class="settings-resources-page">
@@ -766,6 +910,7 @@
                     <button class="history-tab active" data-tab="daily">日常对话</button>
                     <button class="history-tab" data-tab="bar">暖调闲聚</button>
                     <button class="history-tab" data-tab="date">约会行程</button>
+                    <button class="history-tab" data-tab="roundtable">圆桌密语</button>
                 </div>
                 <div class="custom-select" id="history-date-filter">
                     <div class="select-selected">全部日期</div>
@@ -776,6 +921,7 @@
                 <div id="history-list"></div>
                 <div id="bar-history-list" class="hidden"></div>
                 <div id="date-history-list" class="hidden"></div>
+                <div id="roundtable-history-list" class="hidden"></div>
             </div>
         </div>
     </div>

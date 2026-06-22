@@ -6,6 +6,7 @@ import { loadCharacter, updateCharacter, getCharacterPosition, startInteraction,
 import { initDialogue, showDialogue, hideDialogue, isDialogueVisible, getConversationHistory, importConversationHistory, setDialogueSceneContext } from './dialogue.js';
 import { initDateDialogue, openDatePanel, closeDatePanel, isDatePanelVisible, getDateConversationHistory, importDateConversationHistory, getDateLocations } from './date_dialogue.js';
 import { initSettings } from './settings.js';
+import { getAdvancedSettings, saveAdvancedSettings } from './advanced_settings.js';
 import { addAffinity, exportGameState, formatGameDateTime, getAffinity, getBarAdmissionProgress, getGameTimeInfo, getMoney, importGameState, initGameState, recordHeadPat, recordModelUsed, recordSleepModeEntered, updateGameTime } from './game_state.js';
 import { closeGiftCollection, closeGiftTerminal, initGiftSystem, isGiftOverlayVisible, openGiftCollection, openGiftTerminal, renderGiftCollection } from './gift_system.js?v=20260618-gift-stream';
 import { closeAchievementsPanel, evaluateAchievements, exportAchievements, flushStartupAchievementToasts, importAchievements, initAchievements, isAchievementsPanelVisible, refreshAchievementsFromImport } from './achievements.js';
@@ -102,6 +103,7 @@ import {
 import {
     closeRoundtableWhispers,
     exportRoundtableWhispers,
+    getRoundtableWhispersHistory,
     importRoundtableWhispers,
     initRoundtableWhispers,
     isRoundtableWhispersVisible,
@@ -2384,6 +2386,7 @@ function initHistoryPanel() {
     const list = document.getElementById('history-list');
     const barList = document.getElementById('bar-history-list');
     const dateList = document.getElementById('date-history-list');
+    const roundtableList = document.getElementById('roundtable-history-list');
     const selectWrapper = document.getElementById('history-date-filter');
     const selectSelected = selectWrapper.querySelector('.select-selected');
     const selectOptions = selectWrapper.querySelector('.select-options');
@@ -2416,17 +2419,26 @@ function initHistoryPanel() {
                 list.classList.remove('hidden');
                 barList?.classList.add('hidden');
                 dateList.classList.add('hidden');
+                roundtableList?.classList.add('hidden');
                 renderHistory();
             } else if (tab.dataset.tab === 'bar') {
                 list.classList.add('hidden');
                 barList?.classList.remove('hidden');
                 dateList.classList.add('hidden');
+                roundtableList?.classList.add('hidden');
                 renderBarHistory();
-            } else {
+            } else if (tab.dataset.tab === 'date') {
                 list.classList.add('hidden');
                 barList?.classList.add('hidden');
                 dateList.classList.remove('hidden');
+                roundtableList?.classList.add('hidden');
                 renderDateHistory();
+            } else {
+                list.classList.add('hidden');
+                barList?.classList.add('hidden');
+                dateList.classList.add('hidden');
+                roundtableList?.classList.remove('hidden');
+                renderRoundtableHistory();
             }
         });
     });
@@ -2439,6 +2451,8 @@ function refreshActiveHistoryTab() {
         renderBarHistory();
     } else if (tab === 'date') {
         renderDateHistory();
+    } else if (tab === 'roundtable') {
+        renderRoundtableHistory();
     } else {
         renderHistory();
     }
@@ -2694,6 +2708,200 @@ function renderDateHistory(dateFilter = 'all') {
     });
 }
 
+function formatHistoryDate(ts, separator = '-') {
+    const d = new Date(Number(ts) || 0);
+    return `${d.getFullYear()}${separator}${String(d.getMonth() + 1).padStart(2, '0')}${separator}${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function formatHistoryTime(ts) {
+    const d = new Date(Number(ts) || 0);
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function buildRoundtableHistorySessions() {
+    const data = getRoundtableWhispersHistory();
+    const messages = Array.isArray(data.messages) ? data.messages : [];
+    const sessions = [];
+    let current = null;
+
+    for (const message of messages) {
+        if (message.eventType === 'session-start') {
+            current = {
+                id: message.sessionId || message.id,
+                mode: message.sessionMode === 'fresh' ? 'fresh' : 'full',
+                startTs: message.ts || 0,
+                date: formatHistoryDate(message.ts, '/'),
+                filterDate: formatHistoryDate(message.ts, '-'),
+                members: (message.memberNames || []).map((name, index) => ({
+                    name,
+                    color: message.memberColors?.[index] || '#e58aa6'
+                })),
+                messages: [message]
+            };
+            sessions.push(current);
+            continue;
+        }
+
+        const sameSession = current && message.sessionId && current.id === message.sessionId;
+        if (!sameSession) {
+            const date = formatHistoryDate(message.ts, '/');
+            const filterDate = formatHistoryDate(message.ts, '-');
+            current = sessions.find(item => item.id === `legacy-${filterDate}`) || null;
+            if (!current) {
+                current = {
+                    id: `legacy-${filterDate}`,
+                    mode: 'full',
+                    startTs: message.ts || 0,
+                    date,
+                    filterDate,
+                    members: [],
+                    messages: []
+                };
+                sessions.push(current);
+            }
+        }
+        current.messages.push(message);
+    }
+
+    return sessions
+        .filter(session => session.messages.some(message => message.role !== 'system'))
+        .sort((a, b) => (b.startTs || 0) - (a.startTs || 0));
+}
+
+function renderRoundtableHistory(dateFilter = 'all') {
+    const list = document.getElementById('roundtable-history-list');
+    const selectWrapper = document.getElementById('history-date-filter');
+    const selectSelected = selectWrapper.querySelector('.select-selected');
+    const selectOptions = selectWrapper.querySelector('.select-options');
+    if (!list) return;
+
+    const sessions = buildRoundtableHistorySessions();
+    const dates = [...new Set(sessions.map(session => session.filterDate))].sort().reverse();
+
+    selectOptions.innerHTML = '';
+    const allOpt = document.createElement('div');
+    allOpt.className = 'select-option' + (dateFilter === 'all' ? ' selected' : '');
+    allOpt.textContent = '全部日期';
+    allOpt.dataset.value = 'all';
+    allOpt.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectSelected.textContent = '全部日期';
+        selectOptions.classList.add('hidden');
+        renderRoundtableHistory('all');
+    });
+    selectOptions.appendChild(allOpt);
+
+    dates.forEach(d => {
+        const opt = document.createElement('div');
+        opt.className = 'select-option' + (d === dateFilter ? ' selected' : '');
+        opt.textContent = d;
+        opt.dataset.value = d;
+        opt.addEventListener('click', (e) => {
+            e.stopPropagation();
+            selectSelected.textContent = d;
+            selectOptions.classList.add('hidden');
+            renderRoundtableHistory(d);
+        });
+        selectOptions.appendChild(opt);
+    });
+    selectSelected.textContent = dateFilter === 'all' ? '全部日期' : dateFilter;
+
+    const filtered = dateFilter === 'all'
+        ? sessions
+        : sessions.filter(session => session.filterDate === dateFilter);
+
+    list.innerHTML = '';
+    if (filtered.length === 0) {
+        list.innerHTML = '<div style="text-align:center;color:rgba(90,62,74,0.56);padding:20px;">暂无圆桌密语记录</div>';
+        return;
+    }
+
+    filtered.forEach(session => {
+        const group = document.createElement('div');
+        group.className = 'roundtable-history-group';
+
+        const title = document.createElement('div');
+        title.className = 'history-date-sep';
+        title.textContent = `${session.date}-[${session.mode === 'fresh' ? '新群聊' : '继续群聊'}]`;
+        group.appendChild(title);
+
+        session.messages.forEach(message => {
+            if (message.role === 'system') {
+                group.appendChild(createRoundtableHistorySystemLine(message, session));
+            } else {
+                group.appendChild(createRoundtableHistoryMessage(message));
+            }
+        });
+
+        list.appendChild(group);
+    });
+    list.scrollTop = list.scrollHeight;
+}
+
+function createRoundtableHistorySystemLine(message, session) {
+    const line = document.createElement('div');
+    line.className = 'roundtable-history-event';
+    const time = document.createElement('span');
+    time.className = 'roundtable-history-time';
+    time.textContent = formatHistoryTime(message.ts);
+    const text = document.createElement('span');
+    text.className = 'roundtable-history-event-text';
+
+    if (message.eventType === 'session-start') {
+        appendColoredText(text, '[分析员, ', '#b89bd6');
+        const members = session.members.length > 0
+            ? session.members
+            : (message.memberNames || []).map((name, index) => ({ name, color: message.memberColors?.[index] || '#e58aa6' }));
+        members.forEach((member, index) => {
+            if (index > 0) appendColoredText(text, ', ', '');
+            appendColoredText(text, member.name, member.color);
+        });
+        appendColoredText(text, '] 开始群聊', '');
+    } else if (message.eventType === 'member-join' || message.eventType === 'member-leave') {
+        const names = message.memberNames?.length ? message.memberNames : [message.speakerName || '成员'];
+        const colors = message.memberColors || [];
+        appendColoredText(text, '[', '');
+        names.forEach((name, index) => {
+            if (index > 0) appendColoredText(text, ', ', '');
+            appendColoredText(text, name, colors[index] || message.speakerColor || '#e58aa6');
+        });
+        appendColoredText(text, message.eventType === 'member-join' ? '] 加入了群聊' : '] 离开了群聊', '');
+    } else {
+        text.textContent = message.text;
+    }
+
+    line.append(time, text);
+    return line;
+}
+
+function appendColoredText(parent, value, color) {
+    const span = document.createElement('span');
+    span.textContent = value;
+    if (color) span.style.color = color;
+    parent.appendChild(span);
+}
+
+function createRoundtableHistoryMessage(message) {
+    const el = document.createElement('div');
+    el.className = `history-msg roundtable-history-msg ${message.role}`;
+    el.style.setProperty('--speaker-accent', message.speakerColor || '#e58aa6');
+
+    const role = document.createElement('div');
+    role.className = 'msg-role';
+    const speaker = document.createElement('span');
+    speaker.className = 'roundtable-history-speaker';
+    speaker.textContent = message.role === 'player' ? '分析员' : message.speakerName;
+    speaker.style.color = message.speakerColor || '#e58aa6';
+    const meta = document.createElement('span');
+    meta.textContent = ` · 圆桌密语 · ${formatHistoryTime(message.ts)}`;
+    role.append(speaker, meta);
+
+    const content = document.createElement('div');
+    content.textContent = message.text;
+    el.append(role, content);
+    return el;
+}
+
 async function buildExportPayloadV3(options = {}) {
     const gameState = exportGameState();
     return {
@@ -2709,6 +2917,7 @@ async function buildExportPayloadV3(options = {}) {
         gifts: gameState.gifts,
         dreamFurniture: exportDreamFurniture(),
         settings: JSON.parse(localStorage.getItem('fritia-settings') || '{}'),
+        advancedSettings: getAdvancedSettings(),
         conversations: getConversationHistory(),
         dateConversations: getDateConversationHistory(),
         barConversations: getBarConversationHistory(),
@@ -2760,6 +2969,9 @@ function importData() {
 async function applyImportedDataV3(data, assetFiles = new Map()) {
     if (data.settings) {
         localStorage.setItem('fritia-settings', JSON.stringify(data.settings));
+    }
+    if (data.advancedSettings) {
+        saveAdvancedSettings(data.advancedSettings);
     }
     if (data.conversations && Array.isArray(data.conversations)) {
         importConversationHistory(data.conversations);
@@ -2828,6 +3040,9 @@ function handleImportFile(e) {
             const data = JSON.parse(ev.target.result);
             if (data.settings) {
                 localStorage.setItem('fritia-settings', JSON.stringify(data.settings));
+            }
+            if (data.advancedSettings) {
+                saveAdvancedSettings(data.advancedSettings);
             }
             if (data.conversations && Array.isArray(data.conversations)) {
                 importConversationHistory(data.conversations);

@@ -1,3 +1,5 @@
+import { getDreamMaxComponents } from './advanced_settings.js';
+
 const LINE_MAX_TOKENS = 256;
 const LINE_RETRY_MAX_TOKENS = 640;
 let cachedCharacterPrompt = null;
@@ -262,6 +264,7 @@ function formatFurnitureSummary(existingFurniture = []) {
 function buildFurniturePrompt({ description, placementText, roomContext, existingFurniture }) {
     const bounds = roomContext?.bounds || {};
     const door = roomContext?.doorClearanceZone || {};
+    const maxComponents = getDreamMaxComponents();
     return [
         `玩家想制造的家具：${description}`,
         `玩家描述的摆放位置：${placementText || '未填写，默认放在新房间中央安全区域。'}`,
@@ -284,7 +287,7 @@ function buildFurniturePrompt({ description, placementText, roomContext, existin
         '如果玩家没有明确要求悬挂或挂墙，绝对不要输出 anchor:"wall"，不要把普通家具放到墙上。',
         'dimensions.width/depth/height 使用米，默认不超过 3m/2.5m/2.3m。',
         'frontDirection 只能是 +X/-X/+Z/-Z。',
-        'components 是 1 到 24 个 primitive，绝不能是空数组；type 只能是 box/cylinder/sphere/cone/torus/plane。',
+        `components 是 1 到 ${maxComponents} 个 primitive，绝不能是空数组；type 只能是 box/cylinder/sphere/cone/torus/plane。`,
         '每个 component 包含 name, position{x,y,z}, rotation{x,y,z}, size{x,y,z}, color, material。',
         'color 使用 #RRGGBB。',
         'material 只能表达 wood/fabric/metal/glass/plastic/ceramic/light/default 这类本地材质意图，不要外部贴图 URL。',
@@ -296,6 +299,7 @@ function buildFurniturePrompt({ description, placementText, roomContext, existin
 function buildFurnitureRevisionPrompt({ furniture, instruction, roomContext }) {
     const bounds = roomContext?.bounds || {};
     const currentSpec = furniture?.spec || {};
+    const maxComponents = getDreamMaxComponents();
     return [
         `玩家要修改已经存在的造梦家具：「${furniture?.name || currentSpec.name || '造梦家具'}」。`,
         `玩家的样式修改要求：${instruction}`,
@@ -313,7 +317,7 @@ function buildFurnitureRevisionPrompt({ furniture, instruction, roomContext }) {
         '如果当前家具 anchor 是 wall，则不要输出修改；悬挂式家具不能进行样式修改。',
         '如果玩家要求在墙、屏风、隔断等实体上开门洞、窗洞或通道，必须把实体拆成门洞两侧和上方等多个 box 组件，不要用一整块 box 表示带洞的墙。',
         '顶层 JSON 必须直接包含非空 components 数组，不要把 components 放进其他字段。',
-        'components 是 1 到 24 个 primitive；type 只能是 box/cylinder/sphere/cone/torus/plane。',
+        `components 是 1 到 ${maxComponents} 个 primitive；type 只能是 box/cylinder/sphere/cone/torus/plane。`,
         '每个 component 必须包含 name, position{x,y,z}, rotation{x,y,z}, size{x,y,z}, color, material。',
         'dimensions.width/depth/height 使用米，不能超过房间安全尺寸；不要输出外部 URL 或贴图。',
         'color 使用 #RRGGBB；material 只能是 wood/fabric/metal/glass/plastic/ceramic/light/default 等本地材质意图。',
