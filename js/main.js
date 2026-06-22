@@ -155,6 +155,7 @@ let bedroomColliders = [];
 let dreamStaticColliders = [];
 let barSceneData = null;
 let currentPlayerRoomId = 'bedroom';
+let dreamFurnitureManageMode = false;
 let isBarSceneActive = false;
 let barTransitionInProgress = false;
 let barBgm = null;
@@ -517,6 +518,12 @@ async function init() {
         showAffinityToast(e.detail?.delta || 0);
         evaluateAchievements();
     });
+    document.addEventListener('fritia-dream-furniture-manage-started', () => {
+        enterDreamFurnitureManageMode();
+    });
+    document.addEventListener('fritia-dream-furniture-manage-ended', () => {
+        exitDreamFurnitureManageMode();
+    });
     document.getElementById('btn-pet').addEventListener('click', () => { if (isSleeping) petFritiaHead(); });
     document.getElementById('btn-wake').addEventListener('click', () => { if (isSleeping) exitSleepMode(); });
     document.getElementById('btn-achievements').addEventListener('click', () => {
@@ -686,7 +693,7 @@ function onKeyDown(e) {
                 toggleDreamDoor();
             } else if (!isBarSceneActive && isLookingAtDreamTerminal(camera)) {
                 openDreamPanel();
-            } else if (!isBarSceneActive && isLookingAtDreamFurniture(camera)) {
+            } else if (!isBarSceneActive && getRoomIdForPosition(camera.position) === 'dream' && isLookingAtDreamFurniture(camera)) {
                 openDreamFurnitureEditor(getLookingDreamFurniture(camera));
             } else if (isLookingAtTerminal()) {
                 openGiftTerminal();
@@ -874,7 +881,9 @@ function showSalaryToast(amount) {
 
 function handleDreamFurnitureChanged(options = {}) {
     if (controlsModule) {
-        controlsModule.setColliders(getActivePlayerColliders());
+        controlsModule.setColliders(dreamFurnitureManageMode
+            ? getDreamFurnitureManageColliders()
+            : getActivePlayerColliders());
     }
     if (charData && currentPlayerRoomId === BAR_ROOM_ID) {
         refreshCharacterNavigationData(charData, {
@@ -916,6 +925,43 @@ function getActivePlayerColliders() {
     return [...getActiveBasePlayerColliders(), ...getDreamFurnitureColliders()];
 }
 
+function getDreamFurnitureManageColliders() {
+    const colliders = [...getActiveBasePlayerColliders(), ...getDreamFurnitureColliders()];
+    if (dreamDoorCollider && !colliders.includes(dreamDoorCollider)) {
+        colliders.push(dreamDoorCollider);
+    }
+    return colliders;
+}
+
+function enterDreamFurnitureManageMode() {
+    dreamFurnitureManageMode = true;
+    if (!controlsModule) return;
+    controlsModule.setMovementBounds?.(dreamRoomBounds);
+    controlsModule.setColliders(getDreamFurnitureManageColliders());
+    controlsModule.resolveCameraCollisions?.();
+    controlsModule.enterDetachedControlMode?.();
+}
+
+function exitDreamFurnitureManageMode() {
+    dreamFurnitureManageMode = false;
+    if (!controlsModule) return;
+    controlsModule.setMovementBounds?.(null);
+    controlsModule.setColliders(getActivePlayerColliders());
+    controlsModule.resolveCameraCollisions?.();
+    if (controlsModule.isPointerDetached?.()
+        && !isDreamOverlayVisible()
+        && !isUtilityOverlayVisible()
+        && !isGiftOverlayVisible()
+        && !isDatePanelVisible()
+        && !isDialogueVisible()
+        && !isDanceOverlayVisible()
+        && !isInvitePanelVisible()
+        && !isBartendingChallengeVisible()
+        && !isRoundtableWhispersVisible()) {
+        controlsModule.forceEnterControlMode?.();
+    }
+}
+
 function getActiveBedroomCharacterColliders() {
     const colliders = bedroomColliders ? [...bedroomColliders] : [];
     if (!isDreamDoorOpen && dreamDoorCollider) colliders.push(dreamDoorCollider);
@@ -931,7 +977,9 @@ function getActiveDreamCharacterColliders() {
 
 function refreshCollisionScopesAfterDreamDoorChange() {
     if (controlsModule) {
-        controlsModule.setColliders(getActivePlayerColliders());
+        controlsModule.setColliders(dreamFurnitureManageMode
+            ? getDreamFurnitureManageColliders()
+            : getActivePlayerColliders());
         controlsModule.resolveCameraCollisions?.();
     }
     if (!charData) return;
@@ -1302,6 +1350,32 @@ function toggleDreamDoor() {
     refreshCollisionScopesAfterDreamDoorChange();
 }
 
+function openDreamDoorForCharacterPassage() {
+    if (isDreamDoorOpen) return;
+    toggleDreamDoor();
+}
+
+function openDreamDoorIfCharacterNeedsPassage(charPos, targetRoomId) {
+    if (isDreamDoorOpen || targetRoomId !== 'bedroom') return;
+    if (!charPos || getRoomIdForPosition(charPos) !== 'dream') return;
+    const doorX = dreamDoorInteractionMesh?.userData?.interactionCenter?.x
+        ?? dreamDoorClosedPosition?.x
+        ?? 3.05;
+    const doorZ = dreamDoorInteractionMesh?.userData?.interactionCenter?.z
+        ?? dreamDoorClosedPosition?.z
+        ?? 0.65;
+    const dx = charPos.x - doorX;
+    const dz = charPos.z - doorZ;
+    if (Math.sqrt(dx * dx + dz * dz) <= 1.75) {
+        openDreamDoorForCharacterPassage();
+    }
+}
+
+function updateDreamDoorForCharacterPassage() {
+    if (!charData || currentPlayerRoomId !== 'bedroom') return;
+    openDreamDoorIfCharacterNeedsPassage(getCharacterPosition(charData), 'bedroom');
+}
+
 function refreshCharacterRoomScope(force = false) {
     if (!charData || !oldRoomBounds || !dreamRoomBounds) return;
     if (isBarSceneActive) {
@@ -1345,6 +1419,7 @@ function refreshCharacterRoomScope(force = false) {
             colliders: getActiveBedroomCharacterColliders()
         });
         if (getRoomIdForPosition(charPos) !== 'bedroom') {
+            openDreamDoorIfCharacterNeedsPassage(charPos, 'bedroom');
             const walked = !force && moveCharacterToWaypoint(
                 charData,
                 { name: 'dream_to_bedroom_door', roomId: 'dream', position: new THREE.Vector3(4.35, 0, 0.65), isFurniture: false, ignoreCollision: true },
@@ -1425,6 +1500,7 @@ function animate() {
                 }
             } else {
                 refreshCharacterRoomScope();
+                updateDreamDoorForCharacterPassage();
                 updateCharacter(charData, delta);
             }
             if (isBarSceneActive && !isDanceFlowActive()) {
@@ -1505,7 +1581,9 @@ function updateInteractionPrompt() {
         const lookDesk = isLookingAtDesk();
         const lookDoor = isLookingAtDoor();
         const lookDreamTerminal = !isBarSceneActive && isLookingAtDreamTerminal(camera);
-        const lookDreamFurniture = !isBarSceneActive && isLookingAtDreamFurniture(camera);
+        const lookDreamFurniture = !isBarSceneActive
+            && getRoomIdForPosition(camera.position) === 'dream'
+            && isLookingAtDreamFurniture(camera);
         const lookTerminal = isLookingAtTerminal();
         const lookCollectionCabinet = isLookingAtCollectionCabinet();
         paintingPrompt.classList.remove('is-disabled');

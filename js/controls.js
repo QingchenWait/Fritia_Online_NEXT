@@ -84,6 +84,7 @@ export function initControls(camera, domElement, colliders) {
         isLocked: false,
         movementLocked: false,
         lookLocked: false,
+        movementBounds: null,
         targetCameraY: camera.position.y,
         useTouchControls: isTouchDevice() && (!hasPhysicalKeyboard() || !pointerLockSupported)
     };
@@ -105,13 +106,13 @@ export function initControls(camera, domElement, colliders) {
         'dream-terminal-panel',
         'dream-furniture-editor-panel',
         'dream-placement-editor-panel',
-        'dream-object-controls',
         'room-panorama-ui'
     ];
     let resumeAfterOverlay = false;
     let resumeInProgress = false;
     let suppressPointerLookUntil = 0;
     let resetTouchInputState = () => {};
+    let detachedControlResumePending = false;
 
     document.addEventListener('fritia-settings-updated', (event) => {
         const next = event.detail || getSettings();
@@ -206,6 +207,10 @@ export function initControls(camera, domElement, colliders) {
 
     controls.addEventListener('unlock', () => {
         leaveControlMode();
+        if (detachedControlResumePending) {
+            detachedControlResumePending = false;
+            setTimeout(() => enterControlMode(), 0);
+        }
     });
 
     document.addEventListener('keydown', (e) => {
@@ -408,6 +413,7 @@ export function initControls(camera, domElement, colliders) {
         if (state.moveForward || state.moveBackward) {
             const prevPos = camera.position.clone();
             controls.moveForward(state.direction.z * speed);
+            clampToMovementBounds(camera.position, radius);
             if (checkCollision(camera.position, radius)) {
                 camera.position.copy(prevPos);
             }
@@ -416,6 +422,7 @@ export function initControls(camera, domElement, colliders) {
         if (state.moveLeft || state.moveRight) {
             const beforeRight = camera.position.clone();
             controls.moveRight(state.direction.x * speed);
+            clampToMovementBounds(camera.position, radius);
             if (checkCollision(camera.position, radius)) {
                 camera.position.copy(beforeRight);
             }
@@ -451,6 +458,14 @@ export function initControls(camera, domElement, colliders) {
         state.targetCameraY = getCameraStandingY(controls.object.position);
     }
 
+    function setMovementBounds(bounds = null) {
+        state.movementBounds = bounds && bounds.min && bounds.max ? bounds : null;
+        if (state.movementBounds) {
+            clampToMovementBounds(controls.object.position);
+            state.targetCameraY = getCameraStandingY(controls.object.position);
+        }
+    }
+
     function setMovementLocked(locked) {
         state.movementLocked = Boolean(locked);
         clearMovementState();
@@ -460,6 +475,17 @@ export function initControls(camera, domElement, colliders) {
         state.lookLocked = Boolean(locked);
         resetTouchInputState();
         suppressPointerLook(locked ? 500 : POINTER_LOCK_SUPPRESS_MS);
+    }
+
+    function clampToMovementBounds(pos, radius = 0.25) {
+        const bounds = state.movementBounds;
+        if (!bounds?.min || !bounds?.max || !pos) return pos;
+        pos.x = THREE.MathUtils.clamp(pos.x, bounds.min.x + radius, bounds.max.x - radius);
+        pos.z = THREE.MathUtils.clamp(pos.z, bounds.min.z + radius, bounds.max.z - radius);
+        if (Number.isFinite(bounds.min.y) && Number.isFinite(bounds.max.y)) {
+            pos.y = THREE.MathUtils.clamp(pos.y, bounds.min.y + 0.2, bounds.max.y - 0.2);
+        }
+        return pos;
     }
 
     function applyLookDelta(deltaX, deltaY, sensitivity) {
@@ -581,6 +607,24 @@ export function initControls(camera, domElement, colliders) {
         return requestPointerLockForResume();
     }
 
+    function enterDetachedControlMode() {
+        resumeAfterOverlay = false;
+        resumeInProgress = false;
+        blurActiveOverlayElement();
+        if (!state.useTouchControls && pointerLockSupported && domElement.ownerDocument?.pointerLockElement === domElement) {
+            detachedControlResumePending = true;
+            controls.unlock();
+            return true;
+        }
+        enterControlMode();
+        return true;
+    }
+
+    function isPointerDetached() {
+        if (state.useTouchControls || !pointerLockSupported) return false;
+        return state.isLocked && domElement.ownerDocument?.pointerLockElement !== domElement;
+    }
+
     function cancelOverlayResume() {
         resumeAfterOverlay = false;
         resumeInProgress = false;
@@ -595,6 +639,7 @@ export function initControls(camera, domElement, colliders) {
         addColliders,
         removeColliders,
         setColliders,
+        setMovementBounds,
         resolveCameraCollisions,
         setMovementLocked,
         setLookLocked,
@@ -603,6 +648,8 @@ export function initControls(camera, domElement, colliders) {
         resumeControlMode,
         cancelOverlayResume,
         enterControlMode,
+        enterDetachedControlMode,
+        isPointerDetached,
         forceEnterControlMode
     };
 }

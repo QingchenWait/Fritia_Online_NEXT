@@ -3870,7 +3870,7 @@ body.dream-revision-pending .touch-actions { pointer-events: none; opacity: 0.35
     border: 2px solid rgba(255,255,255,0.4);
     transition: background 0.1s;
 }
-.touch-actions { display: flex; gap: 12px; pointer-events: auto; touch-action: none; }
+.touch-actions { display: none; gap: 12px; pointer-events: auto; touch-action: none; }
 .touch-btn {
     width: 64px; height: 64px;
     border-radius: 50%;

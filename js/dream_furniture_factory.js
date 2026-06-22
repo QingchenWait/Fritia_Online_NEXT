@@ -363,7 +363,7 @@ export function createFurnitureFromSpec(rawSpec) {
     group.name = spec.name;
     group.userData.dreamSpec = spec;
     group.userData.interactionCenter = new THREE.Vector3(0, Math.min(1.4, spec.dimensions.height * 0.65), 0);
-    const wallMounted = spec.anchor === 'wall' || spec.category === 'hanging';
+    const wallMounted = spec.anchor === 'wall' || spec.category === 'hanging' || spec.category === 'painting';
 
     for (const [index, component] of spec.components.entries()) {
         const mesh = new THREE.Mesh(createGeometry(component, wallMounted), makeMaterial(component, index));
@@ -458,10 +458,15 @@ export function deserializeFurniture(data) {
     const { valid, spec } = validateFurnitureSpec(data.spec);
     if (!valid) return null;
     const pose = data.pose && typeof data.pose === 'object' ? data.pose : {};
+    const category = ALLOWED_CATEGORIES.has(data.category) ? data.category : spec.category;
+    if (pose.anchor === 'wall' || category === 'hanging' || category === 'painting') {
+        spec.anchor = 'wall';
+        if (category === 'hanging' || category === 'painting') spec.category = category;
+    }
     return {
         id: String(data.id || `dream_${Date.now()}`),
         name: clampText(data.name || spec.name, spec.name, 12),
-        category: ALLOWED_CATEGORIES.has(data.category) ? data.category : spec.category,
+        category,
         description: clampText(data.description || spec.description, spec.description, 120),
         playerDescription: clampText(data.playerDescription || '', '', 240),
         spec,

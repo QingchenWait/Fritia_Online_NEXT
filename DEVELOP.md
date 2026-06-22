@@ -143,6 +143,7 @@ npm run dev
 - `startDreamFurnitureCinematic(record, runtimeItem)` / `updateDreamFurnitureCinematic(delta)` / `skipDreamFurnitureCinematic()`：新家具生成后播放约 3 秒的特写拉远镜头，镜头起终点限制在造梦空间内，避免穿墙；播放前检测结束落点的玩家碰撞风险，必要时保持玩家视角 Y 轴高度并改用附近安全位置；过场期间只允许按 `E` 跳过。
 - `initRoomPanorama()` / `enterRoomPanorama()` / `updateRoomPanorama()`：看向造梦终端时通过 `按 1 拍摄房间` 进入全景拍照模式。模式内固定相机到新旧房间斜上方，暂停玩家移动和普通交互，并通过黑屏淡入淡出切换视角。
 - `refreshCharacterRoomScope(force)`：玩家进入新旧房间时，切换芙提雅导航作用域；优先让角色通过门步行进入对应房间，失败时才瞬移。
+- 玩家从造梦空间回到初始房间后，如果芙提雅仍在造梦空间并正在靠近连接门跟随回房，且连接门处于关闭或关闭动画中，`updateDreamDoorForCharacterPassage()` 会在她到达门附近时自动重新打开该门；除此限定场景外，门和角色导航仍使用原有策略。
 - `getActivePlayerColliders()`：当前玩家碰撞体。门关闭时包含 `dreamDoorCollider`，门打开时移除。
 - `getActiveBedroomCharacterColliders()` / `getActiveDreamCharacterColliders()`：角色在不同房间的导航碰撞体。
 - `tryEnterBarSceneWithAdmission()`：旧房间南侧门的暖调闲聚准入检查。需要完成 3 次日常对话、1 次约会、1 次睡觉模式、送出 1 件礼物和制造 1 件造梦家具；未完成时在门位置投影 `#bar-admission-panel`，隐藏进入提示并显示 `按 E 关闭`，全部完成后直接调用 `enterBarScene()`。
@@ -434,6 +435,7 @@ LLM 输出协议：
 - `update(delta)`：每帧更新玩家位置并执行碰撞检测。
 - `isNearCharacter(charPos, threshold)`：判断玩家是否接近芙提雅。
 - `addColliders(colliders)` / `removeColliders(colliders)` / `setColliders(colliders)`：动态更新玩家碰撞体。
+- `setMovementBounds(bounds)`：临时限制玩家移动范围；造梦家具快捷管理使用造梦房间 bounds，退出后恢复为空。
 - `resolveCameraCollisions(radius)`：如果家具移动到玩家脚下，把相机水平推出碰撞体，避免卡住。
 - `setMovementLocked(locked)`：锁定玩家移动，但保留视角旋转，家具快捷编辑时使用。
 - `rotateView(deltaX, deltaY)`：家具快捷编辑时在非 Pointer Lock 状态下拖动视角。
@@ -441,7 +443,9 @@ LLM 输出协议：
 - `resumeControlMode()`：overlay 关闭后恢复控制模式。
 - `cancelOverlayResume()`：取消 overlay 关闭后的自动恢复控制标记；离开酒吧强制关闭圆桌密语时使用，避免转场后抢回 Pointer Lock。
 - `enterControlMode()`：只切换内部操作状态，用于触控或 Pointer Lock 已存在的场景。
+- `enterDetachedControlMode()` / `isPointerDetached()`：进入非 Pointer Lock 但仍允许移动的临时操作模式；用于造梦家具快捷管理，让玩家可 WASD 移动且鼠标仍可点击屏幕上的管理按钮。
 - `forceEnterControlMode()`：主动请求 Pointer Lock 并恢复操作模式；造梦家具特写过场结束后使用该接口，避免出现可移动但鼠标未锁定的半激活状态。
+- 移动端触控控制仍保留摇杆、`F` 和“视角”按钮的 DOM 与事件函数；当前 UI 仅隐藏右下角 `F` / “视角”按钮区域，便于后续继续开发。
 
 overlay 管理列表：
 
@@ -459,7 +463,6 @@ overlay 管理列表：
 - `dream-terminal-panel`
 - `dream-furniture-editor-panel`
 - `dream-placement-editor-panel`
-- `dream-object-controls`
 
 ## 角色系统：`js/character.js`
 
@@ -913,6 +916,7 @@ localStorage key：`fritia_achievements`
 - `getDreamFurnitureLabel(furnitureId)`：家具名称，用于提示 `按 E 管理 [名称]`。
 - `getDreamFurnitureDialogueContext()`：给日常对话注入的家具背景。
 - `exportDreamFurniture()` / `importDreamFurniture(data)`：导出/导入造梦家具。
+- 导入造梦家具时，悬挂式家具必须和运行时部署使用同一条墙面姿态路径：`deserializeFurniture()` 会用顶层 `category` 与 `pose.anchor` 回填 `spec.anchor/category`，`importDreamFurniture()` 会通过 `applyRecordPoseToGroup()` 写入 `group.userData.anchor="wall"` 并执行 `applyWallFurniturePose()`，避免把 `hanging/painting` 按地面家具校验而跳过。
 - `refreshDreamFurnitureAfterImport()`：导入后刷新运行时家具。
 
 关键内部逻辑：
@@ -963,6 +967,8 @@ localStorage key：`fritia_achievements`
 家具快捷管理：
 
 - 看向家具按 `E` 不直接打开大 overlay，而是在家具实体中心投影 `#dream-object-controls`。
+- 玩家必须人在造梦房间内才能触发造梦家具快捷管理；快捷管理期间不会释放移动，玩家可继续移动和拖动圆形管理区旋转视角，但 `controls.js#setMovementBounds()` 会把移动范围限制在造梦空间 bounds 内，并且玩家碰撞体始终包含连接门碰撞体，不能穿过门洞回到初始房间或进入暖调闲聚。
+- 点击“编辑”或“重新自动摆放”进入输入型 overlay 时，会退出快捷管理移动模式并释放控制，关闭输入 overlay 返回圆形快捷管理后再恢复上述可移动管理模式。
 - 前/后/左/右按钮移动家具，短按一步 `0.25m`，长按超过 `0.5s` 后平滑连续移动。
 - 左转/右转按钮短按 `15°`，长按超过 `0.5s` 后平滑连续旋转。
 - 悬挂式家具的前/后按钮表示沿墙面向天花板/地板移动，左右按钮表示沿所在墙面水平移动；旋转按钮禁用。
@@ -1368,6 +1374,13 @@ DOM ID：
 - `fritia-dream-furniture-visited`
   - 来源：角色到达动态家具 waypoint。
   - detail：`{ furnitureId, name, description, category, dialogueTags }`。
+- `fritia-dream-furniture-manage-started`
+  - 来源：打开造梦家具快捷管理圆形按钮，或从家具编辑 overlay 返回快捷管理。
+  - detail：`{ id }`。
+  - 用途：主流程进入可移动但限制在造梦房间的家具管理模式。
+- `fritia-dream-furniture-manage-ended`
+  - 来源：关闭造梦家具快捷管理，或进入家具编辑/位置输入 overlay。
+  - 用途：主流程恢复普通碰撞范围与控制模式。
 
 ## 导出/导入 JSON
 

@@ -626,6 +626,22 @@ function applyWallFurniturePose(group, pose) {
     };
 }
 
+function applyRecordPoseToGroup(group, record) {
+    if (isWallFurniture(record)) {
+        group.userData.anchor = 'wall';
+        const pose = applyWallFurniturePose(group, {
+            ...record.pose,
+            anchor: 'wall'
+        });
+        record.pose = copyPose(pose);
+        if (record.spec) record.spec.anchor = 'wall';
+        return pose;
+    }
+    group.userData.anchor = 'floor';
+    applyFurniturePose(group, record.pose);
+    return record.pose;
+}
+
 function findSafePlacement(group, spec, placementText = '', excludeId = '') {
     if (isWallFurniture(spec)) {
         return findSafeWallPlacement(group, spec, placementText, excludeId);
@@ -818,11 +834,7 @@ function deployRecord(record) {
         isWallFurniture(record) ? record.pose.position.y : Math.min(1.4, spec.dimensions.height * 0.65),
         record.pose.position.z
     );
-    if (isWallFurniture(record)) {
-        record.pose = copyPose(applyWallFurniturePose(group, record.pose));
-    } else {
-        applyFurniturePose(group, record.pose);
-    }
+    applyRecordPoseToGroup(group, record);
     group.userData.interactionCenter = new THREE.Vector3(
         group.position.x,
         isWallFurniture(record) ? group.position.y : Math.min(1.4, spec.dimensions.height * 0.65),
@@ -1394,8 +1406,9 @@ export function openDreamFurnitureEditor(furnitureId) {
     editSnapshot = copyPose(record.pose);
     els.objectControls?.classList.remove('hidden');
     updateObjectControlModes(record);
-    controlsModule?.releaseControlMode({ resumeOnClose: true });
-    controlsModule?.setMovementLocked?.(true);
+    document.dispatchEvent(new CustomEvent('fritia-dream-furniture-manage-started', {
+        detail: { id }
+    }));
     startObjectControlsProjection();
 }
 
@@ -1438,6 +1451,8 @@ export function requestDreamPaintingTextureUpload(furnitureId = '') {
 function openFurnitureEditPanel() {
     const record = getEditingRecord();
     if (!record) return;
+    document.dispatchEvent(new CustomEvent('fritia-dream-furniture-manage-ended'));
+    controlsModule?.releaseControlMode({ resumeOnClose: true });
     stopObjectControlsProjection();
     els.objectControls?.classList.add('hidden');
     if (els.editorTitle) els.editorTitle.textContent = record.name;
@@ -1472,7 +1487,9 @@ function openFurnitureEditPanel() {
 function returnToObjectControls() {
     if (!editingId || pendingRevision) return;
     els.objectControls?.classList.remove('hidden');
-    controlsModule?.setMovementLocked?.(true);
+    document.dispatchEvent(new CustomEvent('fritia-dream-furniture-manage-started', {
+        detail: { id: editingId }
+    }));
     startObjectControlsProjection();
 }
 
@@ -1485,6 +1502,8 @@ function closeFurnitureEditPanel() {
 function openPlacementEditPanel() {
     const record = getEditingRecord();
     if (!record) return;
+    document.dispatchEvent(new CustomEvent('fritia-dream-furniture-manage-ended'));
+    controlsModule?.releaseControlMode({ resumeOnClose: true });
     stopObjectControlsProjection();
     els.objectControls?.classList.add('hidden');
     if (els.editorPlacement) els.editorPlacement.value = '';
@@ -1522,7 +1541,7 @@ export function closeDreamFurnitureEditor() {
     else els.editor?.classList.add('hidden');
     if (placementWasOpen) closeById('dream-placement-editor-panel');
     else els.placementPanel?.classList.add('hidden');
-    controlsModule?.setMovementLocked?.(false);
+    document.dispatchEvent(new CustomEvent('fritia-dream-furniture-manage-ended'));
     if (controlsWereOpen) {
         document.dispatchEvent(new CustomEvent('fritia-overlay-closed', { detail: { id: 'dream-object-controls' } }));
     }
@@ -1875,7 +1894,11 @@ async function handleStyleRevision() {
         let created;
         try {
             created = createFurnitureFromSpec(revisedSpec);
-            applyFurniturePose(created.group, record.pose);
+            applyRecordPoseToGroup(created.group, {
+                ...record,
+                spec: revisedSpec,
+                pose: copyPose(record.pose)
+            });
         } catch (err) {
             setEditorStatus(`家具尺寸或组件校验失败：${err.message}`, 'warn');
             return;
@@ -2318,7 +2341,7 @@ export function importDreamFurniture(data) {
         doorClearanceZone = doorClearanceZone || boxFromPlain(item.doorClearanceZone);
         try {
             const { group } = createFurnitureFromSpec(record.spec);
-            applyFurniturePose(group, record.pose);
+            applyRecordPoseToGroup(group, record);
             const validation = validateRuntimePlacement(group, record.id);
             if (!validation.ok) {
                 skipped++;
