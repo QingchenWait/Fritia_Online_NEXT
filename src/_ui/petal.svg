@@ -1,0 +1,13 @@
+<svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Single sakura-style petal for ambient floating decoration. -->
+  <defs>
+    <linearGradient id="pt-rose" x1="6" y1="4" x2="34" y2="36" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffe3ea"/>
+      <stop offset="0.6" stop-color="#f4b8c8"/>
+      <stop offset="1" stop-color="#e58aa6"/>
+    </linearGradient>
+  </defs>
+  <path d="M20 4 C28 8 34 16 34 24 C34 31 28 36 20 36 C12 36 6 31 6 24 C6 16 12 8 20 4 Z" fill="url(#pt-rose)"/>
+  <path d="M20 8 C20 16 20 28 20 33" stroke="#e58aa6" stroke-width="0.8" opacity="0.5" stroke-linecap="round"/>
+  <path d="M20 4 C16 9 14 14 14 18" stroke="#fff" stroke-width="0.8" opacity="0.5" stroke-linecap="round"/>
+</svg>

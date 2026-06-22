@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+import { getBarCollisionCandidates } from './bar_performance.js';
+import { getSettings } from './settings.js';
 
 function isTouchDevice() {
     return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
@@ -20,9 +22,56 @@ function supportsPointerLock(domElement) {
         && 'pointerLockElement' in doc;
 }
 
+const POINTER_LOCK_MAX_LOOK_STEP = 70;
+const POINTER_LOCK_HARD_SPIKE = 260;
+const MANUAL_LOOK_MAX_STEP = 80;
+const MANUAL_LOOK_HARD_SPIKE = 260;
+const TOUCH_LOOK_MAX_STEP = 46;
+const TOUCH_LOOK_HARD_SPIKE = 180;
+const POINTER_LOCK_SUPPRESS_MS = 90;
+const PLAYER_EYE_HEIGHT = 1.6;
+const PLAYER_FOOT_CLEARANCE = 0.04;
+const CAMERA_HEIGHT_SMOOTH_SPEED = 12;
+
+function clampSensitivity(value) {
+    const next = Number(value);
+    if (!Number.isFinite(next)) return 1;
+    return Math.min(2.5, Math.max(0.35, next));
+}
+
+function nowMs() {
+    return typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+}
+
+function isLookDeltaSpike(deltaX, deltaY, maxDelta) {
+    const dx = Number(deltaX);
+    const dy = Number(deltaY);
+    if (!Number.isFinite(dx) || !Number.isFinite(dy)) return true;
+    return Math.abs(dx) > maxDelta
+        || Math.abs(dy) > maxDelta
+        || Math.hypot(dx, dy) > maxDelta * 1.45;
+}
+
+function normalizeLookDelta(deltaX, deltaY, maxStep, hardSpike) {
+    const dx = Number(deltaX);
+    const dy = Number(deltaY);
+    if (!Number.isFinite(dx) || !Number.isFinite(dy)) return null;
+    if (isLookDeltaSpike(dx, dy, hardSpike)) return null;
+    const length = Math.hypot(dx, dy);
+    if (length > maxStep && length > 0.0001) {
+        const scale = maxStep / length;
+        return { x: dx * scale, y: dy * scale };
+    }
+    return { x: dx, y: dy };
+}
+
 export function initControls(camera, domElement, colliders) {
     const pointerLockSupported = supportsPointerLock(domElement);
     const controls = new PointerLockControls(camera, domElement);
+    const lookEuler = new THREE.Euler(0, 0, 0, 'YXZ');
+    const initialSettings = getSettings();
+    let mouseSensitivity = clampSensitivity(initialSettings.mouseSensitivity);
+    let touchSensitivity = clampSensitivity(initialSettings.touchSensitivity);
 
     const state = {
         moveForward: false,
@@ -33,6 +82,10 @@ export function initControls(camera, domElement, colliders) {
         speed: 3.0,
         colliders: colliders,
         isLocked: false,
+        movementLocked: false,
+        lookLocked: false,
+        movementBounds: null,
+        targetCameraY: camera.position.y,
         useTouchControls: isTouchDevice() && (!hasPhysicalKeyboard() || !pointerLockSupported)
     };
 
@@ -41,14 +94,52 @@ export function initControls(camera, domElement, colliders) {
         'settings-panel',
         'history-panel',
         'model-selector',
+        'dance-panel',
+        'bar-guest-panel',
+        'bartending-challenge-panel',
+        'roundtable-whispers-panel',
         'sleep-ui',
         'date-panel',
         'gift-terminal-panel',
         'gift-collection-panel',
-        'achievements-panel'
+        'achievements-panel',
+        'dream-terminal-panel',
+        'dream-furniture-editor-panel',
+        'dream-placement-editor-panel',
+        'room-panorama-ui'
     ];
     let resumeAfterOverlay = false;
     let resumeInProgress = false;
+    let suppressPointerLookUntil = 0;
+    let resetTouchInputState = () => {};
+    let detachedControlResumePending = false;
+
+    document.addEventListener('fritia-settings-updated', (event) => {
+        const next = event.detail || getSettings();
+        mouseSensitivity = clampSensitivity(next.mouseSensitivity);
+        touchSensitivity = clampSensitivity(next.touchSensitivity);
+    });
+
+    function suppressPointerLook(ms = POINTER_LOCK_SUPPRESS_MS) {
+        suppressPointerLookUntil = Math.max(suppressPointerLookUntil, nowMs() + ms);
+    }
+
+    function filterPointerLockMouseMove(event) {
+        const doc = domElement.ownerDocument;
+        if (state.useTouchControls || doc.pointerLockElement !== domElement || !state.isLocked) return;
+        const dx = Number(event.movementX) || 0;
+        const dy = Number(event.movementY) || 0;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (state.lookLocked) return;
+        if (nowMs() < suppressPointerLookUntil) return;
+        const normalized = normalizeLookDelta(dx, dy, POINTER_LOCK_MAX_LOOK_STEP, POINTER_LOCK_HARD_SPIKE);
+        if (normalized) {
+            applyLookDelta(normalized.x, normalized.y, 0.002 * mouseSensitivity);
+        }
+    }
+
+    document.addEventListener('mousemove', filterPointerLockMouseMove, true);
 
     function isOverlayOpen() {
         return overlayIds.some(id => {
@@ -57,10 +148,14 @@ export function initControls(camera, domElement, colliders) {
         });
     }
 
+    function isRoomPanoramaModeActive() {
+        return document.body.classList.contains('room-panorama-active');
+    }
+
     function syncEntryPrompt() {
         const prompt = document.getElementById('click-to-play');
         if (!prompt) return;
-        if (!state.isLocked && !isOverlayOpen() && !resumeAfterOverlay && !resumeInProgress) {
+        if (!state.isLocked && !isOverlayOpen() && !isRoomPanoramaModeActive() && !resumeAfterOverlay && !resumeInProgress) {
             prompt.classList.remove('hidden');
         } else {
             prompt.classList.add('hidden');
@@ -87,6 +182,7 @@ export function initControls(camera, domElement, colliders) {
     function enterControlMode() {
         resumeAfterOverlay = false;
         resumeInProgress = false;
+        resetTouchInputState();
         state.isLocked = true;
         syncEntryPrompt();
         document.getElementById('crosshair').classList.add('active');
@@ -98,17 +194,23 @@ export function initControls(camera, domElement, colliders) {
     function leaveControlMode() {
         state.isLocked = false;
         clearMovementState();
+        resetTouchInputState();
         document.getElementById('crosshair').classList.remove('active');
         document.getElementById('touch-controls').classList.remove('active');
         syncEntryPrompt();
     }
 
     controls.addEventListener('lock', () => {
+        suppressPointerLook();
         enterControlMode();
     });
 
     controls.addEventListener('unlock', () => {
         leaveControlMode();
+        if (detachedControlResumePending) {
+            detachedControlResumePending = false;
+            setTimeout(() => enterControlMode(), 0);
+        }
     });
 
     document.addEventListener('keydown', (e) => {
@@ -130,7 +232,9 @@ export function initControls(camera, domElement, colliders) {
     });
 
     const clickToPlay = document.getElementById('click-to-play');
-    clickToPlay.addEventListener('click', () => {
+    clickToPlay.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (isRoomPanoramaModeActive()) return;
         if (!state.useTouchControls) {
             if (pointerLockSupported) {
                 controls.lock();
@@ -141,6 +245,7 @@ export function initControls(camera, domElement, colliders) {
     });
 
     document.addEventListener('click', (e) => {
+        if (isRoomPanoramaModeActive()) return;
         if (!state.isLocked && !state.useTouchControls && !resumeAfterOverlay && !resumeInProgress) {
             const inOverlay = overlayIds.some(id => {
                 const el = document.getElementById(id);
@@ -153,25 +258,147 @@ export function initControls(camera, domElement, colliders) {
         }
     });
 
+    function resetTransientInput() {
+        clearMovementState();
+        resetTouchInputState();
+        suppressPointerLook(160);
+    }
+
+    window.addEventListener('resize', resetTransientInput);
+    window.addEventListener('orientationchange', resetTransientInput);
+    window.addEventListener('blur', () => {
+        resetTransientInput();
+    });
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) resetTransientInput();
+        else suppressPointerLook(160);
+    });
+
     if (state.useTouchControls) {
-        initTouchJoystick(state);
-        initTouchLook(controls, state);
+        const resetJoystick = initTouchJoystick(state);
+        const resetLook = initTouchLook(controls, state, rotateView, () => touchSensitivity);
+        resetTouchInputState = () => {
+            resetJoystick?.();
+            resetLook?.();
+        };
         initTouchButtons(state);
     }
 
+    function blocksFootPath(box) {
+        const walkableHeight = Number(box?.userData?.walkableHeight);
+        if (Number.isFinite(walkableHeight) && box.max.y <= walkableHeight) {
+            return false;
+        }
+        return true;
+    }
+
+    function overlapsFootprint(pos, radius, box) {
+        return pos.x + radius > box.min.x && pos.x - radius < box.max.x
+            && pos.z + radius > box.min.z && pos.z - radius < box.max.z;
+    }
+
+    function isPointInIgnoreZone(pos, box) {
+        const zones = box?.userData?.ignoreZones;
+        if (!Array.isArray(zones)) return false;
+        return zones.some(zone => pos.x >= zone.minX && pos.x <= zone.maxX
+            && pos.z >= zone.minZ && pos.z <= zone.maxZ);
+    }
+
+    function getWalkableSurfaceY(pos, radius) {
+        let surfaceY = 0;
+        const candidates = getBarCollisionCandidates(state.colliders, pos, radius);
+        for (const box of candidates) {
+            const walkableHeight = Number(box?.userData?.walkableHeight);
+            if (!Number.isFinite(walkableHeight) || box.max.y > walkableHeight) continue;
+            if (!overlapsFootprint(pos, radius, box)) continue;
+            const dynamicSurfaceY = typeof box.userData?.surfaceYAt === 'function'
+                ? box.userData.surfaceYAt(pos, box)
+                : null;
+            surfaceY = Math.max(surfaceY, Number.isFinite(dynamicSurfaceY) ? dynamicSurfaceY : box.max.y);
+        }
+        return surfaceY;
+    }
+
+    function getCameraStandingY(pos, radius = 0.25) {
+        return getWalkableSurfaceY(pos, radius) + PLAYER_EYE_HEIGHT;
+    }
+
+    function snapCameraHeight(radius = 0.25) {
+        const targetY = getCameraStandingY(controls.object.position, radius);
+        state.targetCameraY = targetY;
+        controls.object.position.y = targetY;
+    }
+
+    function smoothCameraHeight(delta, radius = 0.25) {
+        const targetY = getCameraStandingY(controls.object.position, radius);
+        state.targetCameraY = targetY;
+        const t = 1 - Math.exp(-CAMERA_HEIGHT_SMOOTH_SPEED * Math.max(0, delta));
+        controls.object.position.y += (targetY - controls.object.position.y) * t;
+        if (Math.abs(controls.object.position.y - targetY) < 0.003) {
+            controls.object.position.y = targetY;
+        }
+    }
+
     function checkCollision(pos, radius) {
-        for (const box of state.colliders) {
-            if (pos.x + radius > box.min.x && pos.x - radius < box.max.x &&
-                pos.z + radius > box.min.z && pos.z - radius < box.max.z &&
-                1.6 > box.min.y && 0 < box.max.y) {
+        const footY = getWalkableSurfaceY(pos, radius);
+        const bodyMinY = footY + PLAYER_FOOT_CLEARANCE;
+        const bodyMaxY = footY + PLAYER_EYE_HEIGHT;
+        const candidates = getBarCollisionCandidates(state.colliders, pos, radius);
+        for (const box of candidates) {
+            if (!blocksFootPath(box)) continue;
+            if (isPointInIgnoreZone(pos, box)) continue;
+            if (overlapsFootprint(pos, radius, box) &&
+                bodyMaxY > box.min.y && bodyMinY < box.max.y) {
                 return true;
             }
         }
         return false;
     }
 
+    function resolveCameraCollisions(radius = 0.25) {
+        const camera = controls.object;
+        let moved = false;
+
+        for (let i = 0; i < 8; i++) {
+            let resolvedThisPass = false;
+            const candidates = getBarCollisionCandidates(state.colliders, camera.position, radius);
+            for (const box of candidates) {
+                if (!blocksFootPath(box)) continue;
+                if (isPointInIgnoreZone(camera.position, box)) continue;
+                const footY = getWalkableSurfaceY(camera.position, radius);
+                const bodyMinY = footY + PLAYER_FOOT_CLEARANCE;
+                const bodyMaxY = footY + PLAYER_EYE_HEIGHT;
+                if (!(overlapsFootprint(camera.position, radius, box) &&
+                    bodyMaxY > box.min.y && bodyMinY < box.max.y)) {
+                    continue;
+                }
+
+                const shifts = [
+                    { axis: 'x', value: box.min.x - (camera.position.x + radius) },
+                    { axis: 'x', value: box.max.x - (camera.position.x - radius) },
+                    { axis: 'z', value: box.min.z - (camera.position.z + radius) },
+                    { axis: 'z', value: box.max.z - (camera.position.z - radius) }
+                ].sort((a, b) => Math.abs(a.value) - Math.abs(b.value));
+
+                const shift = shifts[0];
+                camera.position[shift.axis] += shift.value;
+                resolvedThisPass = true;
+                moved = true;
+            }
+            if (!resolvedThisPass) break;
+        }
+
+        snapCameraHeight(radius);
+        return moved;
+    }
+
     function update(delta) {
         if (!state.isLocked) return;
+        if (state.movementLocked) {
+            clearMovementState();
+            snapCameraHeight();
+            return;
+        }
 
         state.direction.z = Number(state.moveForward) - Number(state.moveBackward);
         state.direction.x = Number(state.moveRight) - Number(state.moveLeft);
@@ -179,11 +406,14 @@ export function initControls(camera, domElement, colliders) {
 
         const speed = state.speed * delta;
         const camera = controls.object;
-        const prevPos = camera.position.clone();
+        camera.updateMatrixWorld(true);
+        const prevQuat = camera.quaternion.clone();
         const radius = 0.25;
 
         if (state.moveForward || state.moveBackward) {
+            const prevPos = camera.position.clone();
             controls.moveForward(state.direction.z * speed);
+            clampToMovementBounds(camera.position, radius);
             if (checkCollision(camera.position, radius)) {
                 camera.position.copy(prevPos);
             }
@@ -192,12 +422,14 @@ export function initControls(camera, domElement, colliders) {
         if (state.moveLeft || state.moveRight) {
             const beforeRight = camera.position.clone();
             controls.moveRight(state.direction.x * speed);
+            clampToMovementBounds(camera.position, radius);
             if (checkCollision(camera.position, radius)) {
                 camera.position.copy(beforeRight);
             }
         }
 
-        camera.position.y = 1.6;
+        smoothCameraHeight(delta, radius);
+        camera.quaternion.copy(prevQuat);
     }
 
     function isNearCharacter(charPos, threshold = 2.5) {
@@ -205,6 +437,72 @@ export function initControls(camera, domElement, colliders) {
         const dx = camPos.x - charPos.x;
         const dz = camPos.z - charPos.z;
         return Math.sqrt(dx * dx + dz * dz) < threshold;
+    }
+
+    function addColliders(colliders) {
+        if (!Array.isArray(colliders)) return;
+        for (const collider of colliders) {
+            if (collider && !state.colliders.includes(collider)) {
+                state.colliders.push(collider);
+            }
+        }
+    }
+
+    function removeColliders(colliders) {
+        if (!Array.isArray(colliders)) return;
+        state.colliders = state.colliders.filter(collider => !colliders.includes(collider));
+    }
+
+    function setColliders(colliders) {
+        state.colliders = Array.isArray(colliders) ? colliders : [];
+        state.targetCameraY = getCameraStandingY(controls.object.position);
+    }
+
+    function setMovementBounds(bounds = null) {
+        state.movementBounds = bounds && bounds.min && bounds.max ? bounds : null;
+        if (state.movementBounds) {
+            clampToMovementBounds(controls.object.position);
+            state.targetCameraY = getCameraStandingY(controls.object.position);
+        }
+    }
+
+    function setMovementLocked(locked) {
+        state.movementLocked = Boolean(locked);
+        clearMovementState();
+    }
+
+    function setLookLocked(locked) {
+        state.lookLocked = Boolean(locked);
+        resetTouchInputState();
+        suppressPointerLook(locked ? 500 : POINTER_LOCK_SUPPRESS_MS);
+    }
+
+    function clampToMovementBounds(pos, radius = 0.25) {
+        const bounds = state.movementBounds;
+        if (!bounds?.min || !bounds?.max || !pos) return pos;
+        pos.x = THREE.MathUtils.clamp(pos.x, bounds.min.x + radius, bounds.max.x - radius);
+        pos.z = THREE.MathUtils.clamp(pos.z, bounds.min.z + radius, bounds.max.z - radius);
+        if (Number.isFinite(bounds.min.y) && Number.isFinite(bounds.max.y)) {
+            pos.y = THREE.MathUtils.clamp(pos.y, bounds.min.y + 0.2, bounds.max.y - 0.2);
+        }
+        return pos;
+    }
+
+    function applyLookDelta(deltaX, deltaY, sensitivity) {
+        lookEuler.setFromQuaternion(controls.object.quaternion);
+        lookEuler.y -= deltaX * sensitivity;
+        lookEuler.x -= deltaY * sensitivity;
+        lookEuler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, lookEuler.x));
+        controls.object.quaternion.setFromEuler(lookEuler);
+        controls.object.updateMatrixWorld(true);
+    }
+
+    function rotateView(deltaX, deltaY) {
+        if (state.lookLocked) return false;
+        const normalized = normalizeLookDelta(deltaX, deltaY, MANUAL_LOOK_MAX_STEP, MANUAL_LOOK_HARD_SPIKE);
+        if (!normalized) return false;
+        applyLookDelta(normalized.x, normalized.y, 0.002 * mouseSensitivity);
+        return true;
     }
 
     function blurActiveOverlayElement() {
@@ -216,6 +514,7 @@ export function initControls(camera, domElement, colliders) {
 
     function requestPointerLockForResume() {
         try {
+            suppressPointerLook();
             const result = domElement.requestPointerLock();
             if (result && typeof result.catch === 'function') {
                 result.catch(() => {
@@ -254,7 +553,7 @@ export function initControls(camera, domElement, colliders) {
     }
 
     function resumeControlMode() {
-        if (!resumeAfterOverlay || isOverlayOpen()) {
+        if (!resumeAfterOverlay || isOverlayOpen() || isRoomPanoramaModeActive()) {
             syncEntryPrompt();
             return false;
         }
@@ -283,16 +582,94 @@ export function initControls(camera, domElement, colliders) {
         return requestPointerLockForResume();
     }
 
-    return { controls, state, update, isNearCharacter, releaseControlMode, resumeControlMode };
+    function forceEnterControlMode(options = {}) {
+        if (isRoomPanoramaModeActive() && !options.allowDuringPanorama) {
+            syncEntryPrompt();
+            return false;
+        }
+        blurActiveOverlayElement();
+        if (state.useTouchControls) {
+            enterControlMode();
+            return true;
+        }
+        if (!pointerLockSupported) {
+            enterControlMode();
+            return false;
+        }
+        const doc = domElement.ownerDocument;
+        if (doc.pointerLockElement === domElement) {
+            enterControlMode();
+            return true;
+        }
+        resumeAfterOverlay = false;
+        resumeInProgress = true;
+        syncEntryPrompt();
+        return requestPointerLockForResume();
+    }
+
+    function enterDetachedControlMode() {
+        resumeAfterOverlay = false;
+        resumeInProgress = false;
+        blurActiveOverlayElement();
+        if (!state.useTouchControls && pointerLockSupported && domElement.ownerDocument?.pointerLockElement === domElement) {
+            detachedControlResumePending = true;
+            controls.unlock();
+            return true;
+        }
+        enterControlMode();
+        return true;
+    }
+
+    function isPointerDetached() {
+        if (state.useTouchControls || !pointerLockSupported) return false;
+        return state.isLocked && domElement.ownerDocument?.pointerLockElement !== domElement;
+    }
+
+    function cancelOverlayResume() {
+        resumeAfterOverlay = false;
+        resumeInProgress = false;
+        syncEntryPrompt();
+    }
+
+    return {
+        controls,
+        state,
+        update,
+        isNearCharacter,
+        addColliders,
+        removeColliders,
+        setColliders,
+        setMovementBounds,
+        resolveCameraCollisions,
+        setMovementLocked,
+        setLookLocked,
+        rotateView,
+        releaseControlMode,
+        resumeControlMode,
+        cancelOverlayResume,
+        enterControlMode,
+        enterDetachedControlMode,
+        isPointerDetached,
+        forceEnterControlMode
+    };
 }
 
 function initTouchJoystick(state) {
     const joystick = document.getElementById('joystick-move');
     const knob = document.getElementById('joystick-move-knob');
-    if (!joystick || !knob) return;
+    if (!joystick || !knob) return () => {};
 
     let touchId = null;
     const maxDist = 35;
+
+    function resetJoystick() {
+        touchId = null;
+        knob.style.transform = 'translate(-50%, -50%)';
+        state.moveForward = false;
+        state.moveBackward = false;
+        state.moveLeft = false;
+        state.moveRight = false;
+    }
 
     joystick.addEventListener('touchstart', (e) => {
         e.preventDefault();
@@ -300,35 +677,31 @@ function initTouchJoystick(state) {
         const touch = e.changedTouches[0];
         touchId = touch.identifier;
         updateJoystick(touch);
-    });
+    }, { passive: false });
 
     document.addEventListener('touchmove', (e) => {
         if (touchId === null) return;
+        e.preventDefault();
         for (const touch of e.changedTouches) {
             if (touch.identifier === touchId) {
                 updateJoystick(touch);
                 break;
             }
         }
-    });
+    }, { passive: false });
 
     function endJoystickTouch(e) {
         if (touchId === null) return;
         for (const touch of e.changedTouches) {
             if (touch.identifier === touchId) {
-                touchId = null;
-                knob.style.transform = 'translate(-50%, -50%)';
-                state.moveForward = false;
-                state.moveBackward = false;
-                state.moveLeft = false;
-                state.moveRight = false;
+                resetJoystick();
                 break;
             }
         }
     }
 
-    document.addEventListener('touchend', endJoystickTouch);
-    document.addEventListener('touchcancel', endJoystickTouch);
+    document.addEventListener('touchend', endJoystickTouch, { passive: false });
+    document.addEventListener('touchcancel', endJoystickTouch, { passive: false });
 
     function updateJoystick(touch) {
         const rect = joystick.getBoundingClientRect();
@@ -351,17 +724,23 @@ function initTouchJoystick(state) {
         state.moveLeft = dx < -threshold;
         state.moveRight = dx > threshold;
     }
+
+    return resetJoystick;
 }
 
-function initTouchLook(controls, state) {
+function initTouchLook(controls, state, rotateView, getTouchSensitivityValue = () => 1) {
     const canvas = document.getElementById('game-canvas');
-    if (!canvas) return;
+    if (!canvas) return () => {};
 
     let touchId = null;
     let lastX = 0;
     let lastY = 0;
-    const sensitivity = 0.003;
-    let euler = new THREE.Euler(0, 0, 0, 'YXZ');
+
+    function resetLookTouch() {
+        touchId = null;
+        lastX = 0;
+        lastY = 0;
+    }
 
     canvas.addEventListener('touchstart', (e) => {
         if (!state.isLocked) return;
@@ -375,15 +754,17 @@ function initTouchLook(controls, state) {
             if (target.closest('#joystick-move') || target.closest('.touch-actions')) continue;
             
             if (touchId === null) {
+                e.preventDefault();
                 touchId = touch.identifier;
                 lastX = touch.clientX;
                 lastY = touch.clientY;
             }
         }
-    });
+    }, { passive: false });
 
     document.addEventListener('touchmove', (e) => {
         if (touchId === null || !state.isLocked) return;
+        e.preventDefault();
         for (const touch of e.changedTouches) {
             if (touch.identifier === touchId) {
                 const dx = touch.clientX - lastX;
@@ -391,28 +772,29 @@ function initTouchLook(controls, state) {
                 lastX = touch.clientX;
                 lastY = touch.clientY;
 
-                euler.setFromQuaternion(controls.object.quaternion);
-                euler.y -= dx * sensitivity;
-                euler.x -= dy * sensitivity;
-                euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x));
-                controls.object.quaternion.setFromEuler(euler);
+                const normalized = normalizeLookDelta(dx, dy, TOUCH_LOOK_MAX_STEP, TOUCH_LOOK_HARD_SPIKE);
+                if (!normalized) break;
+                const sensitivity = clampSensitivity(getTouchSensitivityValue());
+                rotateView?.(normalized.x * 1.5 * sensitivity, normalized.y * 1.5 * sensitivity);
                 break;
             }
         }
-    });
+    }, { passive: false });
 
     function endLookTouch(e) {
         if (touchId === null) return;
         for (const touch of e.changedTouches) {
             if (touch.identifier === touchId) {
-                touchId = null;
+                resetLookTouch();
                 break;
             }
         }
     }
 
-    document.addEventListener('touchend', endLookTouch);
-    document.addEventListener('touchcancel', endLookTouch);
+    document.addEventListener('touchend', endLookTouch, { passive: false });
+    document.addEventListener('touchcancel', endLookTouch, { passive: false });
+
+    return resetLookTouch;
 }
 
 function initTouchButtons(state) {

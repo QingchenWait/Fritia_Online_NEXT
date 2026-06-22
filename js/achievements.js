@@ -4,12 +4,15 @@ import {
     getGameTimeInfo,
     getGifts,
     getMoney,
+    getBarAdmissionProgress,
     getStats
 } from './game_state.js';
 import { getConversationHistory } from './dialogue.js';
 import { getDateConversationHistory, getDateLocations } from './date_dialogue.js';
 
 const STORAGE_KEY = 'fritia_achievements';
+const DAY_MINUTES = 24 * 60;
+const TEN_DAY_STREAK_MINUTES = 10 * DAY_MINUTES;
 
 const ACHIEVEMENTS = [
     {
@@ -94,6 +97,24 @@ const ACHIEVEMENTS = [
         complete: () => getCompletedDateLocationCount() >= 12
     },
     {
+        id: 'dream_love_nest',
+        title: '布置爱巢',
+        desc: '造梦空间内存在的自制家具达到 5 件。',
+        icon: 'src/_logos/ach_dream_love_nest.svg',
+        target: 5,
+        progress: () => Math.min(getDreamFurnitureCount(), 5),
+        complete: () => getDreamFurnitureCount() >= 5
+    },
+    {
+        id: 'dream_perfectionist',
+        title: '完美主义',
+        desc: '对同一件造梦家具完成至少 3 次造型修改。',
+        icon: 'src/_logos/ach_dream_perfectionist.svg',
+        target: 3,
+        progress: () => Math.min(getMaxDreamFurnitureRevisionCount(), 3),
+        complete: () => getMaxDreamFurnitureRevisionCount() >= 3
+    },
+    {
         id: 'dress_doll',
         title: '更衣人偶',
         desc: '使用过芙提雅的全部皮肤模型。',
@@ -112,24 +133,51 @@ const ACHIEVEMENTS = [
         complete: () => getStats().smallTeacherStartsWithGanShenme >= 1
     },
     {
+        id: 'bar_admission_ticket',
+        title: '华丽入场',
+        desc: '获得暖调闲聚的入场券。',
+        icon: 'src/_logos/ach_bar_admission_ticket.svg',
+        target: 5,
+        progress: () => getBarAdmissionProgress().completed,
+        complete: () => getBarAdmissionProgress().complete
+    },
+    {
+        id: 'neon_dancer',
+        title: '霓裳羽衣',
+        desc: '在暖调闲聚中观看 2 次舞蹈。',
+        icon: 'src/_logos/ach_neon_dancer.svg',
+        target: 2,
+        progress: () => Math.min(getStats().danceWatchCount || 0, 2),
+        complete: () => (getStats().danceWatchCount || 0) >= 2
+    },
+    {
+        id: 'safe_evacuate',
+        title: '安全撤离',
+        desc: '在琴诺的调酒挑战中获得 1 次胜利。',
+        icon: 'src/_logos/ach_safe_evacuate.svg',
+        target: 1,
+        progress: () => Math.min(getStats().bartendingChallengeWins || 0, 1),
+        complete: () => (getStats().bartendingChallengeWins || 0) >= 1
+    },
+    {
         id: 'no_spending_10_days',
         title: '一毛不拔',
-        desc: '游戏时间的前 10 天里未花费任何数据金。',
+        desc: '连续 10 天未花费任何数据金。',
         hidden: true,
         icon: 'src/_logos/ach_no_entry.svg',
-        target: 1,
-        progress: () => getFirstTenDaysPassed() && getStats().moneySpent <= 0 ? 1 : 0,
-        complete: () => getFirstTenDaysPassed() && getStats().moneySpent <= 0
+        target: 10,
+        progress: () => getStreakDaysSince('lastMoneySpentGameMinute'),
+        complete: () => hasTenDayStreakSince('lastMoneySpentGameMinute')
     },
     {
         id: 'homebody_10_days',
         title: '资深宅友',
-        desc: '游戏时间的前 10 天里未在约会模式进行任何对话。',
+        desc: '连续 10 天未在约会模式进行任何对话。',
         hidden: true,
         icon: 'src/_logos/ach_house.svg',
-        target: 1,
-        progress: () => getFirstTenDaysPassed() && getStats().dateUserMessages <= 0 && getStats().dateBotMessages <= 0 ? 1 : 0,
-        complete: () => getFirstTenDaysPassed() && getStats().dateUserMessages <= 0 && getStats().dateBotMessages <= 0
+        target: 10,
+        progress: () => getStreakDaysSince('lastDateDialogueGameMinute'),
+        complete: () => hasTenDayStreakSince('lastDateDialogueGameMinute')
     },
     {
         id: 'luxury_custom',
@@ -170,12 +218,14 @@ export function initAchievements() {
     els.close = document.getElementById('achievements-close');
     els.toastHost = document.getElementById('achievement-toast-host');
     els.button = document.getElementById('btn-achievements');
+    if (els.toastHost && els.toastHost.parentElement !== document.body) {
+        document.body.appendChild(els.toastHost);
+    }
 
     els.button?.addEventListener('click', openAchievementsPanel);
     els.close?.addEventListener('click', closeAchievementsPanel);
 
     evaluateAchievements({ notify: false, queueStartup: true });
-    renderAchievementList();
 }
 
 export function openAchievementsPanel() {
@@ -216,7 +266,6 @@ export function evaluateAchievements(options = {}) {
         }
     }
 
-    if (!queueStartup) renderAchievementList();
     return newlyUnlocked;
 }
 
@@ -273,6 +322,7 @@ function showAchievementToastOnce(achievement) {
 
 function showAchievementToast(achievement) {
     if (!els.toastHost) return;
+    playAchievementSound();
 
     const toast = document.createElement('div');
     toast.className = 'achievement-toast';
@@ -287,6 +337,14 @@ function showAchievementToast(achievement) {
     `;
     els.toastHost.appendChild(toast);
     setTimeout(() => toast.remove(), 4600);
+}
+
+function playAchievementSound() {
+    try {
+        const audio = new Audio('src/_voices/achievement_complete.mp3');
+        audio.volume = 0.82;
+        audio.play().catch(() => {});
+    } catch {}
 }
 
 function renderAchievementList() {
@@ -358,8 +416,8 @@ function getProgressValue(achievement) {
 
 function getConversationProgress() {
     const stats = getStats();
-    const statUser = stats.dailyUserMessages + stats.dateUserMessages;
-    const statBot = stats.dailyBotMessages + stats.dateBotMessages;
+    const statUser = stats.dailyUserMessages + stats.dateUserMessages + (stats.barUserMessages || 0);
+    const statBot = stats.dailyBotMessages + stats.dateBotMessages + (stats.barBotMessages || 0);
     const historyUser = getConversationHistory().filter(msg => msg.role === 'user').length;
     const historyBot = getConversationHistory().filter(msg => msg.role === 'assistant').length;
     const dateHistory = getDateConversationHistory();
@@ -394,8 +452,42 @@ function getUsedModelCount() {
     return all.filter(path => used.has(path)).length;
 }
 
-function getFirstTenDaysPassed() {
-    return getGameTimeInfo({ quantize: 1 }).dayIndex >= 10;
+function getDreamFurnitureRecords() {
+    try {
+        const data = JSON.parse(localStorage.getItem('fritia_dream_furniture') || '[]');
+        return Array.isArray(data) ? data.filter(item => item && typeof item === 'object') : [];
+    } catch {
+        return [];
+    }
+}
+
+function getDreamFurnitureCount() {
+    return getDreamFurnitureRecords().length;
+}
+
+function getMaxDreamFurnitureRevisionCount() {
+    const recordMax = getDreamFurnitureRecords().reduce((max, item) => {
+        return Math.max(max, Math.round(Number(item.revisionCount) || 0));
+    }, 0);
+    return Math.max(recordMax, Math.round(Number(getStats().maxDreamFurnitureRevisionCount) || 0));
+}
+
+function getCurrentGameMinutes() {
+    return Math.max(0, Math.round(Number(getGameTimeInfo({ quantize: 1 }).totalMinutes) || 0));
+}
+
+function getStreakMinutesSince(statsKey) {
+    const stats = getStats();
+    const lastEventMinute = Math.max(0, Math.round(Number(stats?.[statsKey]) || 0));
+    return Math.max(0, getCurrentGameMinutes() - lastEventMinute);
+}
+
+function getStreakDaysSince(statsKey) {
+    return Math.min(10, Math.floor(getStreakMinutesSince(statsKey) / DAY_MINUTES));
+}
+
+function hasTenDayStreakSince(statsKey) {
+    return getStreakMinutesSince(statsKey) >= TEN_DAY_STREAK_MINUTES;
 }
 
 function loadAchievementState() {

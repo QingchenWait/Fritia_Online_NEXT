@@ -1,0 +1,22 @@
+<svg width="640" height="480" viewBox="0 0 640 480" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Warm dreamy bokeh used as the shared overlay backdrop tint behind blurred panels. -->
+  <defs>
+    <radialGradient id="bk-a" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffd9c2" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#ffd9c2" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="bk-b" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#f4b8c8" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#f4b8c8" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="bk-c" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#e6c178" stop-opacity="0.4"/>
+      <stop offset="1" stop-color="#e6c178" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <circle cx="120" cy="110" r="120" fill="url(#bk-a)"/>
+  <circle cx="520" cy="90" r="150" fill="url(#bk-b)"/>
+  <circle cx="430" cy="380" r="170" fill="url(#bk-c)"/>
+  <circle cx="90" cy="400" r="110" fill="url(#bk-b)"/>
+  <circle cx="300" cy="220" r="90" fill="url(#bk-a)"/>
+</svg>

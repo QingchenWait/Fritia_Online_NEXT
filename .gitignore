@@ -11,6 +11,7 @@ desktop.ini
 
 # Node modules (unused but just in case)
 node_modules/
+ui/
 
 # User data - never commit
 *.env

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="完美主义">
+  <defs>
+    <linearGradient id="perfBg" x1="18" y1="14" x2="78" y2="82" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8affd2"/>
+      <stop offset="1" stop-color="#8a9bff"/>
+    </linearGradient>
+    <linearGradient id="perfGem" x1="32" y1="24" x2="64" y2="72" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset=".45" stop-color="#bff7ff"/>
+      <stop offset="1" stop-color="#5b79ff"/>
+    </linearGradient>
+  </defs>
+  <circle cx="48" cy="48" r="42" fill="#151923"/>
+  <circle cx="48" cy="48" r="36" fill="url(#perfBg)" opacity=".92"/>
+  <path d="M34 25h28l12 16-26 34-26-34 12-16Z" fill="url(#perfGem)"/>
+  <path d="M34 25 48 75 62 25M22 41h52M34 25l-12 16M62 25l12 16" fill="none" stroke="#21304f" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity=".45"/>
+  <path d="m69 20 2.4 6.2 6.2 2.4-6.2 2.4-2.4 6.2-2.4-6.2-6.2-2.4 6.2-2.4L69 20Z" fill="#fff7a8"/>
+  <path d="m25 62 1.7 4.4 4.4 1.7-4.4 1.7-1.7 4.4-1.7-4.4-4.4-1.7 4.4-1.7L25 62Z" fill="#fff"/>
+</svg>

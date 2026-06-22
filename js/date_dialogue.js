@@ -1,5 +1,10 @@
 import { getSettings } from './settings.js';
 import { addAffinity, getGameTimeContext, recordDialogueInteraction } from './game_state.js';
+import { buildRagReferenceMessage } from './knowledge_base.js';
+import {
+    buildDeepSeekIntimateUserMessage,
+    shouldKeepMessageForCurrentDeepSeekMode
+} from './deepseek_intimate_mode.js';
 
 const DATE_HISTORY_KEY = 'fritia_date_history';
 const DATE_LOCATIONS = [
@@ -83,6 +88,31 @@ function buildDateSystemPrompt(locationName) {
     return `${datePromptTemplate.replace('{location}', locationName)}\n\n${getGameTimeContext()}`;
 }
 
+function buildDateOpeningMessage(locationName) {
+    return {
+        role: 'user',
+        content: `我们已经来到${locationName}，请你作为芙提雅主动说出约会开始的第一句话。`
+    };
+}
+
+function removeEmptyDateAssistantMessages(locationId) {
+    const history = dateConversationHistory[locationId];
+    if (!Array.isArray(history) || history.length === 0) return false;
+    const filtered = history.filter(message => (
+        message?.role !== 'assistant' || String(message?.content || '').trim()
+    ));
+    if (filtered.length === history.length) return false;
+    dateConversationHistory[locationId] = filtered;
+    return true;
+}
+
+function getDateContextMessages(history = [], settings = getSettings()) {
+    return history
+        .filter(message => shouldKeepMessageForCurrentDeepSeekMode(message, settings, ['assistant']))
+        .slice(-20)
+        .map(message => ({ role: message.role, content: message.content }));
+}
+
 export async function initDateDialogue() {
     els.panel = document.getElementById('date-panel');
     els.locations = document.getElementById('date-locations');
@@ -144,6 +174,7 @@ function selectLocation(loc) {
     els.chatTitle.textContent = `${loc.emoji} ${loc.name}`;
 
     const todayKey = getTodayKey();
+    const removedEmptyMessages = removeEmptyDateAssistantMessages(loc.id);
     const history = dateConversationHistory[loc.id];
 
     if (history && history.length > 0) {
@@ -163,6 +194,7 @@ function selectLocation(loc) {
             saveDateHistory();
         }
     }
+    if (removedEmptyMessages) saveDateHistory();
 
     renderDateMessages();
 
@@ -274,6 +306,19 @@ async function startDateConversation(loc) {
     try {
         dateAbortController = new AbortController();
         const systemPrompt = buildDateSystemPrompt(loc.name);
+        const ragMessage = await buildRagReferenceMessage({
+            mode: 'date',
+            query: `${loc.name} 约会开场`,
+            recentMessages: []
+        });
+        const intimateMessage = await buildDeepSeekIntimateUserMessage(settings);
+        const messages = [
+            { role: 'system', content: systemPrompt },
+            ...(ragMessage ? [ragMessage] : []),
+            ...(intimateMessage ? [intimateMessage] : []),
+            buildDateOpeningMessage(loc.name)
+        ];
+
         const response = await fetch(`${settings.baseUrl}/chat/completions`, {
             method: 'POST',
             headers: {
@@ -282,10 +327,10 @@ async function startDateConversation(loc) {
             },
             body: JSON.stringify({
                 model: settings.model,
-                messages: [{ role: 'system', content: systemPrompt }],
+                messages,
                 stream: true,
                 temperature: 0.9,
-                max_tokens: 300
+                max_tokens: 350
             }),
             signal: dateAbortController.signal
         });
@@ -323,8 +368,18 @@ async function startDateConversation(loc) {
             }
         }
 
-        dateConversationHistory[loc.id].push({ role: 'assistant', content: fullText, ts: Date.now() });
-        saveDateHistory();
+        if (fullText.trim()) {
+            dateConversationHistory[loc.id].push({
+                role: 'assistant',
+                content: fullText,
+                ts: Date.now(),
+                deepseekIntimateMode: Boolean(intimateMessage)
+            });
+            saveDateHistory();
+        } else {
+            bubbleEl.remove();
+            appendDateSystemMessage('模型没有返回约会开场白，请返回地点列表后重新选择，或稍后再试。');
+        }
     } catch (err) {
         thinkingEl.remove();
         if (err.name !== 'AbortError') {
@@ -371,7 +426,13 @@ async function handleDateSend() {
         const systemPrompt = buildDateSystemPrompt(loc ? loc.name : '约会');
 
         const history = dateConversationHistory[currentLocationId];
-        const contextMsgs = history.slice(-20).map(m => ({ role: m.role, content: m.content }));
+        const contextMsgs = getDateContextMessages(history, settings);
+        const ragMessage = await buildRagReferenceMessage({
+            mode: 'date',
+            query: msg,
+            recentMessages: contextMsgs
+        });
+        const intimateMessage = await buildDeepSeekIntimateUserMessage(settings);
 
         const response = await fetch(`${settings.baseUrl}/chat/completions`, {
             method: 'POST',
@@ -383,11 +444,13 @@ async function handleDateSend() {
                 model: settings.model,
                 messages: [
                     { role: 'system', content: systemPrompt },
+                    ...(ragMessage ? [ragMessage] : []),
+                    ...(intimateMessage ? [intimateMessage] : []),
                     ...contextMsgs
                 ],
                 stream: true,
                 temperature: 0.9,
-                max_tokens: 300
+                max_tokens: 350
             }),
             signal: dateAbortController.signal
         });
@@ -425,7 +488,12 @@ async function handleDateSend() {
             }
         }
 
-        dateConversationHistory[currentLocationId].push({ role: 'assistant', content: fullText, ts: Date.now() });
+        dateConversationHistory[currentLocationId].push({
+            role: 'assistant',
+            content: fullText,
+            ts: Date.now(),
+            deepseekIntimateMode: Boolean(intimateMessage)
+        });
         saveDateHistory();
         if (fullText.trim()) {
             addAffinity(1);

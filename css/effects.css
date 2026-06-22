@@ -1,0 +1,134 @@
+/* =============================================================
+   effects.css — 动画与光效
+   入场动画 · 按键提示「点燃」effect · 爱心脉动 · 花瓣 · 扫描进度
+   ============================================================= */
+
+/* ===== 入场 ===== */
+@keyframes overlay-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+@keyframes panel-in {
+    from { opacity: 0; transform: translateY(16px) scale(0.975); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes msg-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes dialogue-enter {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ===== 爱心脉动（强调装饰） ===== */
+@keyframes heart-pulse {
+    0%, 100% { transform: scale(1); opacity: 0.9; }
+    50%      { transform: scale(1.16); opacity: 1; }
+}
+
+/* ===== 造梦样式修改进度扫描（沿用旧动画名，JS 切 .active 触发） ===== */
+@keyframes dream-progress-scan {
+    from { background-position: 0 0; }
+    to   { background-position: 200% 0; }
+}
+
+/* =============================================================
+   点燃（ignite）—— 按键提示触发时的光效
+   JS 在触发瞬间：① 给可见提示按钮加 .igniting（按钮自身辉光）；
+   ② 在按钮中心生成独立 .ignite-burst（光环 + 火花），即使按钮随即
+   隐藏也能完整播放。详见 main.js#ignitePrompt。
+   按钮自身 transform 用于居中，故辉光只动 box-shadow。
+   ============================================================= */
+.kbd-prompt.igniting,
+.sleep-btn.igniting,
+#room-panorama-close.igniting,
+.dream-revision-action.igniting {
+    animation: ignite-glow 0.5s var(--ease-out);
+}
+
+@keyframes ignite-glow {
+    0%   { box-shadow: var(--shadow-hud), 0 0 0 rgba(230,193,120,0); }
+    28%  { box-shadow: 0 0 26px rgba(255,224,176,0.95), 0 0 56px rgba(229,138,166,0.7), inset 0 0 18px rgba(255,236,200,0.6); }
+    100% { box-shadow: var(--shadow-hud), 0 0 0 rgba(230,193,120,0); }
+}
+
+/* 独立点燃爆发：JS 设定 left/top 到目标按钮中心 */
+.ignite-burst {
+    position: fixed;
+    z-index: 140;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+}
+/* 扩散光环 */
+.ignite-burst::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 0;
+    width: 70px; height: 70px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,224,176,0.95);
+    background: radial-gradient(circle, rgba(255,238,205,0.55), rgba(229,138,166,0.12) 55%, transparent 72%);
+    transform: translate(-50%, -50%) scale(0.25);
+    animation: ignite-ring 0.55s var(--ease-out) forwards;
+}
+@keyframes ignite-ring {
+    0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.25); }
+    30%  { opacity: 1; }
+    100% { opacity: 0; transform: translate(-50%, -50%) scale(2.6); }
+}
+/* 四角星火花 */
+.ignite-burst::after {
+    content: "";
+    position: absolute;
+    left: 0; top: 0;
+    width: 92px; height: 92px;
+    background: url(../src/_ui/spark.svg) center / contain no-repeat;
+    transform: translate(-50%, -50%) scale(0.3) rotate(0deg);
+    animation: ignite-spark 0.55s var(--ease-out) forwards;
+}
+
+@keyframes ignite-spark {
+    0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.3) rotate(-30deg); }
+    25%  { opacity: 1; }
+    100% { opacity: 0; transform: translate(-50%, -50%) scale(1.9) rotate(60deg); }
+}
+
+/* ===== 飘落花瓣（装饰层，按需用于 hero 区域） ===== */
+.petal-layer {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 0;
+}
+.petal-layer .petal {
+    position: absolute;
+    top: -28px;
+    width: 22px;
+    height: 22px;
+    background: url(../src/_ui/petal.svg) center / contain no-repeat;
+    opacity: 0.0;
+    animation: petal-fall linear infinite;
+}
+.petal-layer .petal:nth-child(1) { left: 12%; animation-duration: 11s; animation-delay: 0s;   transform: scale(0.8); }
+.petal-layer .petal:nth-child(2) { left: 34%; animation-duration: 14s; animation-delay: 2.5s; transform: scale(1.1); }
+.petal-layer .petal:nth-child(3) { left: 58%; animation-duration: 12s; animation-delay: 1.2s; transform: scale(0.7); }
+.petal-layer .petal:nth-child(4) { left: 78%; animation-duration: 15s; animation-delay: 3.4s; transform: scale(1); }
+.petal-layer .petal:nth-child(5) { left: 90%; animation-duration: 13s; animation-delay: 0.8s; transform: scale(0.85); }
+
+@keyframes petal-fall {
+    0%   { opacity: 0; transform: translateY(0) translateX(0) rotate(0deg); }
+    12%  { opacity: 0.75; }
+    88%  { opacity: 0.6; }
+    100% { opacity: 0; transform: translateY(360px) translateX(40px) rotate(220deg); }
+}
+
+/* 尊重减少动态偏好 */
+@media (prefers-reduced-motion: reduce) {
+    .ui-overlay, .otome-panel, .petal-layer .petal { animation: none !important; }
+}

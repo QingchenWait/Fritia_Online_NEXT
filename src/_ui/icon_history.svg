@@ -1,0 +1,6 @@
+<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- History: chat bubble with a clock hand. -->
+  <path d="M9 12 h30 a4 4 0 0 1 4 4 v14 a4 4 0 0 1 -4 4 H22 l-8 7 v-7 H9 a4 4 0 0 1 -4 -4 V16 a4 4 0 0 1 4 -4 Z" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/>
+  <circle cx="24" cy="23" r="7" stroke="#e6c178" stroke-width="2.2"/>
+  <path d="M24 19 V23 L27 25" stroke="#e58aa6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

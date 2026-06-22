@@ -1,7 +1,7 @@
+import { getGameTimeSpeedSettings } from './advanced_settings.js';
+
 const STORAGE_KEY = 'fritia_game_state';
 const INITIAL_GAME_MINUTES = 12 * 60;
-const GAME_MINUTES_PER_REAL_SECOND = 5;
-const DISPLAY_STEP_MINUTES = 5;
 const DAY_MINUTES = 24 * 60;
 const DAILY_SALARY = 4000;
 const INITIAL_MONEY = 40000;
@@ -24,7 +24,7 @@ let state = {
     stats: createDefaultStats()
 };
 
-let lastDisplayBucket = Math.floor(INITIAL_GAME_MINUTES / DISPLAY_STEP_MINUTES);
+let lastDisplayBucket = Math.floor(INITIAL_GAME_MINUTES / getGameTimeSpeedSettings().displayStepMinutes);
 
 function saveState() {
     try {
@@ -35,34 +35,61 @@ function saveState() {
 function createDefaultStats() {
     return {
         moneySpent: 0,
+        lastMoneySpentGameMinute: 0,
         fiveStarGiftCount: 0,
         maxGiftEstimate: 0,
         dailyUserMessages: 0,
         dailyBotMessages: 0,
+        barUserMessages: 0,
+        barBotMessages: 0,
         dateUserMessages: 0,
         dateBotMessages: 0,
+        lastDateDialogueGameMinute: 0,
         dateInteractionLocations: [],
         usedModelPaths: [DEFAULT_MODELS[0]],
         smallTeacherStartsWithGanShenme: 0,
-        headPatCount: 0
+        headPatCount: 0,
+        maxDreamFurnitureRevisionCount: 0,
+        sleepModeCount: 0,
+        danceWatchCount: 0,
+        bartendingChallengeWins: 0
     };
 }
 
-function normalizeStats(data = {}) {
+function normalizeStats(data = {}, context = {}) {
     const defaults = createDefaultStats();
     const list = (value) => Array.isArray(value) ? value.filter(Boolean).map(String) : [];
+    const currentGameMinute = Math.max(0, Math.round(Number(context.gameMinutes ?? state.gameMinutes) || 0));
+    const hasOwn = (key) => Object.prototype.hasOwnProperty.call(data || {}, key);
+    const moneySpent = Math.max(0, Math.round(Number(data.moneySpent) || 0));
+    const dateUserMessages = Math.max(0, Math.round(Number(data.dateUserMessages) || 0));
+    const dateBotMessages = Math.max(0, Math.round(Number(data.dateBotMessages) || 0));
+    const lastMoneySpentGameMinute = hasOwn('lastMoneySpentGameMinute')
+        ? Math.max(0, Math.round(Number(data.lastMoneySpentGameMinute) || 0))
+        : (moneySpent > 0 ? currentGameMinute : 0);
+    const lastDateDialogueGameMinute = hasOwn('lastDateDialogueGameMinute')
+        ? Math.max(0, Math.round(Number(data.lastDateDialogueGameMinute) || 0))
+        : (dateUserMessages > 0 || dateBotMessages > 0 ? currentGameMinute : 0);
     return {
-        moneySpent: Math.max(0, Math.round(Number(data.moneySpent) || 0)),
+        moneySpent,
+        lastMoneySpentGameMinute,
         fiveStarGiftCount: Math.max(0, Math.round(Number(data.fiveStarGiftCount) || 0)),
         maxGiftEstimate: Math.max(0, Math.round(Number(data.maxGiftEstimate) || 0)),
         dailyUserMessages: Math.max(0, Math.round(Number(data.dailyUserMessages) || 0)),
         dailyBotMessages: Math.max(0, Math.round(Number(data.dailyBotMessages) || 0)),
-        dateUserMessages: Math.max(0, Math.round(Number(data.dateUserMessages) || 0)),
-        dateBotMessages: Math.max(0, Math.round(Number(data.dateBotMessages) || 0)),
+        barUserMessages: Math.max(0, Math.round(Number(data.barUserMessages) || 0)),
+        barBotMessages: Math.max(0, Math.round(Number(data.barBotMessages) || 0)),
+        dateUserMessages,
+        dateBotMessages,
+        lastDateDialogueGameMinute,
         dateInteractionLocations: [...new Set(list(data.dateInteractionLocations))],
         usedModelPaths: [...new Set([...defaults.usedModelPaths, ...list(data.usedModelPaths)])],
         smallTeacherStartsWithGanShenme: Math.max(0, Math.round(Number(data.smallTeacherStartsWithGanShenme) || 0)),
-        headPatCount: Math.max(0, Math.round(Number(data.headPatCount) || 0))
+        headPatCount: Math.max(0, Math.round(Number(data.headPatCount) || 0)),
+        maxDreamFurnitureRevisionCount: Math.max(0, Math.round(Number(data.maxDreamFurnitureRevisionCount) || 0)),
+        sleepModeCount: Math.max(0, Math.round(Number(data.sleepModeCount) || 0)),
+        danceWatchCount: Math.max(0, Math.round(Number(data.danceWatchCount) || 0)),
+        bartendingChallengeWins: Math.max(0, Math.round(Number(data.bartendingChallengeWins) || 0))
     };
 }
 
@@ -104,7 +131,9 @@ function loadState() {
                 ? Math.max(0, Math.floor(Number(data.lastSalaryDay)))
                 : Math.floor((Number.isFinite(gameMinutes) ? gameMinutes : INITIAL_GAME_MINUTES) / DAY_MINUTES),
             gifts,
-            stats: normalizeStats(data.stats)
+            stats: normalizeStats(data.stats, {
+                gameMinutes: Number.isFinite(gameMinutes) ? Math.max(0, gameMinutes) : INITIAL_GAME_MINUTES
+            })
         };
     } catch {}
 }
@@ -168,7 +197,7 @@ function getFestival(month, day) {
 export function initGameState() {
     loadState();
     deriveStatsFromCurrentData();
-    lastDisplayBucket = Math.floor(state.gameMinutes / DISPLAY_STEP_MINUTES);
+    lastDisplayBucket = Math.floor(state.gameMinutes / getGameTimeSpeedSettings().displayStepMinutes);
     saveState();
 }
 
@@ -177,7 +206,8 @@ export function updateGameTime(realDeltaSeconds) {
         return { displayChanged: false, salary: 0 };
     }
 
-    state.gameMinutes += realDeltaSeconds * GAME_MINUTES_PER_REAL_SECOND;
+    const timeSettings = getGameTimeSpeedSettings();
+    state.gameMinutes += realDeltaSeconds * timeSettings.gameMinutesPerRealSecond;
     let salary = 0;
     const currentDay = Math.floor(state.gameMinutes / DAY_MINUTES);
     if (currentDay > state.lastSalaryDay) {
@@ -187,7 +217,7 @@ export function updateGameTime(realDeltaSeconds) {
         state.lastSalaryDay = currentDay;
     }
 
-    const displayBucket = Math.floor(state.gameMinutes / DISPLAY_STEP_MINUTES);
+    const displayBucket = Math.floor(state.gameMinutes / timeSettings.displayStepMinutes);
     const displayChanged = displayBucket !== lastDisplayBucket;
     if (displayChanged) lastDisplayBucket = displayBucket;
     if (displayChanged || salary > 0) saveState();
@@ -196,7 +226,7 @@ export function updateGameTime(realDeltaSeconds) {
 }
 
 export function getGameTimeInfo(options = {}) {
-    const step = options.quantize === 5 ? DISPLAY_STEP_MINUTES : 1;
+    const step = options.quantize === 5 ? getGameTimeSpeedSettings().displayStepMinutes : 1;
     const info = getCalendarFromMinutes(state.gameMinutes, step);
     const festival = getFestival(info.month, info.day);
     return {
@@ -275,9 +305,13 @@ export function recordDialogueInteraction(type, assistantText = '', locationId =
     if (type === 'date') {
         state.stats.dateUserMessages += 1;
         state.stats.dateBotMessages += 1;
+        state.stats.lastDateDialogueGameMinute = Math.max(0, Math.round(Number(state.gameMinutes) || 0));
         if (locationId && !state.stats.dateInteractionLocations.includes(locationId)) {
             state.stats.dateInteractionLocations.push(locationId);
         }
+    } else if (type === 'bar') {
+        state.stats.barUserMessages += 1;
+        state.stats.barBotMessages += 1;
     } else {
         state.stats.dailyUserMessages += 1;
         state.stats.dailyBotMessages += 1;
@@ -306,6 +340,84 @@ export function recordHeadPat() {
     dispatchStatsUpdated();
 }
 
+export function recordDreamFurnitureRevision(count) {
+    const value = Math.max(0, Math.round(Number(count) || 0));
+    if (value <= state.stats.maxDreamFurnitureRevisionCount) return;
+    state.stats.maxDreamFurnitureRevisionCount = value;
+    saveState();
+    dispatchStatsUpdated();
+}
+
+export function recordSleepModeEntered() {
+    state.stats.sleepModeCount += 1;
+    saveState();
+    dispatchStatsUpdated();
+}
+
+export function recordDanceWatched() {
+    state.stats.danceWatchCount += 1;
+    state.affinity += 3;
+    saveState();
+    dispatchStatsUpdated();
+    document.dispatchEvent(new CustomEvent('fritia-affinity-updated', {
+        detail: { delta: 3, value: state.affinity }
+    }));
+}
+
+export function recordBartendingChallengeWin() {
+    state.stats.bartendingChallengeWins += 1;
+    saveState();
+    dispatchStatsUpdated();
+}
+
+export function getBarAdmissionProgress() {
+    const stats = getStats();
+    const dailyDialogues = Math.max(0, Math.min(stats.dailyUserMessages || 0, stats.dailyBotMessages || 0));
+    const dateDialogues = Math.max(0, Math.min(stats.dateUserMessages || 0, stats.dateBotMessages || 0));
+    const dreamFurnitureCount = readDreamFurnitureSnapshot().length;
+    const tasks = [
+        {
+            id: 'daily_dialogue',
+            label: '日常对话',
+            value: Math.min(dailyDialogues, 3),
+            target: 3
+        },
+        {
+            id: 'date',
+            label: '约会',
+            value: Math.min(dateDialogues, 1),
+            target: 1
+        },
+        {
+            id: 'sleep',
+            label: '睡觉模式',
+            value: Math.min(stats.sleepModeCount || 0, 1),
+            target: 1
+        },
+        {
+            id: 'gift',
+            label: '送出礼物',
+            value: Math.min(state.gifts.length, 1),
+            target: 1
+        },
+        {
+            id: 'dream_furniture',
+            label: '造梦家具',
+            value: Math.min(dreamFurnitureCount, 1),
+            target: 1
+        }
+    ].map(task => ({
+        ...task,
+        complete: task.value >= task.target
+    }));
+    return {
+        tasks,
+        completed: tasks.filter(task => task.complete).length,
+        total: tasks.length,
+        complete: tasks.every(task => task.complete)
+    };
+}
+
 function dispatchStatsUpdated() {
     if (typeof document !== 'undefined') {
         document.dispatchEvent(new CustomEvent('fritia-game-state-updated'));
@@ -319,10 +431,25 @@ export function canAfford(amount) {
 export function spendMoney(amount) {
     const value = Math.max(0, Math.round(amount));
     if (state.money < value) return false;
+    if (value <= 0) return true;
     state.money -= value;
     state.stats.moneySpent += value;
+    state.stats.lastMoneySpentGameMinute = Math.max(0, Math.round(Number(state.gameMinutes) || 0));
     saveState();
     dispatchStatsUpdated();
+    return true;
+}
+
+export function addMoney(amount, reason = '') {
+    const value = Math.max(0, Math.round(amount));
+    if (value <= 0) return false;
+    state.money += value;
+    saveState();
+    if (typeof document !== 'undefined') {
+        document.dispatchEvent(new CustomEvent('fritia-game-state-updated', {
+            detail: { moneyDelta: value, reason }
+        }));
+    }
     return true;
 }
 
@@ -388,6 +515,7 @@ export function exportGameState() {
             value: state.affinity
         },
         stats: getStats(),
+        dreamFurniture: readDreamFurnitureSnapshot(),
         gifts: getGifts()
     };
 }
@@ -399,7 +527,7 @@ export function importGameState(data, options = {}) {
     const minutes = Number(source.gameMinutes ?? source.gameTime?.totalMinutes);
     if (Number.isFinite(minutes)) {
         state.gameMinutes = Math.max(0, minutes);
-        lastDisplayBucket = Math.floor(state.gameMinutes / DISPLAY_STEP_MINUTES);
+        lastDisplayBucket = Math.floor(state.gameMinutes / getGameTimeSpeedSettings().displayStepMinutes);
     }
 
     const moneyAmount = Number(source.money?.amount ?? source.money);
@@ -424,7 +552,9 @@ export function importGameState(data, options = {}) {
         ? source.gifts
         : (Array.isArray(data.gifts) ? data.gifts : []);
     const giftsAdded = mergeGifts(gifts);
-    state.stats = mergeStats(state.stats, normalizeStats(source.stats || data.stats));
+    state.stats = mergeStats(state.stats, normalizeStats(source.stats || data.stats, {
+        gameMinutes: state.gameMinutes
+    }));
     deriveStatsFromCurrentData();
     saveState();
     if (!options.suppressEvent) {
@@ -436,16 +566,24 @@ export function importGameState(data, options = {}) {
 function mergeStats(current, imported) {
     return {
         moneySpent: Math.max(current.moneySpent, imported.moneySpent),
+        lastMoneySpentGameMinute: Math.max(current.lastMoneySpentGameMinute || 0, imported.lastMoneySpentGameMinute || 0),
         fiveStarGiftCount: Math.max(current.fiveStarGiftCount, imported.fiveStarGiftCount),
         maxGiftEstimate: Math.max(current.maxGiftEstimate, imported.maxGiftEstimate),
         dailyUserMessages: Math.max(current.dailyUserMessages, imported.dailyUserMessages),
         dailyBotMessages: Math.max(current.dailyBotMessages, imported.dailyBotMessages),
+        barUserMessages: Math.max(current.barUserMessages, imported.barUserMessages),
+        barBotMessages: Math.max(current.barBotMessages, imported.barBotMessages),
         dateUserMessages: Math.max(current.dateUserMessages, imported.dateUserMessages),
         dateBotMessages: Math.max(current.dateBotMessages, imported.dateBotMessages),
+        lastDateDialogueGameMinute: Math.max(current.lastDateDialogueGameMinute || 0, imported.lastDateDialogueGameMinute || 0),
         dateInteractionLocations: [...new Set([...current.dateInteractionLocations, ...imported.dateInteractionLocations])],
         usedModelPaths: [...new Set([...current.usedModelPaths, ...imported.usedModelPaths])],
         smallTeacherStartsWithGanShenme: Math.max(current.smallTeacherStartsWithGanShenme, imported.smallTeacherStartsWithGanShenme),
-        headPatCount: Math.max(current.headPatCount, imported.headPatCount)
+        headPatCount: Math.max(current.headPatCount, imported.headPatCount),
+        maxDreamFurnitureRevisionCount: Math.max(current.maxDreamFurnitureRevisionCount, imported.maxDreamFurnitureRevisionCount),
+        sleepModeCount: Math.max(current.sleepModeCount || 0, imported.sleepModeCount || 0),
+        danceWatchCount: Math.max(current.danceWatchCount || 0, imported.danceWatchCount || 0),
+        bartendingChallengeWins: Math.max(current.bartendingChallengeWins || 0, imported.bartendingChallengeWins || 0)
     };
 }
 
@@ -453,6 +591,72 @@ function deriveStatsFromCurrentData() {
     state.stats.usedModelPaths = [...new Set([...state.stats.usedModelPaths, DEFAULT_MODELS[0]])];
     const fiveStarCount = state.gifts.filter(gift => Number(gift.score) >= 5).length;
     state.stats.fiveStarGiftCount = Math.max(state.stats.fiveStarGiftCount, fiveStarCount);
+    deriveDialogueStatsFromLocalHistory();
+    state.stats.lastMoneySpentGameMinute = Math.max(0, Math.round(Number(state.stats.lastMoneySpentGameMinute) || 0));
+    state.stats.lastDateDialogueGameMinute = Math.max(0, Math.round(Number(state.stats.lastDateDialogueGameMinute) || 0));
+    state.stats.sleepModeCount = Math.max(0, Math.round(Number(state.stats.sleepModeCount) || 0));
+    state.stats.danceWatchCount = Math.max(0, Math.round(Number(state.stats.danceWatchCount) || 0));
+    state.stats.bartendingChallengeWins = Math.max(0, Math.round(Number(state.stats.bartendingChallengeWins) || 0));
+}
+
+function deriveDialogueStatsFromLocalHistory() {
+    if (typeof localStorage === 'undefined') return;
+    try {
+        const messages = JSON.parse(localStorage.getItem('fritia_chat_history') || '[]');
+        if (Array.isArray(messages)) {
+            const daily = countDialogueMessages(messages.filter(msg => (msg?.scene || 'daily') !== 'bar'));
+            const bar = countDialogueMessages(messages.filter(msg => (msg?.scene || 'daily') === 'bar'));
+            state.stats.dailyUserMessages = Math.max(state.stats.dailyUserMessages, daily.user);
+            state.stats.dailyBotMessages = Math.max(state.stats.dailyBotMessages, daily.bot);
+            state.stats.barUserMessages = Math.max(state.stats.barUserMessages, bar.user);
+            state.stats.barBotMessages = Math.max(state.stats.barBotMessages, bar.bot);
+            if (state.stats.smallTeacherStartsWithGanShenme <= 0 && messages.some(msg => msg?.role === 'assistant' && String(msg.content || '').trim().startsWith('干什么'))) {
+                state.stats.smallTeacherStartsWithGanShenme = 1;
+            }
+        }
+    } catch {}
+
+    try {
+        const history = JSON.parse(localStorage.getItem('fritia_date_history') || '{}');
+        if (!history || typeof history !== 'object' || Array.isArray(history)) return;
+        let user = 0;
+        let bot = 0;
+        const locations = new Set(state.stats.dateInteractionLocations);
+        Object.entries(history).forEach(([key, value]) => {
+            if (key.endsWith('_archive')) return;
+            const messages = Array.isArray(value) ? [...value] : [];
+            const archives = history[`${key}_archive`];
+            if (Array.isArray(archives)) {
+                archives.forEach(archive => {
+                    if (Array.isArray(archive?.messages)) messages.push(...archive.messages);
+                });
+            }
+            const counts = countDialogueMessages(messages);
+            user += counts.user;
+            bot += counts.bot;
+            if (counts.user > 0 && counts.bot > 0) locations.add(key);
+        });
+        state.stats.dateUserMessages = Math.max(state.stats.dateUserMessages, user);
+        state.stats.dateBotMessages = Math.max(state.stats.dateBotMessages, bot);
+        state.stats.dateInteractionLocations = [...locations];
+    } catch {}
+}
+
+function countDialogueMessages(messages) {
+    return (Array.isArray(messages) ? messages : []).reduce((acc, msg) => {
+        if (msg?.role === 'user') acc.user += 1;
+        if (msg?.role === 'assistant') acc.bot += 1;
+        return acc;
+    }, { user: 0, bot: 0 });
+}
+
+function readDreamFurnitureSnapshot() {
+    try {
+        const data = JSON.parse(localStorage.getItem('fritia_dream_furniture') || '[]');
+        return Array.isArray(data) ? data : [];
+    } catch {
+        return [];
+    }
 }
 
 function parseAffinityValue(value, fallback) {

@@ -1,5 +1,11 @@
 import { getSettings } from './settings.js';
 import { addAffinity, getGameTimeContext, recordDialogueInteraction } from './game_state.js';
+import { getDreamFurnitureDialogueContext } from './dream_system.js';
+import { buildRagReferenceMessage } from './knowledge_base.js';
+import {
+    buildDeepSeekIntimateUserMessage,
+    shouldKeepMessageForCurrentDeepSeekMode
+} from './deepseek_intimate_mode.js';
 
 const HISTORY_KEY = 'fritia_chat_history';
 
@@ -7,6 +13,12 @@ let conversationHistory = [];
 let isGenerating = false;
 let abortController = null;
 let systemPrompt = '';
+let dialogueContext = {
+    scene: 'daily',
+    characterId: 'fritia',
+    characterName: '芙提雅',
+    prompt: ''
+};
 
 const elements = {};
 
@@ -40,7 +52,7 @@ function estimateTokens(text) {
     return tokens;
 }
 
-function getContextMessages() {
+function getContextMessages(settings = getSettings()) {
     const systemTokens = estimateTokens(systemPrompt);
     const maxTokens = 8000;
     const availableTokens = maxTokens - systemTokens - 200;
@@ -50,6 +62,8 @@ function getContextMessages() {
     
     for (let i = conversationHistory.length - 1; i >= 0; i--) {
         const msg = conversationHistory[i];
+        if ((msg.scene || 'daily') !== dialogueContext.scene) continue;
+        if (!shouldKeepMessageForCurrentDeepSeekMode(msg, settings, ['assistant'])) continue;
         const msgTokens = estimateTokens(msg.content) + 10;
         
         if (totalTokens + msgTokens > availableTokens) break;
@@ -62,7 +76,12 @@ function getContextMessages() {
 }
 
 function buildSystemPrompt() {
-    return `${systemPrompt}\n\n${getGameTimeContext()}`;
+    const furnitureContext = getDreamFurnitureDialogueContext();
+    const basePrompt = dialogueContext.prompt || systemPrompt;
+    const sceneContext = dialogueContext.scene === 'bar'
+        ? '\n\n当前地点是“暖调闲聚”酒吧地图。本轮对话属于暖调闲聚场景。'
+        : '';
+    return `${basePrompt}\n\n${getGameTimeContext()}${sceneContext}${furnitureContext ? `\n\n${furnitureContext}` : ''}`;
 }
 
 function loadHistory() {
@@ -95,6 +114,15 @@ export function importConversationHistory(data) {
         conversationHistory = data;
         saveHistory();
     }
+}
+
+export function setDialogueSceneContext(context = {}) {
+    dialogueContext = {
+        scene: context.scene === 'bar' ? 'bar' : 'daily',
+        characterId: context.characterId || 'fritia',
+        characterName: context.characterName || '芙提雅',
+        prompt: context.prompt || ''
+    };
 }
 
 export async function initDialogue() {
@@ -130,7 +158,14 @@ async function handleSend() {
     }
 
     elements.inputEl.value = '';
-    const userMsg = { role: 'user', content: msg, ts: getTimestamp() };
+    const userMsg = {
+        role: 'user',
+        content: msg,
+        ts: getTimestamp(),
+        scene: dialogueContext.scene,
+        characterId: dialogueContext.characterId,
+        characterName: dialogueContext.characterName
+    };
     conversationHistory.push(userMsg);
     saveHistory();
     appendUserMessage(msg);
@@ -140,6 +175,24 @@ async function handleSend() {
 
     try {
         abortController = new AbortController();
+        const contextMessages = getContextMessages(settings);
+        const ragMessage = dialogueContext.scene === 'daily'
+            ? await buildRagReferenceMessage({
+                mode: 'daily',
+                query: msg,
+                recentMessages: contextMessages
+            })
+            : null;
+        const intimateMessage = dialogueContext.scene === 'daily'
+            ? await buildDeepSeekIntimateUserMessage(settings)
+            : null;
+        const messages = [
+            { role: 'system', content: buildSystemPrompt() },
+            ...(ragMessage ? [ragMessage] : []),
+            ...(intimateMessage ? [intimateMessage] : []),
+            ...contextMessages
+        ];
+
         const response = await fetch(`${settings.baseUrl}/chat/completions`, {
             method: 'POST',
             headers: {
@@ -148,13 +201,10 @@ async function handleSend() {
             },
             body: JSON.stringify({
                 model: settings.model,
-                messages: [
-                    { role: 'system', content: buildSystemPrompt() },
-                    ...getContextMessages()
-                ],
+                messages,
                 stream: true,
                 temperature: 0.85,
-                max_tokens: 200
+                max_tokens: 350
             }),
             signal: abortController.signal
         });
@@ -198,12 +248,20 @@ async function handleSend() {
             }
         }
 
-        const assistantMsg = { role: 'assistant', content: fullText, ts: getTimestamp() };
+        const assistantMsg = {
+            role: 'assistant',
+            content: fullText,
+            ts: getTimestamp(),
+            scene: dialogueContext.scene,
+            characterId: dialogueContext.characterId,
+            characterName: dialogueContext.characterName,
+            deepseekIntimateMode: Boolean(intimateMessage)
+        };
         conversationHistory.push(assistantMsg);
         saveHistory();
         if (fullText.trim()) {
             addAffinity(1);
-            recordDialogueInteraction('daily', fullText);
+            recordDialogueInteraction(dialogueContext.scene === 'bar' ? 'bar' : 'daily', fullText);
         }
 
     } catch (err) {
@@ -317,6 +375,9 @@ function scrollDialogue() {
 
 export function showDialogue() {
     elements.ui.classList.remove('hidden');
+    elements.ui.classList.toggle('bar-fritia-dialogue', dialogueContext.scene === 'bar');
+    const namePlate = document.getElementById('dialogue-name');
+    if (namePlate) namePlate.textContent = dialogueContext.characterName || '芙提雅';
     elements.textEl.innerHTML = '';
 
     const greetings = [
@@ -345,6 +406,7 @@ export function showDialogue() {
 
 export function hideDialogue() {
     elements.ui.classList.add('hidden');
+    elements.ui.classList.remove('bar-fritia-dialogue');
     if (abortController) {
         abortController.abort();
         abortController = null;

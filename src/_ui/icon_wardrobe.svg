@@ -1,0 +1,6 @@
+<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Wardrobe / dress-up: a hanger with a dress silhouette. -->
+  <path d="M24 9 a3 3 0 0 1 3 3 c0 1.6-1.4 2.4-3 3" stroke="#e6c178" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M24 18 L8 30 a1.6 1.6 0 0 0 1 3 H39 a1.6 1.6 0 0 0 1 -3 Z" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/>
+  <path d="M18 23 c2 4 10 4 12 0" stroke="#e58aa6" stroke-width="2.2" stroke-linecap="round"/>
+</svg>

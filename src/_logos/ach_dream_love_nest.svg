@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="布置爱巢">
+  <defs>
+    <linearGradient id="nestBg" x1="16" y1="12" x2="80" y2="84" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8ee7ff"/>
+      <stop offset="1" stop-color="#ff8fc7"/>
+    </linearGradient>
+    <linearGradient id="nestHome" x1="28" y1="30" x2="72" y2="78" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff5dc"/>
+      <stop offset="1" stop-color="#ffd38c"/>
+    </linearGradient>
+  </defs>
+  <circle cx="48" cy="48" r="42" fill="#151923"/>
+  <circle cx="48" cy="48" r="36" fill="url(#nestBg)" opacity=".9"/>
+  <path d="M22 51 48 29l26 22-5 6-5-4v24H32V53l-5 4-5-6Z" fill="url(#nestHome)"/>
+  <path d="M38 77V57h20v20" fill="#473042" opacity=".9"/>
+  <path d="M48 47c-5-8-16-4-16 5 0 9 16 17 16 17s16-8 16-17c0-9-11-13-16-5Z" fill="#ff4f93"/>
+  <path d="M28 27c8-7 18-11 31-9" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" opacity=".6"/>
+  <path d="M68 26h8v8" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity=".75"/>
+</svg>

@@ -266,8 +266,7 @@ function buildGiftRequestBody(detail, settings, mode) {
             { role: 'user', content: buildGiftPrompt(detail, mode) }
         ],
         stream: true,
-        temperature: mode === 'strict' ? 0.25 : 0.65,
-        max_tokens: 180
+        temperature: mode === 'strict' ? 0.25 : 0.65
     };
 
     return requestBody;
@@ -345,7 +344,7 @@ async function fetchGiftCompletionStream(settings, body) {
                 const content = extractCompletionText(json);
                 if (content) fullText += content;
             } catch {
-                if (trimmed.startsWith('data:') && data && !data.startsWith('{') && !data.startsWith('[')) {
+                if (trimmed.startsWith('data:') && data && !looksLikeJsonPayload(data)) {
                     fullText += data;
                 }
             }
@@ -364,6 +363,11 @@ async function fetchGiftCompletionStream(settings, body) {
 
     if (!fullText.trim()) {
         const raw = rawText.trim();
+        if (looksLikeSseStream(raw)) {
+            const extracted = extractTextFromSseStream(raw).trim();
+            if (extracted) return extracted;
+            throw new Error('API 返回了流式 JSON，但没有可读取的模型正文。请确认模型没有只输出思考内容，或尝试更换非推理模型。');
+        }
         try {
             return extractCompletionText(JSON.parse(raw)).trim();
         } catch {
@@ -376,11 +380,52 @@ async function fetchGiftCompletionStream(settings, body) {
 
 function extractCompletionText(json) {
     const choice = json?.choices?.[0];
-    return choice?.delta?.content
-        ?? choice?.message?.content
-        ?? choice?.text
-        ?? json?.content
-        ?? '';
+    return normalizeCompletionContent(choice?.delta?.content)
+        || normalizeCompletionContent(choice?.delta?.text)
+        || normalizeCompletionContent(choice?.message?.content)
+        || normalizeCompletionContent(choice?.text)
+        || normalizeCompletionContent(json?.delta)
+        || normalizeCompletionContent(json?.content)
+        || normalizeCompletionContent(json?.response)
+        || '';
+}
+
+function normalizeCompletionContent(value) {
+    if (typeof value === 'string') return value;
+    if (Array.isArray(value)) {
+        return value.map(item => {
+            if (typeof item === 'string') return item;
+            return item?.text || item?.content || item?.value || '';
+        }).join('');
+    }
+    if (value && typeof value === 'object') {
+        return value.text || value.content || value.value || '';
+    }
+    return '';
+}
+
+function looksLikeJsonPayload(text) {
+    const value = String(text || '').trim();
+    return value.startsWith('{') || value.startsWith('[');
+}
+
+function looksLikeSseStream(text) {
+    return /^data:\s*\{/m.test(String(text || '')) || /"object"\s*:\s*"chat\.completion\.chunk"/.test(String(text || ''));
+}
+
+function extractTextFromSseStream(raw) {
+    let text = '';
+    const lines = String(raw || '').split(/\r?\n/);
+    for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data:')) continue;
+        const data = trimmed.slice(5).trim();
+        if (!data || data === '[DONE]' || !looksLikeJsonPayload(data)) continue;
+        try {
+            text += extractCompletionText(JSON.parse(data));
+        } catch {}
+    }
+    return text;
 }
 
 function buildGiftPrompt(detail, mode) {
@@ -445,7 +490,13 @@ function summarizeDateHistory() {
 }
 
 function parseGiftEvaluation(content, options = {}) {
-    const normalized = normalizeEvaluationText(content);
+    const normalized = normalizeEvaluationText(looksLikeSseStream(content)
+        ? extractTextFromSseStream(content)
+        : content);
+    if (!normalized.trim()) {
+        if (!options.silent) console.warn('[Gift] Empty evaluation after stream parsing:', content);
+        throw new Error('模型没有返回可解析的礼物估价。请确认当前 API 与模型支持 chat/completions 的流式输出。');
+    }
     let parsed = null;
     try {
         parsed = JSON.parse(normalized);
@@ -503,6 +554,7 @@ function normalizeEvaluationText(content) {
 }
 
 function parseLooseEvaluation(text) {
+    if (looksLikeSseStream(text)) return null;
     const amount = parseMoneyValue(
         text.match(/(?:amount|price|cost|value|金额|价格|估价|购买金额|售价)[^\d￥¥]*(?:￥|¥)?\s*([\d,，.]+)/i)?.[1]
     );
@@ -543,6 +595,8 @@ function getFirstValue(object, keys) {
 function isLowQualityEvaluation(content, parsed) {
     const text = String(content || '');
     if (!parsed || !Number.isFinite(Number(parsed.amount))) return true;
+    if (/^data:\s*\{/i.test(String(parsed.comment || '').trim())) return true;
+    if (/"object"\s*:\s*"chat\.completion\.chunk"/.test(text)) return true;
     if (text.includes('\uFFFD')) return true;
     const asciiRatio = text.length > 0
         ? [...text].filter(ch => ch.charCodeAt(0) < 128).length / [...text].length

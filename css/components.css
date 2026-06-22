@@ -1,0 +1,458 @@
+/* =============================================================
+   components.css — 共享 UI 组件（暖色 Otome 设计系统）
+   .ui-overlay 全屏背景 · .otome-panel 浮层框架 · 按钮族 · 字段 ·
+   标题/角标花纹 · custom-select · chip · 统一滚动条
+   新增浮层只需复用这些类，即可保持统一风格。详见 UI_STYLE.md。
+   ============================================================= */
+
+/* ===== 全屏 overlay 背景（每个浮层外层加 .ui-overlay） ===== */
+.ui-overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background:
+        radial-gradient(circle at 50% 38%, rgba(244,184,200,0.12), transparent 52%),
+        rgba(34,16,24,0.52);
+    -webkit-backdrop-filter: blur(var(--blur-overlay));
+    backdrop-filter: blur(var(--blur-overlay));
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    animation: overlay-in var(--t-mid) var(--ease-out);
+}
+
+.ui-overlay::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: url(../src/_ui/bokeh.svg) center / cover no-repeat;
+    opacity: 0.5;
+    mix-blend-mode: screen;
+    pointer-events: none;
+}
+
+/* ===== 浮层框架 .otome-panel ===== */
+.otome-panel {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    width: min(560px, 94vw);
+    max-height: min(86vh, 880px);
+    color: var(--c-ink);
+    background: var(--panel-bg);
+    border: 1px solid rgba(230,193,120,0.5);
+    border-radius: var(--r-lg);
+    box-shadow:
+        var(--shadow-panel),
+        inset 0 0 0 1px rgba(255,255,255,0.55),
+        inset 0 0 46px rgba(244,184,200,0.10);
+    overflow: hidden;
+    animation: panel-in var(--t-slow) var(--ease-soft);
+}
+
+/* 对角金角标花纹（TL + BR） */
+.otome-panel::before,
+.otome-panel::after {
+    content: "";
+    position: absolute;
+    width: 58px;
+    height: 58px;
+    background: url(../src/_ui/frame_corner.svg) center / contain no-repeat;
+    opacity: 0.92;
+    pointer-events: none;
+    z-index: 3;
+}
+.otome-panel::before { top: 4px; left: 4px; }
+.otome-panel::after  { right: 4px; bottom: 4px; transform: rotate(180deg); }
+
+/* 尺寸修饰 */
+.otome-panel--sm { width: min(420px, 94vw); }
+.otome-panel--md { width: min(620px, 94vw); }
+.otome-panel--lg { width: min(960px, 95vw); }
+.otome-panel--xl { width: min(1080px, 95vw); }
+
+/* ===== 头部 ===== */
+.otome-panel__head {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: var(--sp-4);
+    padding: var(--sp-5) var(--sp-6);
+    border-bottom: 1px solid var(--panel-line);
+    background: var(--grad-blush);
+}
+
+.otome-panel__icon {
+    flex: 0 0 auto;
+    width: 52px;
+    height: 52px;
+    display: grid;
+    place-items: center;
+    border-radius: var(--r-md);
+    color: var(--c-rose-deep);
+    background: linear-gradient(150deg, #fff, var(--c-blush));
+    border: 1px solid rgba(230,193,120,0.55);
+    box-shadow: var(--shadow-soft), 0 0 18px rgba(244,184,200,0.35);
+}
+.otome-panel__icon img { width: 30px; height: 30px; display: block; }
+
+.otome-panel__titles { flex: 1; min-width: 0; }
+
+.otome-panel__kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--c-gold-deep);
+    font-size: var(--fs-kicker);
+    letter-spacing: var(--ls-wide);
+}
+.otome-panel__kicker::before {
+    content: "";
+    width: 13px; height: 13px;
+    background: url(../src/_ui/heart_motif.svg) center / contain no-repeat;
+}
+
+.otome-panel__title {
+    margin: 3px 0 0;
+    font-size: var(--fs-xl);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+    background: var(--grad-title);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.otome-panel__sub {
+    margin: 5px 0 0;
+    color: var(--c-ink-soft);
+    font-size: var(--fs-sm);
+    line-height: 1.5;
+}
+
+.otome-panel__actions {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+}
+
+.otome-panel__close {
+    flex: 0 0 auto;
+    width: 38px; height: 38px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    border: 1px solid var(--panel-line-2);
+    background: rgba(255,255,255,0.6);
+    color: var(--c-rose-deep);
+    cursor: pointer;
+    transition: transform var(--t-fast) var(--ease-out), background var(--t-fast), border-color var(--t-fast);
+}
+.otome-panel__close img { width: 16px; height: 16px; display: block; }
+.otome-panel__close:hover {
+    background: var(--c-rose-soft);
+    border-color: var(--c-rose);
+    color: #fff;
+    transform: rotate(90deg);
+}
+
+/* ===== 主体 / 页脚 ===== */
+.otome-panel__body {
+    position: relative;
+    z-index: 1;
+    min-height: 0;
+    flex: 1;
+    padding: var(--sp-6);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+.otome-panel__foot {
+    display: flex;
+    gap: var(--sp-3);
+    justify-content: flex-end;
+    padding: var(--sp-4) var(--sp-6);
+    border-top: 1px solid var(--panel-line);
+    background: rgba(255,255,255,0.28);
+}
+
+/* ===== 区块卡片 ===== */
+.otome-card {
+    padding: var(--sp-5);
+    border: 1px solid var(--panel-line);
+    border-radius: var(--r-md);
+    background: var(--panel-card);
+    box-shadow: var(--shadow-soft);
+}
+.otome-card--rose {
+    background: var(--panel-card-2);
+    border-color: rgba(229,138,166,0.34);
+}
+
+.otome-section-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin-bottom: var(--sp-3);
+    color: var(--c-rose-ink);
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    letter-spacing: var(--ls-mid);
+}
+.otome-section-label::before {
+    content: "";
+    width: 12px; height: 12px;
+    background: url(../src/_ui/heart_motif.svg) center / contain no-repeat;
+}
+
+/* 爱心金线分隔 */
+.otome-divider {
+    height: 18px;
+    margin: var(--sp-3) 0;
+    background: url(../src/_ui/divider_heart.svg) center / contain no-repeat;
+}
+
+/* ===== 按钮族 ===== */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 42px;
+    padding: 10px 22px;
+    border: none;
+    border-radius: var(--r-pill);
+    font: inherit;
+    font-weight: 600;
+    letter-spacing: var(--ls-mid);
+    cursor: pointer;
+    transition: transform var(--t-fast) var(--ease-out), filter var(--t-fast), box-shadow var(--t-fast), background var(--t-fast), border-color var(--t-fast), color var(--t-fast);
+    -webkit-tap-highlight-color: transparent;
+}
+.btn img { width: 20px; height: 20px; display: block; }
+.btn:active { transform: translateY(1px); }
+
+.btn--primary {
+    color: #fff;
+    background: var(--grad-rose);
+    box-shadow: var(--shadow-soft), inset 0 1px 0 rgba(255,255,255,0.45);
+}
+.btn--primary:hover { filter: brightness(1.05); transform: translateY(-1px); box-shadow: var(--shadow-card), var(--glow-rose); }
+
+.btn--gold {
+    color: #6a481c;
+    background: var(--grad-gold);
+    box-shadow: var(--shadow-soft), inset 0 1px 0 rgba(255,255,255,0.5);
+}
+.btn--gold:hover { filter: brightness(1.04); transform: translateY(-1px); box-shadow: var(--shadow-card), var(--glow-gold); }
+
+.btn--ghost {
+    color: var(--c-ink-soft);
+    background: rgba(255,255,255,0.5);
+    border: 1px solid var(--panel-line-2);
+}
+.btn--ghost:hover { color: var(--c-rose-deep); border-color: var(--c-rose); background: rgba(255,255,255,0.8); }
+
+.btn--danger {
+    color: var(--c-danger-deep);
+    background: rgba(216,96,122,0.12);
+    border: 1px solid rgba(216,96,122,0.4);
+}
+.btn--danger:hover { color: #fff; background: var(--c-danger); border-color: var(--c-danger); }
+
+.btn:disabled,
+.btn[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+    filter: grayscale(0.25);
+    transform: none;
+    box-shadow: none;
+}
+
+/* ===== 字段（input / textarea） ===== */
+.field,
+.otome-panel input[type="text"],
+.otome-panel input[type="password"],
+.otome-panel textarea {
+    width: 100%;
+    border: 1px solid var(--field-border);
+    border-radius: var(--r-sm);
+    background: var(--field-bg);
+    color: var(--c-ink);
+    padding: 11px 14px;
+    font-family: inherit;
+    font-size: 16px;          /* 移动端不放大 */
+    line-height: 1.55;
+    outline: none;
+    transition: border-color var(--t-fast), box-shadow var(--t-fast), background var(--t-fast);
+}
+.otome-panel textarea { resize: vertical; }
+.otome-panel input:focus,
+.otome-panel textarea:focus,
+.field:focus {
+    border-color: var(--c-rose);
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(229,138,166,0.18);
+}
+.otome-panel input::placeholder,
+.otome-panel textarea::placeholder { color: var(--c-ink-faint); }
+
+.otome-field-label {
+    display: block;
+    margin-bottom: 7px;
+    color: var(--c-ink-soft);
+    font-size: var(--fs-sm);
+    letter-spacing: var(--ls-mid);
+}
+
+/* ===== chip（余额等小药丸） ===== */
+.otome-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 36px;
+    padding: 6px 14px;
+    border-radius: var(--r-pill);
+    font-size: var(--fs-sm);
+    white-space: nowrap;
+    border: 1px solid rgba(230,193,120,0.45);
+    background: rgba(246,219,170,0.45);
+    color: var(--c-gold-deep);
+    font-weight: 600;
+}
+.otome-chip img { width: 18px; height: 18px; }
+.otome-chip--rose {
+    border-color: rgba(229,138,166,0.4);
+    background: rgba(251,233,236,0.7);
+    color: var(--c-rose-ink);
+}
+
+/* ===== 自定义下拉（历史日期筛选，沿用 JS 结构） ===== */
+.custom-select { position: relative; min-width: 110px; }
+.select-selected {
+    background: var(--field-bg);
+    border: 1px solid var(--field-border);
+    border-radius: var(--r-sm);
+    padding: 7px 28px 7px 12px;
+    color: var(--c-ink);
+    font-size: var(--fs-sm);
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+}
+.select-selected::after {
+    content: '';
+    position: absolute;
+    right: 11px; top: 50%;
+    transform: translateY(-50%);
+    width: 0; height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid var(--c-rose);
+}
+.select-selected:hover { border-color: var(--c-rose); }
+.select-options {
+    position: absolute;
+    top: calc(100% + 5px);
+    left: 0; right: 0;
+    background: var(--panel-bg-solid);
+    border: 1px solid var(--panel-line-2);
+    border-radius: var(--r-sm);
+    max-height: 220px;
+    overflow-y: auto;
+    z-index: 100;
+    box-shadow: var(--shadow-card);
+}
+.select-option {
+    padding: 8px 12px;
+    color: var(--c-ink-soft);
+    font-size: var(--fs-sm);
+    cursor: pointer;
+    transition: background var(--t-fast), color var(--t-fast);
+}
+.select-option:hover { background: var(--c-blush); color: var(--c-rose-deep); }
+.select-option.selected { background: var(--c-blush-2); color: var(--c-rose-deep); font-weight: 600; }
+
+/* ===== 统一暖色滚动条 ===== */
+.otome-panel__body,
+.otome-scroll,
+#history-list,
+#date-history-list,
+#bar-history-list,
+#roundtable-history-list,
+#achievement-list,
+#gift-collection-list,
+#model-list,
+#date-locations,
+#date-chat-area,
+#dialogue-text-area,
+.select-options {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(229,138,166,0.55) rgba(199,92,128,0.10);
+}
+.otome-panel__body::-webkit-scrollbar,
+.otome-scroll::-webkit-scrollbar,
+#history-list::-webkit-scrollbar,
+#date-history-list::-webkit-scrollbar,
+#bar-history-list::-webkit-scrollbar,
+#roundtable-history-list::-webkit-scrollbar,
+#achievement-list::-webkit-scrollbar,
+#gift-collection-list::-webkit-scrollbar,
+#model-list::-webkit-scrollbar,
+#date-locations::-webkit-scrollbar,
+#date-chat-area::-webkit-scrollbar,
+#dialogue-text-area::-webkit-scrollbar,
+.select-options::-webkit-scrollbar { width: 8px; height: 8px; }
+.otome-panel__body::-webkit-scrollbar-track,
+.otome-scroll::-webkit-scrollbar-track,
+#history-list::-webkit-scrollbar-track,
+#date-history-list::-webkit-scrollbar-track,
+#bar-history-list::-webkit-scrollbar-track,
+#roundtable-history-list::-webkit-scrollbar-track,
+#achievement-list::-webkit-scrollbar-track,
+#gift-collection-list::-webkit-scrollbar-track,
+#model-list::-webkit-scrollbar-track,
+#date-locations::-webkit-scrollbar-track,
+#date-chat-area::-webkit-scrollbar-track,
+#dialogue-text-area::-webkit-scrollbar-track,
+.select-options::-webkit-scrollbar-track { background: rgba(199,92,128,0.08); border-radius: var(--r-pill); }
+.otome-panel__body::-webkit-scrollbar-thumb,
+.otome-scroll::-webkit-scrollbar-thumb,
+#history-list::-webkit-scrollbar-thumb,
+#date-history-list::-webkit-scrollbar-thumb,
+#bar-history-list::-webkit-scrollbar-thumb,
+#roundtable-history-list::-webkit-scrollbar-thumb,
+#achievement-list::-webkit-scrollbar-thumb,
+#gift-collection-list::-webkit-scrollbar-thumb,
+#model-list::-webkit-scrollbar-thumb,
+#date-locations::-webkit-scrollbar-thumb,
+#date-chat-area::-webkit-scrollbar-thumb,
+#dialogue-text-area::-webkit-scrollbar-thumb,
+.select-options::-webkit-scrollbar-thumb {
+    min-height: 40px;
+    border: 2px solid transparent;
+    border-radius: var(--r-pill);
+    background: linear-gradient(var(--c-rose-soft), var(--c-rose)) padding-box;
+}
+.otome-panel__body::-webkit-scrollbar-thumb:hover,
+.otome-scroll::-webkit-scrollbar-thumb:hover,
+#history-list::-webkit-scrollbar-thumb:hover,
+#date-history-list::-webkit-scrollbar-thumb:hover,
+#bar-history-list::-webkit-scrollbar-thumb:hover,
+#roundtable-history-list::-webkit-scrollbar-thumb:hover,
+#achievement-list::-webkit-scrollbar-thumb:hover,
+#gift-collection-list::-webkit-scrollbar-thumb:hover,
+#model-list::-webkit-scrollbar-thumb:hover,
+#date-locations::-webkit-scrollbar-thumb:hover,
+#date-chat-area::-webkit-scrollbar-thumb:hover,
+#dialogue-text-area::-webkit-scrollbar-thumb:hover,
+.select-options::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(var(--c-rose), var(--c-rose-deep)) padding-box;
+}

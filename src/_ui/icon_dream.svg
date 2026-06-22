@@ -1,0 +1,6 @@
+<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Dream fabricator: crescent moon with sparkles. -->
+  <path d="M30 8 A16 16 0 1 0 40 30 A12 12 0 0 1 30 8 Z" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/>
+  <path d="M14 13 c0.4 2.6 1.4 3.6 4 4 c-2.6 0.4-3.6 1.4-4 4 c-0.4-2.6-1.4-3.6-4-4 c2.6-0.4 3.6-1.4 4-4 Z" fill="#e6c178"/>
+  <path d="M37 34 c0.3 1.8 1 2.5 2.8 2.8 c-1.8 0.3-2.5 1-2.8 2.8 c-0.3-1.8-1-2.5-2.8-2.8 c1.8-0.3 2.5-1 2.8-2.8 Z" fill="#e58aa6"/>
+</svg>

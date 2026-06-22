@@ -1,0 +1,92 @@
+/* =============================================================
+   芙提雅 ONLINE NEXT — UI 设计令牌 (Design Tokens)
+   暖色少女 Otome 风格。所有颜色 / 间距 / 圆角 / 阴影 / 动效集中在此。
+   修改主题色只需改这里。详见 UI_STYLE.md。
+   注意：字体不在令牌内（全局禁止更改字体）。
+   ============================================================= */
+
+:root {
+    /* ===== 调色板 · 暖色 Otome ===== */
+    --c-cream:        #fdf6f1;   /* 浮层主奶油底 */
+    --c-cream-2:      #f8ece3;   /* 略深奶油，分层用 */
+    --c-blush:        #fbe9ec;   /* 胭脂粉 */
+    --c-blush-2:      #f6dbe1;
+    --c-rose:         #e58aa6;   /* 主玫瑰 */
+    --c-rose-soft:    #f4b8c8;
+    --c-rose-deep:    #c75c80;   /* 深玫瑰，描边/标题 */
+    --c-rose-ink:     #a64468;   /* 玫瑰文字 */
+    --c-gold:         #e6c178;   /* 香槟金 */
+    --c-gold-soft:    #f3d9a0;
+    --c-gold-deep:    #c89b4a;
+    --c-ink:          #5a3a44;   /* 亮面主文字（暖李子棕） */
+    --c-ink-soft:     #8a6b73;   /* 亮面次文字 */
+    --c-ink-faint:    #b59aa1;   /* 亮面三级文字/占位 */
+    --c-danger:       #d8607a;   /* 暖红，删除/危险 */
+    --c-danger-deep:  #b34360;
+    --c-success:      #5fae7e;   /* 暖绿，成功/确认 */
+    --c-info:         #c79bd6;   /* 柔紫，提示 */
+
+    /* ===== 亮面浮层表面（菜单类，深色 3D 场景之上的奶油磨砂） ===== */
+    --panel-bg:        linear-gradient(158deg, rgba(255,250,247,0.97), rgba(249,234,227,0.96));
+    --panel-bg-solid:  #fdf6f1;
+    --panel-card:      rgba(255,255,255,0.58);    /* 奶油上的卡片 */
+    --panel-card-2:    rgba(251,233,236,0.7);     /* 强调卡片（玫瑰调） */
+    --panel-line:      rgba(199,92,128,0.18);     /* 发丝分隔线 */
+    --panel-line-2:    rgba(199,92,128,0.32);
+    --field-bg:        rgba(255,255,255,0.72);
+    --field-border:    rgba(199,92,128,0.26);
+    --field-focus:     var(--c-rose);
+
+    /* ===== 场景层 HUD（3D 场景之上的半透暖玻璃，浅色文字） ===== */
+    --hud-bg:          rgba(58,32,42,0.60);
+    --hud-bg-strong:   rgba(48,26,35,0.84);
+    --hud-line:        rgba(244,184,200,0.30);
+    --hud-text:        rgba(255,247,249,0.96);
+    --hud-text-soft:   rgba(255,233,239,0.72);
+
+    /* ===== 强调渐变 ===== */
+    --grad-rose:   linear-gradient(135deg, #f4b8c8, #e58aa6 46%, #c75c80);
+    --grad-gold:   linear-gradient(135deg, #f3d9a0, #e6c178 50%, #c89b4a);
+    --grad-title:  linear-gradient(92deg, #c75c80, #d98a5a 60%, #c89b4a);
+    --grad-blush:  linear-gradient(160deg, rgba(251,233,236,0.9), rgba(255,250,247,0.5));
+
+    /* ===== 阴影（暖色） ===== */
+    --shadow-panel: 0 28px 80px rgba(120,50,70,0.30), 0 6px 20px rgba(120,50,70,0.16);
+    --shadow-card:  0 6px 18px rgba(150,80,100,0.13);
+    --shadow-soft:  0 2px 8px rgba(150,80,100,0.12);
+    --shadow-hud:   0 14px 40px rgba(40,16,26,0.34);
+    --glow-rose:    0 0 22px rgba(229,138,166,0.50);
+    --glow-gold:    0 0 18px rgba(230,193,120,0.52);
+
+    /* ===== 圆角（Otome = 大圆角） ===== */
+    --r-xs: 6px; --r-sm: 10px; --r-md: 14px; --r-lg: 20px; --r-xl: 28px; --r-pill: 999px;
+
+    /* ===== 间距 ===== */
+    --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
+    --sp-5: 22px; --sp-6: 28px; --sp-7: 36px;
+
+    /* ===== 模糊 ===== */
+    --blur-panel: 18px; --blur-overlay: 8px; --blur-hud: 10px;
+
+    /* ===== 字号阶梯（仅尺寸/字重/字距，字体不变） ===== */
+    --fs-kicker: 0.72rem;
+    --fs-sm:     0.8rem;
+    --fs-base:   0.92rem;
+    --fs-md:     1rem;
+    --fs-lg:     1.25rem;
+    --fs-xl:     1.6rem;
+    --fs-title:  2rem;
+    --ls-wide:   0.18em;
+    --ls-mid:    0.08em;
+
+    /* ===== 动效 ===== */
+    --ease-out:  cubic-bezier(.2,.8,.2,1);
+    --ease-soft: cubic-bezier(.34,1.15,.64,1);   /* 轻微回弹 */
+    --t-fast: 0.14s; --t-mid: 0.24s; --t-slow: 0.4s;
+
+    /* ===== 层级（沿用既有关系，成就/全景在最上） =====
+       hud 10 · touch 20 · dialogue/sleep 50 · top-bar 60 · model 65 ·
+       settings 70 · gift 74 · history/date 75 · dream 76 · achievements 83 ·
+       dream-object 120 · dream-toast 121 · bubble 122 · revision 123 ·
+       panorama 130 · fade 200 · achievement-toast 2147483647 */
+}

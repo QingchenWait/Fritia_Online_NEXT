@@ -2,9 +2,15 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>芙提雅 Online NEXT</title>
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="css/tokens.css?v=20260619-otome">
+    <link rel="stylesheet" href="css/base.css?v=20260621-loading-size">
+    <link rel="stylesheet" href="css/components.css?v=20260619-otome">
+    <link rel="stylesheet" href="css/effects.css?v=20260619-otome">
+    <link rel="stylesheet" href="css/panels.css?v=20260622-advanced-settings">
+    <link rel="stylesheet" href="css/responsive.css?v=20260622-advanced-settings">
     <script type="importmap">
     {
         "imports": {
@@ -23,26 +29,387 @@
                 <div class="loading-bar-fill" id="loading-progress"></div>
             </div>
             <p id="loading-text">初始化场景...</p>
+            <p id="loading-size-text">0.00 MB / 0.00 MB</p>
         </div>
         <p class="loading-credit">青尘工作室出品 | CyanDust_青尘</p>
     </div>
 
     <canvas id="game-canvas"></canvas>
 
-    <div id="fade-overlay"></div>
+    <div id="fade-overlay">
+        <div class="bar-loading-fx" aria-hidden="true">
+            <div class="bar-loading-fx__stars"></div>
+            <div class="bar-loading-fx__meteor meteor-a"></div>
+            <div class="bar-loading-fx__meteor meteor-b"></div>
+            <div class="bar-loading-fx__meteor meteor-c"></div>
+            <div class="bar-loading-fx__meteor meteor-d"></div>
+            <div class="bar-loading-fx__meteor meteor-e"></div>
+            <div class="bar-loading-fx__meteor meteor-f"></div>
+            <div class="bar-loading-fx__meteor meteor-g"></div>
+        </div>
+        <div id="bar-loading-panel" class="bar-loading-panel" role="status" aria-live="polite">
+            <div class="bar-loading-panel__label">暖调闲聚载入中</div>
+            <div class="bar-loading-panel__bar">
+                <div id="bar-loading-progress" class="bar-loading-panel__fill"></div>
+            </div>
+            <div id="bar-loading-text" class="bar-loading-panel__text">正在推开酒吧的门...</div>
+        </div>
+    </div>
 
     <div id="sleep-ui" class="hidden">
-        <button class="sleep-btn" id="btn-pet">按 <kbd>F</kbd> 摸头</button>
-        <button class="sleep-btn" id="btn-wake">按 <kbd>E</kbd> 起床</button>
+        <button class="sleep-btn" id="btn-pet" data-prompt-key="KeyF" translate="yes">按 <kbd translate="no">F</kbd> 摸头</button>
+        <button class="sleep-btn" id="btn-wake" data-prompt-key="KeyE" translate="yes">按 <kbd translate="no">E</kbd> 起床</button>
+    </div>
+
+    <div id="room-panorama-ui" class="hidden" aria-label="全景拍照模式">
+        <div class="room-panorama-top">
+            <div class="room-panorama-title">ROOM PANORAMA</div>
+            <div class="room-panorama-hint">滚轮或双指缩放</div>
+        </div>
+        <button class="room-panorama-side left" id="room-panorama-prev" aria-label="切换到左侧视角">‹</button>
+        <button class="room-panorama-side right" id="room-panorama-next" aria-label="切换到右侧视角">›</button>
+        <div class="room-panorama-bottom">
+            <button id="room-panorama-capture" class="btn btn--primary" aria-label="拍摄并下载全景截图">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M7.5 5.5 9 3.8h6l1.5 1.7H20a2 2 0 0 1 2 2v10.2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7.5a2 2 0 0 1 2-2h3.5Zm4.5 11a4.2 4.2 0 1 0 0-8.4 4.2 4.2 0 0 0 0 8.4Zm0-1.7a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z"/>
+                </svg>
+                <span>拍摄房间</span>
+            </button>
+            <button id="room-panorama-close" class="btn btn--ghost" data-prompt-key="KeyE" translate="yes" aria-label="按 E 退出全景拍照模式">按 <kbd translate="no">E</kbd> 退出</button>
+        </div>
     </div>
 
     <input type="file" id="painting-upload" accept="image/*" style="display:none">
 
-    <div id="model-selector" class="hidden">
-        <div class="model-selector-inner">
-            <h3>芙提雅换装</h3>
-            <div id="model-list"></div>
-            <button id="model-close">关闭</button>
+    <div id="model-selector" class="ui-overlay hidden">
+        <div class="otome-panel otome-panel--sm">
+            <div class="otome-panel__head">
+                <div class="otome-panel__icon"><img src="src/_ui/icon_wardrobe.svg" alt=""></div>
+                <div class="otome-panel__titles">
+                    <span class="otome-panel__kicker">WARDROBE</span>
+                    <h2 class="otome-panel__title">芙提雅换装</h2>
+                </div>
+                <button id="model-close" class="otome-panel__close" aria-label="关闭换装">
+                    <img src="src/_ui/icon_close.svg" alt="">
+                </button>
+            </div>
+            <div class="otome-panel__body">
+                <div id="model-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="dance-panel" class="ui-overlay hidden">
+        <div class="otome-panel otome-panel--lg dance-panel-shell">
+            <div class="otome-panel__head dance-panel-head">
+                <div class="otome-panel__icon"><img src="src/_ui/icon_dance.svg" alt=""></div>
+                <div class="otome-panel__titles">
+                    <span class="otome-panel__kicker">WARM GATHERING LIVE</span>
+                    <h2 class="otome-panel__title">舞曲选择</h2>
+                    <p class="otome-panel__sub">从本地本地 VMD 动作和伴奏音频，让芙提雅老师盛装起舞吧 ~</p>
+                </div>
+                <button id="dance-close" class="otome-panel__close" aria-label="关闭舞曲选择">
+                    <img src="src/_ui/icon_close.svg" alt="">
+                </button>
+            </div>
+            <div class="otome-panel__body dance-panel-body">
+                <input type="file" id="dance-vmd-file" accept=".vmd" hidden>
+                <input type="file" id="dance-audio-file" accept="audio/*" hidden>
+                <section id="dance-preset-stage" class="dance-stage-card" role="button" tabindex="0" aria-label="加载 Love Lee 预设舞曲">
+                    <div class="dance-stage-card__label">STAGE POSITION</div>
+                    <div class="dance-stage-card__title">X 0.0 · Z 35.6</div>
+                    <div class="dance-stage-card__sub">点击以加载 [预设舞曲]。VMD 动作序列优先。</div>
+                </section>
+                <div class="dance-loadout-grid">
+                    <button id="dance-vmd-pick" class="dance-file-card" type="button">
+                        <span class="dance-file-card__kicker">MOTION</span>
+                        <span class="dance-file-card__title">导入 VMD 动作</span>
+                        <span id="dance-vmd-name" class="dance-file-card__meta">未选择 VMD</span>
+                    </button>
+                    <button id="dance-audio-pick" class="dance-file-card" type="button">
+                        <span class="dance-file-card__kicker">AUDIO</span>
+                        <span class="dance-file-card__title">选择伴奏音频</span>
+                        <span id="dance-audio-name" class="dance-file-card__meta">可选音频</span>
+                    </button>
+                </div>
+                <section class="dance-model-section" aria-label="选择芙提雅模型">
+                    <div class="otome-section-label">舞台模型</div>
+                    <div id="dance-model-list" class="dance-model-list"></div>
+                </section>
+                <div id="dance-status" class="dance-status" data-tone="info" aria-live="polite">导入 VMD 动作后即可开场。</div>
+            </div>
+            <div class="otome-panel__foot dance-panel-foot">
+                <button id="dance-start-btn" class="btn btn--primary" type="button" disabled>
+                    <span>开始跳舞</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="bar-guest-panel" class="ui-overlay hidden">
+        <div class="otome-panel otome-panel--xl bar-guest-shell">
+            <div class="otome-panel__head bar-guest-head">
+                <div class="otome-panel__icon"><img src="src/_ui/icon_history.svg" alt=""></div>
+                <div class="otome-panel__titles">
+                    <span class="otome-panel__kicker">WARM GATHERING INVITE</span>
+                    <h2 class="otome-panel__title">发起邀请</h2>
+                    <p class="otome-panel__sub">选择内置角色，或导入 PMX 与人格设定文档，邀请恋人们来小聚吧 ~</p>
+                </div>
+                <button id="bar-guest-close" class="otome-panel__close" aria-label="关闭邀请">
+                    <img src="src/_ui/icon_close.svg" alt="">
+                </button>
+            </div>
+            <div class="otome-panel__body bar-guest-body">
+                <section class="bar-guest-roster" aria-label="候选角色">
+                    <div class="otome-section-label">候选角色</div>
+                    <div id="bar-guest-card-list" class="bar-guest-card-list"></div>
+                </section>
+                <section class="bar-guest-forge" aria-label="自定义角色">
+                    <div class="bar-guest-preview-wrap">
+                        <div id="bar-guest-preview" class="bar-guest-preview"><span>PMX</span></div>
+                        <div>
+                            <div class="otome-section-label">新角色配置</div>
+                            <p class="bar-guest-copy">上传 PMX 模型、贴图与人格设定，即可邀请入场。点击 [保存自定义角色] 可长期留场。</p>
+                        </div>
+                    </div>
+                    <input type="file" id="bar-guest-pmx-file" accept=".pmx,image/*,.spa,.sph,.toon,.bmp" multiple hidden>
+                    <input type="file" id="bar-guest-prompt-file" accept=".txt,.md,text/plain" hidden>
+                    <label class="otome-field-label" for="bar-guest-name">角色名称</label>
+                    <input id="bar-guest-name" type="text" maxlength="24" placeholder="输入角色名称">
+                    <div class="bar-guest-file-grid">
+                        <button id="bar-guest-pmx-pick" class="bar-guest-file-card" type="button">
+                            <span class="dance-file-card__kicker">PMX MODEL</span>
+                            <span class="dance-file-card__title">导入 PMX 与贴图</span>
+                            <span id="bar-guest-pmx-name" class="dance-file-card__meta">未选择 PMX</span>
+                        </button>
+                        <button id="bar-guest-prompt-pick" class="bar-guest-file-card" type="button">
+                            <span class="dance-file-card__kicker">PERSONA FILE</span>
+                            <span class="dance-file-card__title">导入人格设定文档</span>
+                            <span id="bar-guest-prompt-name" class="dance-file-card__meta">未选择人格文档</span>
+                        </button>
+                    </div>
+                    <div id="bar-guest-status" class="dance-status" data-tone="info" aria-live="polite">选择候选角色后可以直接邀请。</div>
+                </section>
+            </div>
+            <div class="otome-panel__foot bar-guest-foot">
+                <button id="bar-guest-save" class="btn btn--ghost" type="button">保存自定义角色</button>
+                <button id="bar-guest-invite" class="btn btn--primary" type="button">邀请入场</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="bartending-challenge-panel" class="ui-overlay hidden">
+        <div class="otome-panel otome-panel--xl bartending-shell">
+            <div class="otome-panel__head bartending-head">
+                <div class="otome-panel__icon"><img src="src/_ui/icon_gift.svg" alt=""></div>
+                <div class="otome-panel__titles">
+                    <span class="otome-panel__kicker">CHERNO MIXOLOGY</span>
+                    <h2 class="otome-panel__title">调酒挑战</h2>
+                    <p class="otome-panel__sub">海姆达尔的调酒师小琴诺，竭诚为分析员儿服务。</p>
+                </div>
+                <div class="otome-panel__actions">
+                    <span class="otome-chip otome-chip--rose">目标：喝下 8 杯特调并存活</span>
+                    <button id="bartending-close" class="otome-panel__close" aria-label="关闭调酒挑战">
+                        <img src="src/_ui/icon_close.svg" alt="">
+                    </button>
+                </div>
+            </div>
+            <div class="otome-panel__body otome-panel__body--flush bartending-body">
+                <div class="bartending-status-deck">
+                    <div class="bartending-hp-console">
+                        <div class="bartending-hp-meta">
+                            <span>HP <strong id="bartending-hp-value">100</strong></span>
+                            <em id="bartending-hp-state" data-level="high">稳定</em>
+                        </div>
+                        <div class="bartending-hp-track">
+                            <div id="bartending-hp-bar" data-level="high"></div>
+                        </div>
+                    </div>
+                    <div class="bartending-round-console">
+                        <span>ROUND</span>
+                        <strong id="bartending-round-value">1/8</strong>
+                        <small>已饮用 <b id="bartending-drink-count">0/8</b></small>
+                    </div>
+                </div>
+                <div class="bartending-grid">
+                    <section class="bartending-mixer-panel" aria-label="调酒材料选择">
+                        <div class="bartending-lane">
+                            <div class="otome-section-label">基酒</div>
+                            <div id="bartending-base-list" class="bartending-ingredient-list"></div>
+                            <input id="bartending-base-custom" type="text" maxlength="24" placeholder="自定义基酒">
+                        </div>
+                        <div class="bartending-lane">
+                            <div class="otome-section-label">调味</div>
+                            <div id="bartending-flavor-list" class="bartending-ingredient-list"></div>
+                            <input id="bartending-flavor-custom" type="text" maxlength="24" placeholder="自定义调味">
+                        </div>
+                        <div class="bartending-lane">
+                            <div class="otome-section-label">装饰</div>
+                            <div id="bartending-garnish-list" class="bartending-ingredient-list"></div>
+                            <input id="bartending-garnish-custom" type="text" maxlength="24" placeholder="自定义装饰">
+                        </div>
+                        <div class="bartending-note-field">
+                            <label class="otome-field-label" for="bartending-note">本杯要求</label>
+                            <textarea id="bartending-note" maxlength="180" placeholder="例如：看起来像无害甜酒，但最好让琴诺自由发挥。"></textarea>
+                        </div>
+                    </section>
+                    <aside class="bartending-result-panel" aria-live="polite">
+                        <div class="bartending-slot-board">
+                            <div class="bartending-slot slot-base">
+                                <span>基酒</span>
+                                <strong id="bartending-slot-base">琴酒</strong>
+                            </div>
+                            <div class="bartending-slot slot-flavor">
+                                <span>调味</span>
+                                <strong id="bartending-slot-flavor">青柠汁</strong>
+                            </div>
+                            <div class="bartending-slot slot-garnish">
+                                <span>装饰</span>
+                                <strong id="bartending-slot-garnish">柠檬片</strong>
+                            </div>
+                            <div class="bartending-shaker" aria-hidden="true">
+                                <span></span>
+                            </div>
+                        </div>
+                        <div id="bartending-loading" class="bartending-loading hidden">
+                            <span></span>
+                            <p>琴诺正在摇杯...</p>
+                        </div>
+                        <div id="bartending-preview-panel" class="bartending-preview-panel hidden">
+                            <div class="otome-section-label">杯前观察</div>
+                            <p id="bartending-preview-text">琴诺正在摇杯，暂时看不清结果。</p>
+                            <small id="bartending-preview-hint">只显示外观和气味，真正效果要喝下才知道。</small>
+                            <div class="bartending-choice-row">
+                                <button id="bartending-drink-btn" class="btn btn--primary" type="button">闭眼喝下</button>
+                                <button id="bartending-skip-btn" class="btn btn--ghost" type="button">这杯先放过我</button>
+                            </div>
+                        </div>
+                        <div id="bartending-reveal-panel" class="bartending-reveal-panel hidden">
+                            <div class="bartending-reveal-head">
+                                <div>
+                                    <span id="bartending-result-kind" data-kind="dark">黑暗料理</span>
+                                    <h3 id="bartending-result-name">悖谬星雾杯</h3>
+                                </div>
+                                <strong id="bartending-result-delta" data-kind="damage">-18 HP</strong>
+                            </div>
+                            <p id="bartending-result-process"></p>
+                            <div id="bartending-result-tags" class="bartending-tags"></div>
+                            <button id="bartending-next-btn" class="btn btn--gold" type="button">下一杯</button>
+                        </div>
+                        <div id="bartending-end-panel" class="bartending-end-panel hidden" data-result="win">
+                            <span class="bartending-end-mark"></span>
+                            <h3 id="bartending-end-title">挑战成功</h3>
+                            <p id="bartending-end-text">分析员精神倍增，把所有天启者都带进了自己的房间。</p>
+                            <button id="bartending-restart-btn" class="btn btn--primary" type="button">重新挑战</button>
+                        </div>
+                    </aside>
+                </div>
+            </div>
+            <div class="otome-panel__foot bartending-foot">
+                <div id="bartending-status" data-kind="info">选择三种材料后开始特调。</div>
+                <button id="bartending-start-btn" class="btn btn--primary" type="button">开始特调</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="roundtable-whispers-panel" class="ui-overlay hidden">
+        <div class="otome-panel otome-panel--xl roundtable-shell">
+            <div class="otome-panel__head roundtable-head">
+                <div class="otome-panel__icon"><img src="src/_ui/icon_history.svg" alt=""></div>
+                <div class="otome-panel__titles">
+                    <span class="otome-panel__kicker">ROUND TABLE WHISPERS</span>
+                    <h2 class="otome-panel__title">圆桌密语</h2>
+                    <p class="otome-panel__sub">在暖调闲聚组建一场只围绕分析员展开的恋人群聊。</p>
+                </div>
+                <div class="otome-panel__actions">
+                    <span id="roundtable-debt" class="otome-chip">互聊 0/3</span>
+                    <span id="roundtable-queue" class="otome-chip otome-chip--rose">队列 0</span>
+                    <button id="roundtable-whispers-close" class="otome-panel__close" aria-label="关闭圆桌密语">
+                        <img src="src/_ui/icon_close.svg" alt="">
+                    </button>
+                </div>
+            </div>
+
+            <div class="otome-panel__body otome-panel__body--flush roundtable-body">
+                <section id="roundtable-step-setup" class="roundtable-step roundtable-setup">
+                    <div class="roundtable-setup-grid">
+                        <div class="roundtable-invite-board">
+                            <div class="roundtable-panel-label">
+                                <span>邀请席位</span>
+                                <strong id="roundtable-selected-count">0/0</strong>
+                            </div>
+                            <div id="roundtable-participant-list" class="roundtable-participant-list"></div>
+                        </div>
+                        <aside class="roundtable-rule-board">
+                            <div class="otome-section-label">圆桌规则</div>
+                            <div class="roundtable-rule-copy">
+                                <p>成员会根据 @、名字提及和当前话题排队接话；连续互聊到上限后会把话题交回分析员。</p>
+                            </div>
+                            <label class="roundtable-toggle">
+                                <input id="roundtable-auto-talk" type="checkbox" checked>
+                                <span class="roundtable-switch" aria-hidden="true"></span>
+                                <span>允许角色自动接话</span>
+                            </label>
+                            <label class="roundtable-toggle">
+                                <input id="roundtable-idle-talk" type="checkbox">
+                                <span class="roundtable-switch" aria-hidden="true"></span>
+                                <span>允许空闲时主动搭话</span>
+                            </label>
+                            <label class="roundtable-toggle">
+                                <input id="roundtable-bot-at-talk" type="checkbox">
+                                <span class="roundtable-switch" aria-hidden="true"></span>
+                                <span>bot 开头 @ 也触发回复</span>
+                            </label>
+                            <label class="roundtable-slider">
+                                <span>玩家未回话时最多互聊</span>
+                                <strong id="roundtable-chain-limit-value">3 次</strong>
+                                <input id="roundtable-chain-limit" type="range" min="1" max="6" step="1" value="3">
+                            </label>
+                            <div id="roundtable-status" class="roundtable-status" data-kind="info">选择席位后进入圆桌。</div>
+                        </aside>
+                    </div>
+                </section>
+
+                <section id="roundtable-step-chat" class="roundtable-step roundtable-chat hidden">
+                    <div class="roundtable-chat-layout">
+                        <aside class="roundtable-roster">
+                            <div class="roundtable-panel-label">
+                                <span>当前圆桌</span>
+                                <strong>LIVE</strong>
+                            </div>
+                            <div id="roundtable-participant-strip" class="roundtable-participant-strip"></div>
+                            <div class="roundtable-roster-actions" aria-label="当前圆桌成员操作">
+                                <div id="roundtable-member-picker" class="roundtable-mini-picker roundtable-mini-picker--members hidden" aria-label="邀请成员"></div>
+                                <button id="roundtable-add-member" class="roundtable-icon-btn" type="button" title="添加成员" aria-label="添加成员">+</button>
+                                <button id="roundtable-remove-member" class="roundtable-icon-btn" type="button" title="删除成员" aria-label="删除成员">-</button>
+                                <button id="roundtable-back" class="roundtable-icon-btn" type="button" title="重新组局" aria-label="重新组局">↩</button>
+                            </div>
+                        </aside>
+                        <main class="roundtable-chat-main">
+                            <div id="roundtable-message-list" class="roundtable-message-list" aria-live="polite"></div>
+                            <div class="roundtable-input-console">
+                                <div id="roundtable-mention-picker" class="roundtable-mini-picker roundtable-mini-picker--mentions hidden" aria-label="选择要 @ 的成员"></div>
+                                <textarea id="roundtable-input" maxlength="240" placeholder="对圆桌说点什么，或 @某个角色..."></textarea>
+                                <button id="roundtable-send" class="btn btn--primary" type="button">发送</button>
+                            </div>
+                        </main>
+                    </div>
+                </section>
+            </div>
+
+            <div class="otome-panel__foot roundtable-foot">
+                <div id="roundtable-chat-status" class="roundtable-status" data-kind="info">圆桌待命。</div>
+                <div class="roundtable-foot-timebar">
+                    <span id="roundtable-bug-warning" class="roundtable-bug-warning hidden" role="button" tabindex="0" aria-label="查看圆桌密语错误">⚠️</span>
+                    <div id="roundtable-game-time" class="roundtable-game-time" aria-label="当前游戏时间">🕗 --:-- 📶🔋</div>
+                </div>
+                <div id="roundtable-bug-popover" class="roundtable-bug-popover hidden" role="dialog" aria-live="polite">
+                    <strong id="roundtable-bug-title">圆桌密语异常</strong>
+                    <pre id="roundtable-bug-detail"></pre>
+                </div>
+                <button id="roundtable-continue" class="btn btn--ghost" type="button">继续对话</button>
+                <button id="roundtable-start" class="btn btn--primary" type="button">组建群聊</button>
+            </div>
         </div>
     </div>
 
@@ -64,15 +431,70 @@
             <div id="money-display">数据金 | 🪙 40,000</div>
             <div id="salary-toast" class="hidden"></div>
         </div>
-        <div id="interaction-prompt" class="hidden" role="button" tabindex="0">
-            按 <kbd>F</kbd> 与芙提雅对话
+        <div id="interaction-prompt" class="kbd-prompt hidden" data-prompt-key="KeyF" translate="yes" role="button" tabindex="0">
+            按 <kbd translate="no">F</kbd> 与芙提雅对话
         </div>
-        <div id="painting-prompt" class="hidden" role="button" tabindex="0">
-            按 <kbd>E</kbd> 更换挂画
+        <div id="painting-prompt" class="kbd-prompt hidden" data-prompt-key="KeyE" translate="yes" role="button" tabindex="0">
+            按 <kbd translate="no">E</kbd> 更换挂画
+        </div>
+        <div id="dream-painting-prompt" class="kbd-prompt hidden" data-prompt-key="Digit1" translate="yes" role="button" tabindex="0">
+            按 <kbd translate="no">1</kbd> 替换图片
         </div>
         <div id="achievement-toast-host"></div>
+        <div id="dream-object-controls" class="hidden">
+            <button class="dream-object-btn move-up" id="dream-object-move-forward" title="向前移动">
+                <img src="src/_logos/dream_arrow_up.svg" alt="">
+            </button>
+            <button class="dream-object-btn move-left" id="dream-object-move-left" title="向左移动">
+                <img src="src/_logos/dream_arrow_left.svg" alt="">
+            </button>
+            <button class="dream-object-btn move-right" id="dream-object-move-right" title="向右移动">
+                <img src="src/_logos/dream_arrow_right.svg" alt="">
+            </button>
+            <button class="dream-object-btn move-down" id="dream-object-move-back" title="向后移动">
+                <img src="src/_logos/dream_arrow_down.svg" alt="">
+            </button>
+            <button class="dream-object-btn rotate-left" id="dream-object-rotate-left" title="左转 15 度">
+                <img src="src/_logos/dream_rotate_left.svg" alt="">
+            </button>
+            <button class="dream-object-btn reset" id="dream-object-reset" title="重置位置">
+                <img src="src/_logos/dream_reset.svg" alt="">
+            </button>
+            <button class="dream-object-btn rotate-right" id="dream-object-rotate-right" title="右转 15 度">
+                <img src="src/_logos/dream_rotate_right.svg" alt="">
+            </button>
+            <button class="dream-object-btn delete" id="dream-object-delete" title="删除家具">
+                <img src="src/_logos/dream_trash.svg" alt="">
+            </button>
+            <button class="dream-object-btn placement" id="dream-object-placement" title="重新自动摆放">
+                <img src="src/_logos/dream_gpt.svg" alt="">
+            </button>
+            <button class="dream-object-btn edit" id="dream-object-edit" title="编辑家具">
+                <img src="src/_logos/dream_edit.svg" alt="">
+            </button>
+            <button class="dream-object-btn confirm" id="dream-object-close" title="确认并退出家具管理">
+                <img src="src/_logos/dream_confirm.svg" alt="">
+            </button>
+        </div>
+        <div id="dream-revision-confirm-bar" class="hidden" aria-live="polite">
+            <button id="dream-revision-confirm" class="dream-revision-action confirm" data-prompt-key="Digit1" translate="yes">
+                <kbd translate="no">1</kbd><span>确认</span>
+            </button>
+            <button id="dream-revision-rollback" class="dream-revision-action rollback" data-prompt-key="Digit2" translate="yes">
+                <kbd translate="no">2</kbd><span>回退</span>
+            </button>
+        </div>
+        <div id="dance-curtain-bar" class="hidden" aria-live="polite">
+            <button id="dance-replay" class="dream-revision-action confirm" data-prompt-key="Digit1" translate="yes">
+                <kbd translate="no">1</kbd><span>再来一次</span>
+            </button>
+            <button id="dance-curtain" class="dream-revision-action curtain" data-prompt-key="Digit2" translate="yes">
+                <kbd translate="no">2</kbd><span>喝彩谢幕</span>
+            </button>
+        </div>
+        <div id="dream-screen-toast" class="hidden" aria-live="polite"></div>
         <div id="click-to-play" class="hidden">
-            点击屏幕进入操作模式
+            <span class="click-to-play-inner">点击屏幕进入操作模式</span>
         </div>
     </div>
 
@@ -86,7 +508,7 @@
             </div>
             <div id="dialogue-input-area">
                 <input type="text" id="dialogue-input" placeholder="说点什么..." autocomplete="off">
-                <button id="dialogue-send">
+                <button id="dialogue-send" class="btn btn--primary">
                     <span>发送</span>
                 </button>
             </div>
@@ -102,10 +524,10 @@
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>
         </button>
         <button id="btn-export" title="导出数据">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <img src="src/_logos/icon_save_floppy.svg" alt="">
         </button>
         <button id="btn-import" title="导入数据">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         </button>
         <div id="settings-toggle" title="设置">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -114,154 +536,600 @@
             </svg>
         </div>
     </div>
-    <input type="file" id="import-file" accept=".json" style="display:none">
+    <input type="file" id="import-file" accept=".zip,.json,application/zip,application/json" style="display:none">
 
-    <div id="achievements-panel" class="hidden">
-        <div class="achievements-shell">
-            <div class="achievements-hero">
-                <div class="achievements-mark">
-                    <img src="src/_logos/achievement_trophy.svg" alt="">
-                </div>
-                <div>
-                    <div class="achievements-kicker">Fritia Online NEXT</div>
-                    <h2>成就列表</h2>
-                    <p>记录你和芙提雅共同完成的关键时刻。</p>
+    <div id="achievements-panel" class="ui-overlay hidden">
+        <div class="otome-panel otome-panel--xl achievements-shell">
+            <div class="otome-panel__head achievements-hero">
+                <div class="otome-panel__icon"><img src="src/_ui/icon_achievement.svg" alt=""></div>
+                <div class="otome-panel__titles">
+                    <span class="otome-panel__kicker">ACHIEVEMENTS</span>
+                    <h2 class="otome-panel__title">成就列表</h2>
+                    <p class="otome-panel__sub">记录你和芙提雅共同完成的关键时刻。</p>
                 </div>
                 <div class="achievements-summary">
-                    <span id="achievement-summary">0/15</span>
+                    <span id="achievement-summary">0/17</span>
                     <small>已解锁</small>
                 </div>
-                <button id="achievements-close" aria-label="关闭成就列表">×</button>
+                <button id="achievements-close" class="otome-panel__close" aria-label="关闭成就列表">
+                    <img src="src/_ui/icon_close.svg" alt="">
+                </button>
             </div>
-            <div id="achievement-list"></div>
-        </div>
-    </div>
-
-    <div id="settings-panel" class="hidden">
-        <div class="settings-inner">
-            <h3>对话模型设置 (OpenAI 格式)</h3>
-            <p class="settings-note">数据仅本地存储，不会上传云端</p>
-            <div class="setting-item">
-                <label for="api-key">API Key</label>
-                <input type="password" id="api-key" placeholder="sk-...">
-            </div>
-            <div class="setting-item">
-                <label for="base-url">Base URL</label>
-                <input type="text" id="base-url" placeholder="https://api.openai.com/v1">
-            </div>
-            <div class="setting-item">
-                <label for="model-name">模型名称</label>
-                <input type="text" id="model-name" placeholder="gpt-4o-mini">
-            </div>
-            <div class="settings-actions">
-                <button id="settings-save">保存</button>
-                <button id="settings-close">关闭</button>
+            <div class="otome-panel__body">
+                <div id="achievement-list"></div>
             </div>
         </div>
     </div>
 
-    <div id="history-panel" class="hidden">
-        <div class="history-inner">
-            <div class="history-header">
-                <h3>历史对话</h3>
+    <div id="settings-panel" class="ui-overlay hidden" data-active-section="model">
+        <div class="otome-panel otome-panel--xl settings-shell">
+            <div class="otome-panel__head settings-head">
+                <div class="otome-panel__icon"><img src="src/_ui/icon_settings.svg" alt=""></div>
+                <div class="otome-panel__titles">
+                    <span class="otome-panel__kicker">SYSTEM CONSOLE</span>
+                    <h2 class="otome-panel__title">系统设置</h2>
+                    <p id="settings-subtitle" class="otome-panel__sub">配置对话模型连接，所有密钥只保存在当前浏览器。</p>
+                </div>
+                <button id="settings-close" class="otome-panel__close" aria-label="关闭设置">
+                    <img src="src/_ui/icon_close.svg" alt="">
+                </button>
+            </div>
+            <div class="otome-panel__body otome-panel__body--flush settings-body">
+                <aside class="settings-nav" aria-label="设置分组">
+                    <button class="settings-nav-item active" type="button" data-settings-section="model">
+                        <span class="settings-nav-item__icon">LLM</span>
+                        <span>大模型设置</span>
+                    </button>
+                    <button class="settings-nav-item" type="button" data-settings-section="controls">
+                        <span class="settings-nav-item__icon">CTRL</span>
+                        <span>操作设置</span>
+                    </button>
+                    <button class="settings-nav-item" type="button" data-settings-section="knowledge">
+                        <span class="settings-nav-item__icon">RAG</span>
+                        <span>知识库</span>
+                    </button>
+                    <button class="settings-nav-item" type="button" data-settings-section="advanced">
+                        <span class="settings-nav-item__icon">ADV</span>
+                        <span>高级设置</span>
+                    </button>
+                    <button class="settings-nav-item" type="button" data-settings-section="resources">
+                        <span class="settings-nav-item__icon">INFO</span>
+                        <span>更多资源</span>
+                    </button>
+                </aside>
+
+                <section class="settings-view active" data-settings-view="model" aria-label="大模型设置">
+                    <button class="settings-back-btn btn btn--ghost" type="button" data-settings-back>↩️ 返回设置分组</button>
+                    <div class="settings-view-head">
+                        <span class="otome-section-label">大模型连接</span>
+                        <p>游戏大部分玩法由大模型驱动，需自行获取 API 并在这里填写。使用 OpenAI chat/completions 兼容格式。</p>
+                    </div>
+                    <div class="settings-form-grid">
+                        <div class="otome-field">
+                            <label class="otome-field-label" for="api-key">API Key</label>
+                            <input type="password" id="api-key" placeholder="sk-...">
+                        </div>
+                        <div class="otome-field">
+                            <label class="otome-field-label" for="base-url">Base URL</label>
+                            <input type="text" id="base-url" placeholder="https://api.openai.com/v1">
+                        </div>
+                        <div class="otome-field">
+                            <label class="otome-field-label" for="model-name">模型名称</label>
+                            <input type="text" id="model-name" placeholder="gpt-4o-mini">
+                        </div>
+                    </div>
+                    <div class="settings-api-card">
+                        <div>
+                            <strong>主流模型 API 获取</strong>
+                            <span>点击按钮进入官网获取 API，并将 API Key、Base URL 与模型名称填入上方文本框。</span>
+                        </div>
+                        <div class="settings-api-links" aria-label="主流模型 API 获取">
+                            <a class="settings-api-link" href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener noreferrer">DeepSeek</a>
+                            <a class="settings-api-link" href="https://platform.xiaomimimo.com/console/api-keys" target="_blank" rel="noopener noreferrer">MiMO</a>
+                            <a class="settings-api-link" href="https://bailian.console.aliyun.com/?tab=model#/api-key" target="_blank" rel="noopener noreferrer">Qwen(千问)</a>
+                            <a class="settings-api-link" href="https://platform.kimi.com/console/api-keys" target="_blank" rel="noopener noreferrer">Kimi</a>
+                            <a class="settings-api-link" href="https://aistudio.google.com/api-keys" target="_blank" rel="noopener noreferrer">Gemini</a>
+                        </div>
+                    </div>
+                    <label id="deepseek-intimate-mode-card" class="settings-intimate-card hidden" for="deepseek-intimate-mode">
+                        <input id="deepseek-intimate-mode" type="checkbox">
+                        <span class="settings-intimate-switch" aria-hidden="true"></span>
+                        <span>
+                            <strong>亲密模式</strong>
+                            <small>当使用 DeepSeek 模型、Localization 为 1 时，在各种对话场景中追加专用用户提示。</small>
+                        </span>
+                    </label>
+                </section>
+
+                <section class="settings-view" data-settings-view="controls" aria-label="操作设置">
+                    <button class="settings-back-btn btn btn--ghost" type="button" data-settings-back>↩️ 返回设置分组</button>
+                    <div class="settings-view-head">
+                        <span class="otome-section-label">视角控制</span>
+                        <p>根据当前设备与习惯调节视角响应速度。数值越高，鼠标或触控滑动时镜头转动越快。</p>
+                    </div>
+                    <div class="settings-control-panel">
+                        <label class="settings-slider-row" for="mouse-sensitivity">
+                            <span>
+                                <strong>鼠标灵敏度</strong>
+                                <small>桌面端 Pointer Lock 与拖拽视角</small>
+                            </span>
+                            <em id="mouse-sensitivity-value">1.00x</em>
+                            <input id="mouse-sensitivity" type="range" min="0.35" max="2.5" step="0.05" value="1">
+                        </label>
+                        <label class="settings-slider-row" for="touch-sensitivity">
+                            <span>
+                                <strong>触控灵敏度</strong>
+                                <small>移动端滑动视角</small>
+                            </span>
+                            <em id="touch-sensitivity-value">1.00x</em>
+                            <input id="touch-sensitivity" type="range" min="0.35" max="2.5" step="0.05" value="1">
+                        </label>
+                        <label class="settings-slider-row settings-localization-card" for="localization-sensitivity">
+                            <span>
+                                <strong>本地化灵敏度</strong>
+                                <small>配置 Localization 的参数</small>
+                            </span>
+                            <em id="localization-sensitivity-value">0.50x</em>
+                            <input id="localization-sensitivity" type="range" min="0.5" max="2" step="0.05" value="0.5">
+                        </label>
+                    </div>
+                </section>
+
+                <section class="settings-view" data-settings-view="knowledge" aria-label="知识库">
+                    <button class="settings-back-btn btn btn--ghost" type="button" data-settings-back>↩️ 返回设置分组</button>
+                    <div class="knowledge-workbench">
+                        <aside class="kb-sidebar" aria-label="知识库列表">
+                            <div class="kb-create-row">
+                                <input id="kb-create-name" type="text" maxlength="40" placeholder="新建知识库名称">
+                                <button id="kb-create-btn" class="btn btn--primary" type="button">创建</button>
+                            </div>
+                            <div id="kb-list" class="kb-list"></div>
+                        </aside>
+                        <main class="kb-main" aria-label="知识库详情">
+                            <div id="kb-empty" class="kb-empty-state">
+                                <span>ARCHIVE EMPTY</span>
+                                <strong>创建知识库后上传 txt / md 文件</strong>
+                            </div>
+                            <div id="kb-detail" class="kb-detail hidden">
+                                <div class="kb-detail-head">
+                                    <div>
+                                        <span class="otome-section-label">资料库终端</span>
+                                        <h3 id="kb-current-title">知识库</h3>
+                                        <p id="kb-current-meta">0 文件 · 0 片段</p>
+                                    </div>
+                                    <div class="kb-actions">
+                                        <button id="kb-enable-toggle" class="btn btn--gold" type="button">启用此知识库</button>
+                                        <button id="kb-delete-btn" class="btn btn--danger" type="button">删除知识库</button>
+                                    </div>
+                                </div>
+                                <div id="kb-active-status" class="kb-status" data-kind="info">选择知识库后可启用检索。</div>
+                                <div class="kb-upload-console">
+                                    <input id="kb-file-input" type="file" accept=".txt,.md,text/plain,text/markdown" multiple hidden>
+                                    <button id="kb-upload-btn" class="kb-upload-card" type="button">
+                                        <span class="dance-file-card__kicker">LOCAL FILES</span>
+                                        <strong>上传 txt / md 文档</strong>
+                                        <small>默认 512 字分块 · 50 字重叠 · BM25 本地索引</small>
+                                    </button>
+                                    <div id="kb-upload-status" class="kb-status" data-kind="info" aria-live="polite">等待上传文档。</div>
+                                </div>
+                                <div class="kb-management-grid">
+                                    <section class="kb-files-panel">
+                                        <div class="kb-panel-label">
+                                            <span>文件列表</span>
+                                            <strong>FILES</strong>
+                                        </div>
+                                        <div id="kb-file-list" class="kb-file-list"></div>
+                                    </section>
+                                    <section class="kb-chunks-panel">
+                                        <div class="kb-panel-label">
+                                            <span id="kb-preview-title">分块预览</span>
+                                            <strong>CHUNKS</strong>
+                                        </div>
+                                        <div id="kb-chunk-list" class="kb-chunk-list"></div>
+                                    </section>
+                                </div>
+                            </div>
+                        </main>
+                    </div>
+                </section>
+
+                <section class="settings-view" data-settings-view="advanced" aria-label="高级设置">
+                    <button class="settings-back-btn btn btn--ghost" type="button" data-settings-back>↩️ 返回设置分组</button>
+                    <div class="advanced-settings-page">
+                        <div class="advanced-settings-toolbar">
+                            <p>⚠️ 修改本页的配置，可能导致游戏不稳定！</p>
+                            <button id="advanced-reset-defaults" class="btn btn--ghost" type="button">恢复本页默认设置</button>
+                        </div>
+
+                        <section class="advanced-settings-group">
+                            <h3>游戏进程</h3>
+                            <div class="advanced-setting-row">
+                                <div class="advanced-setting-copy">
+                                    <label for="advanced-time-speed">时间速度 <span class="advanced-setting-var">(GAME_MINUTES_PER_REAL_SECOND)</span></label>
+                                    <small class="advanced-risk-note">过快的速度会扰乱 bot 的游戏内时间感知</small>
+                                </div>
+                                <div class="advanced-setting-control">
+                                    <em id="advanced-time-speed-value">5 分钟/秒</em>
+                                    <input id="advanced-time-speed" data-advanced-setting="timeSpeed" type="range" min="1" max="60" step="1" value="5">
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="advanced-settings-group">
+                            <h3>造梦空间</h3>
+                            <div class="advanced-setting-row">
+                                <div class="advanced-setting-copy">
+                                    <label for="advanced-dream-max-components">构造家具的最大组件数量 <span class="advanced-setting-var">(MAX_COMPONENTS)</span></label>
+                                    <small class="advanced-risk-note">更大的值会让家具更拟真，但会降低家具生成速度</small>
+                                </div>
+                                <div class="advanced-setting-control">
+                                    <em id="advanced-dream-max-components-value">24</em>
+                                    <input id="advanced-dream-max-components" data-advanced-setting="dreamMaxComponents" type="number" min="4" max="80" step="1" value="24">
+                                </div>
+                            </div>
+                            <div class="advanced-setting-row">
+                                <div class="advanced-setting-copy">
+                                    <label for="advanced-dream-dialogue-cooldown">家具发言冷却时间 <span class="advanced-setting-var">(DIALOGUE_COOLDOWN_MS)</span></label>
+                                    <small class="advanced-risk-note">更大的值会让芙提雅在造梦空间进行更多发言，但增加 token 消耗</small>
+                                </div>
+                                <div class="advanced-setting-control">
+                                    <em id="advanced-dream-dialogue-cooldown-value">20 秒</em>
+                                    <input id="advanced-dream-dialogue-cooldown" data-advanced-setting="dreamDialogueCooldownMs" type="number" min="0" max="600000" step="1000" value="20000">
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="advanced-settings-group">
+                            <h3>圆桌密语</h3>
+                            <div class="advanced-setting-row">
+                                <div class="advanced-setting-copy">
+                                    <label for="advanced-roundtable-max-participants">群聊中的最大成员数量 <span class="advanced-setting-var">(MAX_SELECTED_PARTICIPANTS)</span></label>
+                                    <small class="advanced-risk-note">过大的值可能导致群聊系统不稳定</small>
+                                </div>
+                                <div class="advanced-setting-control">
+                                    <em id="advanced-roundtable-max-participants-value">6</em>
+                                    <input id="advanced-roundtable-max-participants" data-advanced-setting="roundtableMaxParticipants" type="number" min="1" max="12" step="1" value="6">
+                                </div>
+                            </div>
+                            <div class="advanced-setting-row">
+                                <div class="advanced-setting-copy">
+                                    <label for="advanced-roundtable-token-hard-limit">3 分钟内最大 token 消耗总量 <span class="advanced-setting-var">(TOKEN_HARD_LIMIT_10M)</span></label>
+                                    <small class="advanced-risk-note">更大的值会产生更高的用量</small>
+                                </div>
+                                <div class="advanced-setting-control">
+                                    <em id="advanced-roundtable-token-hard-limit-value">400000</em>
+                                    <input id="advanced-roundtable-token-hard-limit" data-advanced-setting="roundtableTokenHardLimit" type="number" min="10000" max="2000000" step="10000" value="400000">
+                                </div>
+                            </div>
+                            <div class="advanced-setting-row">
+                                <div class="advanced-setting-copy">
+                                    <label for="advanced-roundtable-total-call-limit">3 分钟内最大发言次数 <span class="advanced-setting-var">(TOTAL_CALL_LIMIT_10M)</span></label>
+                                    <small class="advanced-risk-note">更大的值会产生更高的用量，并可能导致 API 请求拥塞</small>
+                                </div>
+                                <div class="advanced-setting-control">
+                                    <em id="advanced-roundtable-total-call-limit-value">20</em>
+                                    <input id="advanced-roundtable-total-call-limit" data-advanced-setting="roundtableTotalCallLimit" type="number" min="1" max="100" step="1" value="20">
+                                </div>
+                            </div>
+                            <div class="advanced-setting-row">
+                                <div class="advanced-setting-copy">
+                                    <label for="advanced-roundtable-follow-up-rate">自动接话概率 <span class="advanced-setting-var">(FOLLOW_UP_RATE)</span></label>
+                                    <small class="advanced-risk-note">更大的值会产生更高的用量，并可能导致 API 请求拥塞</small>
+                                </div>
+                                <div class="advanced-setting-control">
+                                    <em id="advanced-roundtable-follow-up-rate-value">55%</em>
+                                    <input id="advanced-roundtable-follow-up-rate" data-advanced-setting="roundtableFollowUpRate" type="range" min="0" max="1" step="0.05" value="0.55">
+                                </div>
+                            </div>
+                            <div class="advanced-setting-row">
+                                <div class="advanced-setting-copy">
+                                    <label for="advanced-roundtable-max-stored-messages">群聊最大消息存储数量 <span class="advanced-setting-var">(MAX_STORED_MESSAGES)</span></label>
+                                    <small class="advanced-risk-note">更大的值会导致更多的存储空间占用</small>
+                                </div>
+                                <div class="advanced-setting-control">
+                                    <em id="advanced-roundtable-max-stored-messages-value">500</em>
+                                    <input id="advanced-roundtable-max-stored-messages" data-advanced-setting="roundtableMaxStoredMessages" type="number" min="50" max="3000" step="50" value="500">
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="advanced-settings-group">
+                            <h3>知识库</h3>
+                            <div class="advanced-setting-row">
+                                <div class="advanced-setting-copy">
+                                    <label for="advanced-kb-chunk-size">分块字符数 <span class="advanced-setting-var">(DEFAULT_CHUNK_SIZE)</span></label>
+                                </div>
+                                <div class="advanced-setting-control">
+                                    <em id="advanced-kb-chunk-size-value">512</em>
+                                    <input id="advanced-kb-chunk-size" data-advanced-setting="kbChunkSize" type="number" min="200" max="2000" step="1" value="512">
+                                </div>
+                            </div>
+                            <div class="advanced-setting-row">
+                                <div class="advanced-setting-copy">
+                                    <label for="advanced-kb-chunk-overlap">分块重叠字符数 <span class="advanced-setting-var">(DEFAULT_CHUNK_OVERLAP)</span></label>
+                                </div>
+                                <div class="advanced-setting-control">
+                                    <em id="advanced-kb-chunk-overlap-value">50</em>
+                                    <input id="advanced-kb-chunk-overlap" data-advanced-setting="kbChunkOverlap" type="number" min="0" max="500" step="1" value="50">
+                                </div>
+                            </div>
+                            <div class="advanced-setting-row">
+                                <div class="advanced-setting-copy">
+                                    <label for="advanced-kb-candidate-limit">稀疏检索数量 <span class="advanced-setting-var">(DEFAULT_CANDIDATE_LIMIT)</span></label>
+                                </div>
+                                <div class="advanced-setting-control">
+                                    <em id="advanced-kb-candidate-limit-value">50</em>
+                                    <input id="advanced-kb-candidate-limit" data-advanced-setting="kbCandidateLimit" type="number" min="1" max="200" step="1" value="50">
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                </section>
+
+                <section class="settings-view" data-settings-view="resources" aria-label="更多资源">
+                    <button class="settings-back-btn btn btn--ghost" type="button" data-settings-back>↩️ 返回设置分组</button>
+                    <div class="settings-resources-page">
+                        <div class="settings-resources-logo-wrap">
+                            <img class="settings-resources-logo" src="src/_logos/Profile_Fritia.png" alt="芙提雅">
+                        </div>
+                        <h3 class="settings-resources-title">芙提雅 ONLINE <span>NEXT</span></h3>
+                        <p class="settings-resources-subtitle">💖 对你的爱，跨越空间 💖</p>
+                        <div id="settings-about-text" class="settings-about-text" aria-live="polite">正在读取制作信息...</div>
+                        <div class="settings-resource-links" aria-label="更多资源链接">
+                            <a class="settings-resource-link" href="https://space.bilibili.com/385556208/lists/8275529?type=season" target="_blank" rel="noopener noreferrer">📹 宣传视频</a>
+                            <a class="settings-resource-link" href="https://github.com/QingchenWait/Fritia_Online_NEXT" target="_blank" rel="noopener noreferrer">🕶️ 源码仓库</a>
+                            <a class="settings-resource-link" href="https://qingchenwait.github.io/fritia_online_guide/#resources" target="_blank" rel="noopener noreferrer">🤖 AstrBot 版</a>
+                            <a class="settings-resource-link" href="https://ifdian.net/a/cyandust" target="_blank" rel="noopener noreferrer">☕️ 赞助创作</a>
+                        </div>
+                    </div>
+                </section>
+            </div>
+            <div class="otome-panel__foot settings-foot">
+                <span>青尘工作室 | BiliBili @CyanDust_青尘</span>
+                <div class="settings-foot-actions">
+                    <button id="settings-site-link" class="btn btn--ghost settings-site-link" type="button">访问官网</button>
+                    <button id="settings-save" class="btn btn--primary">保存设置</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="history-panel" class="ui-overlay hidden">
+        <div class="otome-panel otome-panel--md history-shell">
+            <div class="otome-panel__head">
+                <div class="otome-panel__icon"><img src="src/_ui/icon_history.svg" alt=""></div>
+                <div class="otome-panel__titles">
+                    <span class="otome-panel__kicker">MEMORY LOG</span>
+                    <h2 class="otome-panel__title">历史对话</h2>
+                </div>
+                <button id="history-close" class="otome-panel__close" aria-label="关闭历史">
+                    <img src="src/_ui/icon_close.svg" alt="">
+                </button>
+            </div>
+            <div class="history-toolbar">
                 <div class="history-tabs">
                     <button class="history-tab active" data-tab="daily">日常对话</button>
+                    <button class="history-tab" data-tab="bar">暖调闲聚</button>
                     <button class="history-tab" data-tab="date">约会行程</button>
+                    <button class="history-tab" data-tab="roundtable">圆桌密语</button>
                 </div>
                 <div class="custom-select" id="history-date-filter">
                     <div class="select-selected">全部日期</div>
                     <div class="select-options hidden"></div>
                 </div>
-                <button id="history-close">关闭</button>
             </div>
-            <div id="history-list"></div>
-            <div id="date-history-list" class="hidden"></div>
+            <div class="otome-panel__body otome-panel__body--flush history-body">
+                <div id="history-list"></div>
+                <div id="bar-history-list" class="hidden"></div>
+                <div id="date-history-list" class="hidden"></div>
+                <div id="roundtable-history-list" class="hidden"></div>
+            </div>
         </div>
     </div>
 
-    <div id="date-panel" class="hidden">
-        <div class="date-inner">
-            <div class="date-header">
-                <h3>今日约会行程</h3>
-                <button id="date-close">关闭</button>
+    <div id="date-panel" class="ui-overlay hidden">
+        <div class="otome-panel otome-panel--md date-shell">
+            <div class="otome-panel__head">
+                <div class="otome-panel__icon"><img src="src/_ui/icon_date.svg" alt=""></div>
+                <div class="otome-panel__titles">
+                    <span class="otome-panel__kicker">TODAY'S DATE</span>
+                    <h2 class="otome-panel__title">今日约会行程</h2>
+                </div>
+                <button id="date-close" class="otome-panel__close" aria-label="关闭约会">
+                    <img src="src/_ui/icon_close.svg" alt="">
+                </button>
             </div>
-            <div class="date-body">
+            <div class="otome-panel__body otome-panel__body--flush date-body">
                 <div id="date-locations"></div>
                 <div id="date-chat" class="hidden">
                     <div class="date-chat-header">
-                        <button id="date-back-btn">← 返回</button>
+                        <button id="date-back-btn" class="btn btn--ghost">← 返回</button>
                         <span id="date-chat-title"></span>
-                        <button id="date-new-topic-btn">换个话题</button>
+                        <button id="date-new-topic-btn" class="btn btn--ghost">换个话题</button>
                     </div>
                     <div id="date-chat-area"></div>
                     <div class="date-chat-input">
                         <input type="text" id="date-input" placeholder="说点什么..." autocomplete="off">
-                        <button id="date-send-btn">发送</button>
+                        <button id="date-send-btn" class="btn btn--primary">发送</button>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div id="gift-terminal-panel" class="hidden">
-        <div class="gift-terminal-inner">
-            <div class="gift-terminal-sidebar">
-                <div class="terminal-brand">
-                    <div class="terminal-logo">📥</div>
-                    <div>
-                        <h3>购物终端</h3>
-                        <span>泰古通达物流速递</span>
+    <div id="gift-terminal-panel" class="ui-overlay hidden">
+        <div class="otome-panel otome-panel--lg gift-shell">
+            <div class="otome-panel__head">
+                <div class="otome-panel__icon"><img src="src/_ui/icon_terminal.svg" alt=""></div>
+                <div class="otome-panel__titles">
+                    <span class="otome-panel__kicker">GIFT BOUTIQUE</span>
+                    <h2 class="otome-panel__title">购物终端</h2>
+                    <p class="otome-panel__sub">描述心意，为芙提雅定制专属礼物 · 世界树万能商品供应终端</p>
+                </div>
+                <div class="otome-panel__actions">
+                    <span id="gift-balance" class="otome-chip">余额：🪙 40,000</span>
+                    <button id="gift-terminal-close" class="otome-panel__close" aria-label="关闭购物终端">
+                        <img src="src/_ui/icon_close.svg" alt="">
+                    </button>
+                </div>
+            </div>
+            <div class="otome-panel__body">
+                <div class="otome-card gift-compose-card">
+                    <div class="otome-section-label">礼物描述</div>
+                    <textarea id="gift-description" maxlength="300" placeholder="例如：一只会发光的蓝色小熊挂件，里面藏着分析员写给芙提雅的短笺。"></textarea>
+                    <div class="gift-terminal-actions">
+                        <button id="gift-evaluate-btn" class="btn btn--primary">开始定制</button>
+                        <div id="gift-status"></div>
                     </div>
                 </div>
-                <button class="gift-terminal-tab active" id="gift-gift-category">
-                    <span class="terminal-tab-icon">🎁</span>
-                    <span>礼物</span>
+                <div id="gift-pending" class="gift-pending hidden">
+                    <div>
+                        <div class="otome-section-label">付款确认</div>
+                        <p>尊敬的分析员：您的礼物已定制完成。付款后将赠送给芙提雅女士。</p>
+                    </div>
+                    <button id="gift-pay-btn" class="btn btn--gold">支付</button>
+                </div>
+                <div id="gift-result" class="gift-result hidden"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="gift-collection-panel" class="ui-overlay hidden">
+        <div class="otome-panel otome-panel--md gift-collection-shell">
+            <div class="otome-panel__head">
+                <div class="otome-panel__icon"><img src="src/_ui/icon_gift.svg" alt=""></div>
+                <div class="otome-panel__titles">
+                    <span class="otome-panel__kicker">COLLECTION</span>
+                    <h2 class="otome-panel__title">礼物收藏柜</h2>
+                </div>
+                <button id="gift-collection-close" class="otome-panel__close" aria-label="关闭礼物收藏">
+                    <img src="src/_ui/icon_close.svg" alt="">
                 </button>
-                <div class="terminal-sidebar-note">世界树公司-万能商品供应终端</div>
             </div>
-            <div class="gift-terminal-main">
-                <div class="gift-terminal-header">
-                    <div>
-                        <h3>🛍️ 礼物定制与购买</h3>
-                        <span>自由生成送给恋人的礼物！我们会根据您的描述，进行礼物定制与估价。</span>
-                    </div>
-                    <div class="gift-terminal-header-actions">
-                        <span id="gift-balance">余额：🪙 40,000</span>
-                        <button id="gift-terminal-close">关闭</button>
-                    </div>
+            <div class="otome-panel__body">
+                <div id="gift-collection-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="dream-terminal-panel" class="ui-overlay hidden">
+        <div class="otome-panel otome-panel--lg dream-shell">
+            <div class="otome-panel__head">
+                <div class="otome-panel__icon"><img src="src/_ui/icon_dream.svg" alt=""></div>
+                <div class="otome-panel__titles">
+                    <span class="otome-panel__kicker">DREAM FABRICATOR</span>
+                    <h2 class="otome-panel__title">造梦 · 家具打造终端</h2>
+                    <p class="otome-panel__sub">以泰坦物质创造可移动、可交互的家具实体，打造你和小老师的温馨小窝 ~</p>
                 </div>
-                <div class="gift-terminal-body">
-                    <div class="gift-compose-card">
-                        <div class="gift-section-label">礼物描述</div>
-                        <textarea id="gift-description" maxlength="300" placeholder="例如：一只会发光的蓝色小熊挂件，里面藏着分析员写给芙提雅的短笺。"></textarea>
-                        <div class="gift-terminal-actions">
-                            <button id="gift-evaluate-btn">开始定制</button>
-                            <div id="gift-status"></div>
+                <div class="otome-panel__actions">
+                    <span id="dream-balance" class="otome-chip"><span>余额：500 数据金</span></span>
+                    <button id="dream-terminal-close" class="otome-panel__close" aria-label="关闭造梦终端">
+                        <img src="src/_ui/icon_close.svg" alt="">
+                    </button>
+                </div>
+            </div>
+            <div class="otome-panel__body">
+                <div class="dream-grid">
+                    <section class="otome-card dream-wish-console">
+                        <div class="otome-section-label">家具愿望</div>
+                        <textarea id="dream-furniture-description" maxlength="520" placeholder="例如：一张适合两个人靠坐的星光阅读沙发，带柔软靠背和淡紫色灯带。"></textarea>
+                        <div id="dream-template-strip" class="dream-template-strip" aria-label="家具愿望模板"></div>
+                        <div class="dream-hint-strip">
+                            <span><b>提示：</b>若 LLM 返回输出错误，请重试几次。<br>※ 家具形态为复杂几何体。构造家具所使用的泰坦物质，均经过彻底无害化处理。</span>
                         </div>
-                    </div>
-                    <div id="gift-pending" class="gift-pending hidden">
-                        <div>
-                            <div class="gift-section-label">付款确认</div>
-                            <p>尊敬的分析员：您的礼物已定制完成。付款后将赠送给芙提雅女士。</p>
+                    </section>
+                    <aside class="otome-card otome-card--rose dream-forge-console">
+                        <div class="otome-section-label">打造参数</div>
+                        <div class="dream-compose">
+                            <label class="otome-field-label" for="dream-placement-input">摆放位置</label>
+                            <input id="dream-placement-input" type="text" maxlength="120" placeholder="例如：靠窗的右侧，不要挡住门">
                         </div>
-                        <button id="gift-pay-btn">支付</button>
-                    </div>
-                    <div id="gift-result" class="gift-result hidden"></div>
+                        <div class="dream-forge-card">
+                            <div class="dream-forge-price">
+                                <span>制造消耗</span>
+                                <strong>500 数据金</strong>
+                            </div>
+                            <button id="dream-create-button" class="btn btn--primary">制造家具</button>
+                        </div>
+                        <div class="dream-progress-wrap">
+                            <div class="dream-progress-track">
+                                <div id="dream-progress-fill"></div>
+                            </div>
+                            <div id="dream-progress">等待输入家具愿望</div>
+                        </div>
+                        <div id="dream-status" aria-live="polite"></div>
+                    </aside>
                 </div>
             </div>
         </div>
     </div>
 
-    <div id="gift-collection-panel" class="hidden">
-        <div class="gift-collection-inner">
-            <div class="gift-collection-header">
-                <h3>🗄️ 礼物收藏柜</h3>
-                <button id="gift-collection-close">关闭</button>
+    <div id="dream-furniture-editor-panel" class="ui-overlay hidden">
+        <div class="otome-panel otome-panel--md dream-editor-shell">
+            <div class="otome-panel__head">
+                <div class="otome-panel__icon"><img src="src/_ui/icon_dream.svg" alt=""></div>
+                <div class="otome-panel__titles">
+                    <span class="otome-panel__kicker">FURNITURE EDITOR</span>
+                    <h2 class="otome-panel__title" id="dream-editor-title">梦造家具</h2>
+                </div>
+                <button id="dream-editor-close" class="otome-panel__close" aria-label="关闭家具编辑">
+                    <img src="src/_ui/icon_close.svg" alt="">
+                </button>
             </div>
-            <div id="gift-collection-list"></div>
+            <div class="otome-panel__body">
+                <div id="dream-editor-meta"></div>
+                <section class="otome-card name-card">
+                    <div class="otome-section-label">家具档案</div>
+                    <label class="otome-field-label" for="dream-editor-name">家具名称</label>
+                    <div class="dream-inline-control">
+                        <input id="dream-editor-name" type="text" maxlength="24">
+                        <button id="dream-editor-save-name" class="btn btn--ghost">保存</button>
+                    </div>
+                </section>
+                <section class="otome-card otome-card--rose style-card">
+                    <div class="otome-section-label">家具样式修改 <small class="dream-cost">🪙 100</small></div>
+                    <div class="dream-style-meta">
+                        <span id="dream-editor-style-balance">余额：--</span>
+                        <small>若 LLM 返回输出错误，请重试几次。</small>
+                    </div>
+                    <textarea id="dream-editor-style-instruction" maxlength="360" placeholder="例如：在桌子上放一台电脑；把床加宽一些；给椅子加一个柔软靠垫。"></textarea>
+                    <div class="dream-style-footer">
+                        <div class="dream-style-progress" id="dream-editor-style-progress" aria-hidden="true">
+                            <div id="dream-editor-style-progress-fill"></div>
+                        </div>
+                        <button id="dream-editor-style-apply" class="btn btn--gold"><span>样式变更</span></button>
+                    </div>
+                </section>
+                <div id="dream-editor-status" aria-live="polite"></div>
+            </div>
         </div>
     </div>
 
-    <script type="module" src="js/main.js?v=20260618-gift-stream"></script>
+    <div id="dream-placement-editor-panel" class="ui-overlay hidden">
+        <div class="otome-panel otome-panel--md dream-placement-shell">
+            <div class="otome-panel__head">
+                <div class="otome-panel__icon"><img src="src/_ui/icon_dream.svg" alt=""></div>
+                <div class="otome-panel__titles">
+                    <span class="otome-panel__kicker">POSITION REQUEST</span>
+                    <h2 class="otome-panel__title">家具位置调整</h2>
+                    <p class="otome-panel__sub">用自然语言描述新的摆放位置，系统会重新寻找安全位置。</p>
+                </div>
+                <button id="dream-placement-editor-close" class="otome-panel__close" aria-label="关闭位置调整">
+                    <img src="src/_ui/icon_close.svg" alt="">
+                </button>
+            </div>
+            <div class="otome-panel__body">
+                <section class="otome-card">
+                    <label class="otome-field-label" for="dream-editor-placement">新的摆放位置</label>
+                    <div class="dream-inline-control">
+                        <input id="dream-editor-placement" type="text" maxlength="120" placeholder="例如：靠窗右侧，不要挡住门">
+                        <button id="dream-editor-auto-place" class="btn btn--primary">自动摆放</button>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="js/main.js?v=20260621-history-active-refresh"></script>
 </body>
 </html>

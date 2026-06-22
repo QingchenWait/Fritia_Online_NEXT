@@ -1,0 +1,13 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Four-point sparkle used by the ignite effect on prompt buttons. -->
+  <defs>
+    <radialGradient id="sp-core" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#fffdf6"/>
+      <stop offset="0.4" stop-color="#ffe6b0"/>
+      <stop offset="1" stop-color="#e6c178" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <circle cx="32" cy="32" r="14" fill="url(#sp-core)"/>
+  <path d="M32 4 C34 22 42 30 60 32 C42 34 34 42 32 60 C30 42 22 34 4 32 C22 30 30 22 32 4 Z" fill="#fff4d6"/>
+  <path d="M32 14 C33 26 38 31 50 32 C38 33 33 38 32 50 C31 38 26 33 14 32 C26 31 31 26 32 14 Z" fill="#ffe6b0"/>
+</svg>

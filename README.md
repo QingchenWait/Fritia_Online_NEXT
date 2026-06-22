@@ -2,41 +2,50 @@
 
 # 芙提雅 Online NEXT
 
-*_✨ [**芙提雅 AI Bot**](https://qingchenwait.github.io/fritia_online_guide) 次世代进化版&emsp;/&emsp;3D 互动场景&emsp;约会系统&emsp;LLM 对话&emsp;网页直达 ✨_*
+*_✨ [**芙提雅 AI Bot**](https://qingchenwait.github.io/fritia_online_guide) 次世代进化版&emsp;/&emsp;AI 驱动的 3D 恋爱养成游戏 ✨_*
 
 [![Powered by Three.js](https://img.shields.io/badge/Powered_by-Three.js-blue.svg)](https://threejs.org/)
-![Coding by MiMO-V2.5-UltraSpeed](https://img.shields.io/badge/Coding_by-MiMO_V2.5_UltraSpeed-orange.svg)
+![Coding by GPT & MiMO](https://img.shields.io/badge/Coding_by-GPT_&_MiMO-orange.svg)
 [![GitHub](https://img.shields.io/badge/作者-青尘工作室-cyan)](https://space.bilibili.com/385556208/)
 
 *_💖 对你的爱，跨越空间 💖_*
 
-<img src="./src/sample_screenshot.png" width="70%">
+<img src="./src/sample_screenshot.png" width="80%">
 
 </div>
 
 ## 核心功能
 
-- **🎮 3D 小老师**：芙提雅 ONLINE，现以 3D 游戏方式推出！以第一人称，与芙提雅进行各种亲密互动吧 ~
-- **💕 LLM 驱动的恋爱活动**：游戏剧情由 LLM 驱动，不可预测的对话、约会、送礼等恋爱活动，新鲜感满满！
-- **💬 丰富的交互功能**：房间内的家具基本都可以交互，各种有趣小功能等您探索！
-- **🏆 成就系统**：多个有趣的成就内容，包含隐藏成就。
-- **💾 存档导入导出**：可以把聊天记录、礼物等数据导出备份，方便跨设备游戏。 <br /> ( **注意**：清理浏览器网站数据可能会**删除本地存档**！请务必经常[**备份存档**](#游戏存档备份导入和导出) )
+- **🎮 3D 小老师全面进化**：芙提雅 ONLINE NEXT，现已升级为第一人称 3D 互动世界！互动、对话、约会，与小老师度过难忘的恋爱时光吧 ~
+- **💕 LLM 驱动的恋爱日常**：聊天对话、约会赠礼、内置小游戏，事件和进程均由 LLM 即兴生成。每次回应，都是专属于你的剧情展开。
+- **🌙 造梦系统自由造物**：在造梦空间里，使用 LLM 自由生成家具、移动位置、修改样式，自定义你和小老师的爱巢！
+- **🍸 暖调闲聚全新地图**：尘白宿舍场景复刻，更多天启者入场互动，一起聊出千变万化的恋爱喜剧。
+- **🏆 成就与存档**：人格数据与知识库全面载入游戏，支持导入更多的人物、知识和数据，可一键导入导出备份，随时跨设备游玩。
 
 ## 游玩方法
 
-### 方法一：GitHub Pages 在线游玩
+### 方法一：网页版在线游玩
 
 打开下面的网址，等待加载完成后即可游玩：
 
-[https://qingchenwait.github.io/Fritia_Online_NEXT/](https://qingchenwait.github.io/Fritia_Online_NEXT/)
+[https://game.qingchen.de](https://game.qingchen.de)
+
+**注意**：即使在同一台设备中，也不能换浏览器进行游戏，因为**存档数据只保存在浏览器内部**！
 
 开始游戏前，请先点击右上角 [设置] 按钮，配置本游戏中使用的 LLM 大模型：
 
 - 需要**自行获取大模型 API**，并充值额度。可使用 [DeepSeek](https://platform.deepseek.com/api_keys)、[MiMO](https://platform.xiaomimimo.com/console/api-keys) 等模型。
 - 在设置中，填写 OpenAI 兼容 API 的 `API Key`、`Base URL` 和模型名称。
-- 数据只保存在你的浏览器本地，不会上传云端。
 
-### 方法二：下载源码本地部署
+### 方法二：下载客户端
+
+为了方便大家本地部署，我们将源码打包成了客户端。
+
+可以在 [GitHub Release](https://github.com/QingchenWait/Fritia_Online_NEXT/releases) 页面查看最新版本并下载。
+
+**注意**：客户端的版本更新速度，可能落后于网页版。如果希望游玩最新版本，建议优先选择网页版，或下载最新源码本地部署。
+
+### 方法三：下载源码本地部署
 
 如果希望在你的本地电脑中，部署芙提雅 ONLINE NEXT，请参考以下教程，配置本地网页服务器并运行源码：
 
@@ -46,12 +55,13 @@
    https://nodejs.org/
 
 2. 下载源码：
+
    - 如果你的本地电脑里安装了 Git，可以运行：
 
-        ```bash
-        git clone https://github.com/QingChenWait/Fritia_Online_NEXT.git
-        cd Fritia_Online_NEXT
-        ```
+     ```bash
+     git clone https://github.com/QingChenWait/Fritia_Online_NEXT.git
+     cd Fritia_Online_NEXT
+     ```
 
    - 如果没有安装 Git，也可以在 GitHub 页面点击 `Code` -> `Download ZIP`，解压后进入项目文件夹。
 
@@ -59,15 +69,15 @@
 
 3. 启动本地服务器：
 
-    ```bash
-    npm run start
-    ```
+   ```bash
+   npm run start
+   ```
 
 4. 浏览器打开：
 
-    ```text
-    http://localhost:3000
-    ```
+   ```text
+   http://localhost:3000
+   ```
 
 #### macOS
 
@@ -75,12 +85,13 @@
    https://nodejs.org/
 
 2. 下载源码：
+
    - 如果你的本地电脑里安装了 Git，可以打开“终端”运行：
 
-        ```bash
-        git clone https://github.com/QingChenWait/Fritia_Online_NEXT.git
-        cd Fritia_Online_NEXT
-        ```
+     ```bash
+     git clone https://github.com/QingChenWait/Fritia_Online_NEXT.git
+     cd Fritia_Online_NEXT
+     ```
 
    - 如果没有安装 Git，也可以在 GitHub 页面点击 `Code` -> `Download ZIP`，解压后进入项目文件夹。
 
@@ -88,30 +99,23 @@
 
 3. 启动本地服务器：
 
-    ```bash
-    npm run start
-    ```
+   ```bash
+   npm run start
+   ```
 
 4. 浏览器打开：
 
-    ```text
-    http://localhost:3000
-    ```
+   ```text
+   http://localhost:3000
+   ```
 
 首次运行 `npm run start` 时，系统可能会提示下载 `serve` 工具，输入 `y` 确认即可。
 
 ## 游戏存档备份、导入和导出
 
-游戏数据默认保存在当前浏览器本地，包括：
+游戏数据默认保存在运行游戏的浏览器里面。
 
-- API 设置
-- 日常对话历史
-- 约会对话历史
-- 游戏时间
-- 数据金余额
-- 好感度
-- 礼物记录
-- 成就进度
+**注意**：即使在同一台设备中，也不能换浏览器进行游戏，因为存档数据不会直接跨浏览器保存！
 
 **导出备份**：
 
