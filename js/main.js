@@ -303,6 +303,48 @@ function finishLiveLoadingResource(id) {
     collectLoadedResourceSizes();
 }
 
+function waitFrame() {
+    return new Promise(resolve => requestAnimationFrame(() => resolve()));
+}
+
+function primeObjectTextures(object) {
+    if (!renderer || !object) return;
+    object.traverse?.((node) => {
+        const materials = Array.isArray(node.material)
+            ? node.material
+            : (node.material ? [node.material] : []);
+        for (const material of materials) {
+            for (const value of Object.values(material || {})) {
+                if (value?.isTexture) {
+                    try {
+                        renderer.initTexture?.(value);
+                    } catch {}
+                }
+            }
+        }
+    });
+}
+
+async function waitForFritiaFirstRender() {
+    if (!renderer || !scene || !camera || !charData?.root) return;
+    await setLoadingText('小老师火种系统装载中...');
+    charData.root.updateMatrixWorld?.(true);
+    primeObjectTextures(charData.root);
+    try {
+        if (typeof renderer.compileAsync === 'function') {
+            await renderer.compileAsync(scene, camera);
+        } else if (typeof renderer.compile === 'function') {
+            renderer.compile(scene, camera);
+        }
+    } catch (err) {
+        console.warn('[Startup] Fritia shader precompile skipped:', err);
+    }
+    for (let i = 0; i < 4; i += 1) {
+        renderer.render(scene, camera);
+        await waitFrame();
+    }
+}
+
 async function init() {
     const canvas = document.getElementById('game-canvas');
     startLoadingResourceMonitor();
@@ -539,6 +581,7 @@ async function init() {
     initHistoryPanel();
     initPromptButtons();
 
+    await waitForFritiaFirstRender();
     await setLoadingText('准备就绪！');
     setLoadingProgress(100);
     stopLoadingResourceMonitor();
