@@ -280,8 +280,10 @@ npm run dev
 
 - 管理 `#side-scroller-adventure` 全屏 Canvas 场景，不新增后端、不写入存档。
 - 使用 `src/_2d_adventure/2d_fritia/` 下的 `Simple_Body.png`、`Simple_Arm.png`、`Simple_Leg_Front.png`、`Simple_Leg_Behind.png` 与 `Fire.png` 在 Canvas 中拼装 2D 芙提雅。
+- 使用同目录下的 `Adjutant_Body.png`、`Adjutant_Arm.png`、`Adjutant_Leg_Front.png`、`Adjutant_Leg_Behind.png` 拼装分析员跟随角色。
 - 按火炬、后腿、前腿、头身、手臂的层级绘制，并用正弦步态驱动腿部旋转和肩点固定的手臂摆动，支持左右朝向翻转。
 - `Fire.png` 火炬始终位于芙提雅身后上下漂浮；芙提雅转身时按缓入缓出追随到背后。
+- 分析员跟随角色始终位于芙提雅身后且比火炬更远，使用与芙提雅相同的行走/停下步态，相位略有延迟；微调入口为 `js/side_scroller_adventure.js` 顶部的 `ADJUTANT_COMPANION`。
 - 绘制低多边形渐变冰雪世界：天空渐变、飘雪、远近山脉、雪地坡面和冰面裂纹；背景、地面按不同 parallax 系数随玩家移动循环滚动，形成无限左右移动视觉。
 - 场景打开时调用 `controlsModule.releaseControlMode({ resumeOnClose: true })` 释放 3D 控制，关闭时派发 `fritia-overlay-closed` 恢复控制。
 - 集成 `js/side_scroller_combat.js`，战斗/事件/奖励阶段会暂停横板移动，只有向右移动累计前进距离并触发事件。
@@ -295,20 +297,25 @@ npm run dev
 
 入口与 DOM：
 
-- 初始房间看向南侧门时，`E` 仍进入暖调闲聚/显示入场券任务；`1` 打开冰雪横板场景。
+- 初始房间看向南侧门时，`E` 仍进入暖调闲聚/显示入场券任务；`1` 打开战术考核场景。
 - `#side-scroller-adventure`：全屏小游戏容器，已加入 `controls.js` overlay 管理列表。
 - `#side-scroller-canvas`：2D 渲染画布。
 - `#side-scroller-close`：返回房间按钮。
 - `#side-scroller-left` / `#side-scroller-right`：移动端独立左右移动按钮。
 - `#side-scroller-combat`：横板战斗 HUD 根节点，由 `js/side_scroller_combat.js` 动态挂载到 `#side-scroller-adventure` 内。
-- `#side-combat-style-panel` / `#side-combat-style-input` / `#side-combat-start`：战斗风格输入与开始前进按钮。
+- `#side-combat-style-panel` / `#side-combat-style-input` / `#side-combat-start`：战术考核设定、战斗风格输入与提交战备申请按钮。
+- `#side-combat-difficulty-prev` / `#side-combat-difficulty-label` / `#side-combat-difficulty-detail` / `#side-combat-difficulty-next`：战术考核难度切换控件与关卡详情。
+- `#side-combat-approval`：LLM 初始卡池生成期间的“陶董正在审阅中 ... / 陶董已批准”审批状态；审批中隐藏 `#side-combat-start` 提交按钮，难度切换按钮保留但禁用。
 - `#side-combat-enemy-layer`：敌人目标层。
-- `#side-combat-hand`：四张手牌区域，支持点击选择和拖放到目标。
+- `#side-combat-target-layer`：拖拽卡牌时显示合法作用对象光环的提示层。
+- `#side-combat-hand`：前台四张手牌区域，支持点击选择和拖放到目标。
+- `#side-combat-deck-toggle` / `#side-combat-deck-count`：手牌左侧圆形卡池列表按钮和剩余数量角标。
+- `#side-combat-discard`：圆形垃圾桶弃牌区，手牌拖入后弃牌。
 - `#side-combat-player-panel`：芙提雅生命与自选目标区域。
 - `#side-combat-skill-guard` / `#side-combat-skill-execute`：分析员技能按钮。
 - `#side-combat-refresh` / `#side-combat-refresh-count`：全局卡组刷新按钮与次数。
 - `#side-combat-reward-panel` / `#side-combat-complete-panel`：事件奖励与路线结算面板。
-- `#dream-painting-prompt` 在看向南侧门时复用为 `按 1 进入冰雪横板`。
+- `#dream-painting-prompt` 在看向南侧门时复用为 `按 1 进入战术考核`。
 
 运行约定：
 
@@ -319,13 +326,27 @@ npm run dev
 横板战斗：`js/side_scroller_combat.js` / `js/side_scroller_cards_llm.js`
 
 - 进入横板后先输入自由战斗风格；该文本只用于引导 LLM 对 flex 槽位的类别倾向与卡牌命名，不映射本地预设权重。
-- 一条路线共 8 个事件，前 7 个按本地概率生成敌人、补给或稀有信标，第 8 个固定 Boss。
+- 战术考核难度：标准为 5 个普通关卡 + 1 个 Boss；困难为 7 个普通关卡 + 1 个 Boss；传说为 8 个普通关卡 + 2 个 Boss，其中第 5 关固定小 Boss、第 10 关固定大 Boss。每条路线前 2 个普通关卡固定为敌人战斗，其他普通关卡按本地概率生成敌人、补给或稀有信标。
+- `walk` 阶段按玩家左右移动更新 `forwardDistance`，向左走会让“距下个信号”反向增加；战斗触发后进入 `encounter` 接敌阶段，敌人随继续前进从屏幕右侧滑入，倒退会拉开接敌距离。
 - 敌人事件数量决定全局卡组刷新次数，规则为 `battleCount + 2`；稀有信标可额外增加 1 次。
-- 每次刷新生成 10 张卡，至少 3 张攻击、2 张治疗；战斗开始时抽 4 张，回合结束或出牌后补到 4 张。
-- 卡牌类别为攻击、治疗、控制、召唤、强化；召唤牌为瞬发，不占用每回合 3 张普通牌上限。
+- 芙提雅战斗生命值读取 `game_state#getAffinity()`，与当前好感度一致；敌人与 Boss 血量为原本本地模板的 2 倍。
+- 每次刷新生成 14 张卡池，至少 3 张攻击、3 张治疗；前台始终最多显示 4 张手牌，战斗开始、回合结束、出牌或弃牌后只从当前卡池余牌补到 4 张，不触发新一轮生成。
+- 首次开始路线时生成初始卡池；之后进入敌人/Boss 战斗不会自动刷新或重新抽卡，当前卡池不足时手牌可以少于 4 张。若一次卡池中没有任何剩余卡牌，会自动启用预加载卡池，若无预加载则自动生成一组新卡池。`刷新战术` 只会使用已预加载好的下一组卡池，并在发给玩家后启动再下一组预加载。
+- 卡牌类别为攻击、治疗、控制、召唤、强化；治疗牌可生成回血或护甲，护甲跨战斗叠加并先于生命扣除，HUD 显示为 `当前生命+护甲/生命上限(🛡️护甲)`。
+- 强化牌可强化芙提雅，也会更高概率生成对敌方施加 `weaken`/`vulnerable` 的 debuff；多个同类型状态以独立层叠加，持续回合分别递减。
+- 攻击牌和召唤牌各自约 30% 为群体攻击、约 70% 为单体攻击，群体攻击以本地数值的 70% 向下取整结算；召唤牌也占用每回合 3 张出牌上限。
+- 生成卡牌槽位会带 `effectScope: single|area`，LLM 描述必须与单体/群体范围一致；本地还会清洗描述，防止单体牌显示群体攻击等矛盾文案。
+- 敌方头顶显示 `⚔️ X`，表示其下一次行动对芙提雅造成的实际伤害；玩家减伤 buff、敌方削弱 debuff 和守护代价会实时影响该数值。
+- 战斗中点击 `刷新战术` 会使用预加载卡池；若刷新前当前卡池剩余总数（前台手牌 + 隐藏余牌）大于 4，按钮显示 `重新抽牌并结束回合` 且刷新后立即结束玩家回合；若剩余总数小于等于 4，按钮显示 `重新抽牌` 且刷新后不结束回合。
+- 手牌支持拖动幽灵卡：拖到合法目标会飞向目标并施放，松开在无效目标上会快速回弹到原手牌位置；拖到 `#side-combat-discard` 会弃牌且不消耗出牌次数。
+- 拖拽卡牌时会提示可作用对象：敌方目标卡牌在敌人身上闪烁光环，自身目标卡牌在芙提雅贴图范围闪烁光环。
+- 召唤牌攻击前会触发 `side_scroller_adventure.js` 中的火炬升空动画，火炬快速漂到空中后发射粒子/光线攻击，再回落到跟随位置。
+- 点击 `#side-combat-deck-toggle` 会以紧凑小卡片列出本轮卡池剩余卡牌，只显示名称、稀有度/类别和功能数值，不显示描述。
+- BUFF/DEBUFF 会在玩家或敌人头顶显示图标；点击图标会弹出状态说明小卡片。
+- 卡牌视觉同时表达稀有度与作用目标：蓝/紫/金牌使用对应冷蓝、紫玫、暖金背景；对芙提雅的 buff 使用粉色边框并在数值后标 `✨`，对敌方的 debuff 使用蓝色边框并在数值后标 `🔽`。
 - 卡牌稀有度本地按蓝 68%、紫 25%、金 7% 生成；数值、目标类型、持续回合和状态效果全部本地计算并 clamp。
-- `js/side_scroller_cards_llm.js` 复用 `settings.js#getSettings()` 的 `apiKey/baseUrl/model` 和 `src/_queries/system_prompt.txt`，调用 OpenAI 兼容 `chat/completions`，支持流式/非流式响应解析。
-- LLM 只允许返回 `{ cards: [{ slotId, category, name, description }] }`；locked 槽位不能改类别，非法 JSON、非法类别、过长文本或无 API 配置都会回退到本地卡牌文本。
+- `js/side_scroller_cards_llm.js` 复用 `settings.js#getSettings()` 的 `apiKey/baseUrl/model` 和 `src/_queries/system_prompt.txt`，调用 OpenAI 兼容 `chat/completions`，支持流式/非流式响应解析；请求不设置本地 `max_tokens` 硬上限，避免 10 张卡牌 JSON 被截断。
+- LLM 目标输出为 `{ cards: [{ slotId, category, name, description }] }`；解析器兼容模型误返回的直接数组，但 prompt 仍要求完整 object。locked 槽位不能改类别，flex 槽位类别优先由玩家自由战斗风格引导，文案需按 rarity 区分强度：蓝色正常、紫色更强、金色无与伦比地强，同时继续参考芙提雅知识库经历，并遵守 `effectScope` 的单体/群体描述；非法 JSON、非法类别、过长文本或无 API 配置都会回退到本地卡牌文本。
 - 分析员技能：`神之守护` 每局 3 次，芙提雅回满血、获得 3 个玩家回合减伤和易伤、敌方下回合沉默；`御驾亲征` 每局 3 次，非 Boss 直接击杀，Boss 生命高于 50% 时不可用。
 - 战斗 UI 只存在于横板 overlay 内，关闭横板后全部运行态丢弃，不影响日常对话、约会、造梦、调酒、圆桌密语和存档导入导出。
 
@@ -1576,7 +1597,7 @@ Escape：
 
 2D 横板冰雪小游戏：
 
-1. 看向旧房间南侧门时，应同时显示 `按 E 进入暖调闲聚` 和 `按 1 进入冰雪横板`。
+1. 看向旧房间南侧门时，应同时显示 `按 E 进入暖调闲聚` 和 `按 1 进入战术考核`。
 2. 按 `1` 打开 `#side-scroller-adventure`，原 3D 准星/触控摇杆不应继续叠在小游戏输入之上。
 3. 输入任意战斗风格后点击开始；未配置 API Key 时应使用本地卡牌文本，不阻塞开局。
 4. `A/D` 和方向键可左右移动，角色朝向随移动方向翻转，身体部件拼装完整且走路摆动可见。

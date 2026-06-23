@@ -15,19 +15,34 @@ const PART_SOURCES = {
     arm: 'Simple_Arm.png',
     legFront: 'Simple_Leg_Front.png',
     legBack: 'Simple_Leg_Behind.png',
+    adjutantBody: 'Adjutant_Body.png',
+    adjutantArm: 'Adjutant_Arm.png',
+    adjutantLegFront: 'Adjutant_Leg_Front.png',
+    adjutantLegBack: 'Adjutant_Leg_Behind.png',
     fire: 'Fire.png'
 };
 
 const CHARACTER_SCALE_FACTOR = 0.7;
-const BODY_ANCHOR = { x: 0, y: -338, pivotX: 0.5, pivotY: 0.68 };
-const ARM_SHOULDER_ANCHOR = {
-    x: -11,
-    y: -413,
-    pivotX: 0.9,
-    pivotY: 0.02,
-    scale: 0.92,
-    idleAngle: 2,
-    swingAngle: 4
+const FRITIA_RIG = {
+    scale: 1,
+    body: { key: 'body', x: 0, y: -338, pivotX: 0.5, pivotY: 0.68, alpha: 1, partScale: 1 },
+    arm: { key: 'arm', x: -11, y: -413, pivotX: 0.9, pivotY: 0.02, alpha: 1, partScale: 0.92, idleAngle: 2, swingAngle: 4 },
+    legBack: { key: 'legBack', x: 18, y: -262, pivotX: 0.47, pivotY: 0.05, alpha: 0.72, partScale: 0.98 },
+    legFront: { key: 'legFront', x: -18, y: -264, pivotX: 0.5, pivotY: 0.05, alpha: 1, partScale: 1 }
+};
+const ADJUTANT_COMPANION = {
+    backOffsetX: -238,
+    followSpeed: 8.5,
+    scale: 0.88,
+    groundOffsetY: 2,
+    phaseDelay: 0.58,
+    alpha: 0.96,
+    rig: {
+        body: { key: 'adjutantBody', x: 0, y: -415, pivotX: 0.5, pivotY: 0.7, alpha: 1, partScale: 1 },
+        arm: { key: 'adjutantArm', x: -13, y: -507, pivotX: 0.88, pivotY: 0.02, alpha: 1, partScale: 0.92, idleAngle: 2, swingAngle: 4 },
+        legBack: { key: 'adjutantLegBack', x: 22, y: -324, pivotX: 0.5, pivotY: 0.05, alpha: 0.72, partScale: 0.96 },
+        legFront: { key: 'adjutantLegFront', x: -20, y: -326, pivotX: 0.5, pivotY: 0.05, alpha: 1, partScale: 0.96 }
+    }
 };
 const FIRE_COMPANION = {
     backOffsetX: -124,
@@ -57,8 +72,11 @@ const state = {
     walkBlend: 0,
     stopBlend: 0,
     fireOffsetX: FIRE_COMPANION.backOffsetX,
+    fireAttackClock: 999,
+    adjutantOffsetX: ADJUTANT_COMPANION.backOffsetX,
     snowClock: 0,
     lastFireScreenPosition: { x: 0, y: 0 },
+    lastFritiaHitbox: { left: 0, top: 0, right: 0, bottom: 0 },
     dpr: 1,
     width: 1,
     height: 1
@@ -119,7 +137,9 @@ export function initSideScrollerAdventure({ controlsModule } = {}) {
     initSideScrollerCombat({
         panel: state.panel,
         getFacing: () => state.facing,
-        getFireScreenPosition: () => ({ ...state.lastFireScreenPosition })
+        getFireScreenPosition: () => ({ ...state.lastFireScreenPosition }),
+        getFritiaHitbox: () => ({ ...state.lastFritiaHitbox }),
+        triggerFireAttack: () => triggerFireAttack()
     });
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
@@ -139,6 +159,8 @@ export function openSideScrollerAdventure() {
     state.walkBlend = 0;
     state.stopBlend = 0;
     state.fireOffsetX = FIRE_COMPANION.backOffsetX;
+    state.fireAttackClock = 999;
+    state.adjutantOffsetX = ADJUTANT_COMPANION.backOffsetX;
     state.snowClock = 0;
     state.lastFireScreenPosition = { x: 0, y: 0 };
     resizeCanvas();
@@ -173,7 +195,7 @@ export function updateSideScrollerAdventure(delta) {
         state.facing = direction > 0 ? 1 : -1;
         const movement = direction * 285 * dt;
         state.playerWorldX += movement;
-        if (movement > 0) advanceSideScrollerCombatDistance(movement);
+        advanceSideScrollerCombatDistance(movement);
         state.walkClock += dt * 7.4;
         state.walkBlend = approach(state.walkBlend, 1, dt * 7.5);
         state.stopBlend = 0;
@@ -184,8 +206,11 @@ export function updateSideScrollerAdventure(delta) {
     }
 
     state.cameraX += (state.playerWorldX - state.cameraX) * (1 - Math.exp(-8 * dt));
+    state.fireAttackClock += dt;
     const targetFireOffsetX = FIRE_COMPANION.backOffsetX * state.facing;
     state.fireOffsetX += (targetFireOffsetX - state.fireOffsetX) * (1 - Math.exp(-FIRE_COMPANION.followSpeed * dt));
+    const targetAdjutantOffsetX = ADJUTANT_COMPANION.backOffsetX * state.facing;
+    state.adjutantOffsetX += (targetAdjutantOffsetX - state.adjutantOffsetX) * (1 - Math.exp(-ADJUTANT_COMPANION.followSpeed * dt));
     state.snowClock += dt;
     updateSideScrollerCombat(dt);
     render();
@@ -212,6 +237,10 @@ function loadImage(src) {
         img.onerror = reject;
         img.src = src;
     });
+}
+
+function triggerFireAttack() {
+    state.fireAttackClock = 0;
 }
 
 function bindEvents() {
@@ -467,51 +496,97 @@ function drawFritia(ctx, w, h) {
     const baseScale = Math.max(0.46, Math.min(0.88, h / 760));
     const scale = baseScale * CHARACTER_SCALE_FACTOR;
     const x = w * 0.5;
-    const phase = state.walkClock;
+    const fritiaGait = createCharacterGait(0, scale);
+    const fireFloatY = Math.sin(state.snowClock * FIRE_COMPANION.floatSpeed) * FIRE_COMPANION.floatAmplitude + getFireAttackOffsetY();
+    state.lastFireScreenPosition = {
+        x: x + state.fireOffsetX * scale,
+        y: groundY - fritiaGait.bob + (FIRE_COMPANION.anchorY + fireFloatY) * scale
+    };
+    state.lastFritiaHitbox = {
+        left: x - 58 * scale,
+        right: x + 64 * scale,
+        top: groundY - fritiaGait.bob - 500 * scale,
+        bottom: groundY - fritiaGait.bob + 34 * scale
+    };
+
+    drawAdjutantCompanion(ctx, x, groundY, scale);
+
+    ctx.save();
+    ctx.translate(x, groundY - fritiaGait.bob);
+    ctx.scale(state.facing, 1);
+    drawCharacterShadow(ctx, scale, 58, 1);
+    drawFireCompanion(ctx, scale, fireFloatY);
+    drawRiggedCharacter(ctx, FRITIA_RIG, fritiaGait, scale, 1);
+    ctx.restore();
+}
+
+function drawAdjutantCompanion(ctx, fritiaX, groundY, baseScale) {
+    const scale = baseScale * ADJUTANT_COMPANION.scale;
+    const gait = createCharacterGait(ADJUTANT_COMPANION.phaseDelay, scale);
+    ctx.save();
+    ctx.globalAlpha = ADJUTANT_COMPANION.alpha;
+    ctx.translate(
+        fritiaX + state.adjutantOffsetX * baseScale,
+        groundY + ADJUTANT_COMPANION.groundOffsetY * baseScale - gait.bob
+    );
+    ctx.scale(state.facing, 1);
+    drawCharacterShadow(ctx, scale, 52, 0.82);
+    drawRiggedCharacter(ctx, ADJUTANT_COMPANION.rig, gait, scale, ADJUTANT_COMPANION.alpha);
+    ctx.restore();
+}
+
+function createCharacterGait(phaseOffset, scale) {
+    const phase = state.walkClock - phaseOffset;
     const blend = easeOutCubic(state.walkBlend);
     const stopEase = 1 - easeOutCubic(state.stopBlend);
     const stride = Math.sin(phase) * blend;
     const counter = -stride;
     const settle = Math.sin(phase * 1.2) * Math.max(0, stopEase - blend) * 0.24;
-    const bob = (Math.abs(Math.sin(phase)) * 4.5 * blend + Math.max(0, stopEase - blend) * 1.4) * scale;
-    const lean = (stride * 1.8 + blend * 1.6) * Math.PI / 180;
-    const frontLegAngle = -4 + stride * 14 - settle * 4;
-    const backLegAngle = 4 + counter * 12 + settle * 4;
-    const armAngle = ARM_SHOULDER_ANCHOR.idleAngle + counter * ARM_SHOULDER_ANCHOR.swingAngle;
-    const fireFloatY = Math.sin(state.snowClock * FIRE_COMPANION.floatSpeed) * FIRE_COMPANION.floatAmplitude;
-    state.lastFireScreenPosition = {
-        x: x + state.fireOffsetX * scale,
-        y: groundY - bob + (FIRE_COMPANION.anchorY + fireFloatY) * scale
+    return {
+        stride,
+        counter,
+        settle,
+        bob: (Math.abs(Math.sin(phase)) * 4.5 * blend + Math.max(0, stopEase - blend) * 1.4) * scale,
+        lean: (stride * 1.8 + blend * 1.6) * Math.PI / 180,
+        frontLegAngle: -4 + stride * 14 - settle * 4,
+        backLegAngle: 4 + counter * 12 + settle * 4
     };
+}
 
-    ctx.save();
-    ctx.translate(x, groundY - bob);
-    ctx.scale(state.facing, 1);
-    ctx.shadowColor = 'rgba(34, 83, 102, 0.28)';
-    ctx.shadowBlur = 18;
-    ctx.fillStyle = 'rgba(43, 91, 111, 0.22)';
-    ctx.beginPath();
-    ctx.ellipse(0, 15 * scale, 58 * scale, 11 * scale, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.shadowBlur = 0;
+function drawRiggedCharacter(ctx, rig, gait, scale, alpha = 1) {
+    const arm = rig.arm;
+    const armAngle = (arm.idleAngle || 0) + gait.counter * (arm.swingAngle || 0);
+    drawAnchoredPart(ctx, rig.legBack, gait.backLegAngle, scale, alpha);
+    drawAnchoredPart(ctx, rig.legFront, gait.frontLegAngle, scale, alpha);
+    drawAnchoredPart(ctx, rig.body, gait.lean, scale, alpha, true);
+    drawAnchoredPart(ctx, arm, armAngle, scale, alpha);
+}
 
-    drawFireCompanion(ctx, scale, fireFloatY);
-    drawAnchoredImage(ctx, state.images.legBack, 18, -262, 0.47, 0.05, backLegAngle, scale, 0.72, 0.98);
-    drawAnchoredImage(ctx, state.images.legFront, -18, -264, 0.5, 0.05, frontLegAngle, scale, 1, 1);
-    drawAnchoredImage(ctx, state.images.body, BODY_ANCHOR.x, BODY_ANCHOR.y, BODY_ANCHOR.pivotX, BODY_ANCHOR.pivotY, lean, scale, 1, 1);
+function drawAnchoredPart(ctx, part, angle, scale, alpha, angleIsRadians = false) {
+    if (!part) return;
+    const angleDeg = angleIsRadians ? (angle * 180) / Math.PI : angle;
     drawAnchoredImage(
         ctx,
-        state.images.arm,
-        ARM_SHOULDER_ANCHOR.x,
-        ARM_SHOULDER_ANCHOR.y,
-        ARM_SHOULDER_ANCHOR.pivotX,
-        ARM_SHOULDER_ANCHOR.pivotY,
-        armAngle,
+        state.images[part.key],
+        part.x,
+        part.y,
+        part.pivotX,
+        part.pivotY,
+        angleDeg,
         scale,
-        1,
-        ARM_SHOULDER_ANCHOR.scale
+        alpha * (part.alpha ?? 1),
+        part.partScale ?? 1
     );
-    ctx.restore();
+}
+
+function drawCharacterShadow(ctx, scale, width, alpha = 1) {
+    ctx.shadowColor = `rgba(34, 83, 102, ${0.28 * alpha})`;
+    ctx.shadowBlur = 18;
+    ctx.fillStyle = `rgba(43, 91, 111, ${0.22 * alpha})`;
+    ctx.beginPath();
+    ctx.ellipse(0, 15 * scale, width * scale, 11 * scale, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
 }
 
 function drawFireCompanion(ctx, scale, floatY) {
@@ -528,6 +603,14 @@ function drawFireCompanion(ctx, scale, floatY) {
         img.height * scale * FIRE_COMPANION.scale
     );
     ctx.restore();
+}
+
+function getFireAttackOffsetY() {
+    const t = state.fireAttackClock;
+    if (t < 0.2) return -104 * easeOutCubic(t / 0.2);
+    if (t < 0.58) return -104;
+    if (t < 0.98) return -104 * (1 - easeOutCubic((t - 0.58) / 0.4));
+    return 0;
 }
 
 function drawAnchoredImage(ctx, img, anchorX, anchorY, pivotX, pivotY, angleDeg, scale, alpha = 1, partScale = 1) {

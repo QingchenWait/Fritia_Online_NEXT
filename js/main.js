@@ -1803,7 +1803,7 @@ function updateInteractionPrompt() {
             setKeyPromptHTML(paintingPrompt, '按 <kbd>E</kbd> 进入暖调闲聚', 'KeyE');
             paintingPrompt.classList.remove('hidden');
             if (dreamPaintingPrompt) {
-                setKeyPromptHTML(dreamPaintingPrompt, '按 <kbd>1</kbd> 进入冰雪横板', 'Digit1');
+                setKeyPromptHTML(dreamPaintingPrompt, '按 <kbd>1</kbd> 进入战术考核', 'Digit1');
                 dreamPaintingPrompt.classList.remove('hidden');
             }
         } else {
