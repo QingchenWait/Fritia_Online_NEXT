@@ -1624,11 +1624,11 @@ Escape：
 
 - `dream_system.js`
   - `SEAT_INTERACTION_RATE` 控制造梦 `seat` 家具触发坐下动作的概率。
-  - `BED_INTERACTION_RATE` 控制造梦 `bed` 家具触发平躺动作的概率。
-  - 当前二者默认都是 `0.42`。需要调高或调低交互频率时，直接修改这两个常量，取值范围建议为 `0` 到 `1`。
+  - `BED_INTERACTION_RATE` 暂不参与运行时判定；造梦 `bed` 家具不再触发平躺动作，只作为普通访问 waypoint 触发家具访问事件和台词。
+  - `SEAT_INTERACTION_RATE` 默认 `0.42`。需要调高或调低座椅交互频率时，直接修改该常量，取值范围建议为 `0` 到 `1`。
   - `findSafePlacement()` 会先尝试玩家语义位置，再追加全房间地面网格兜底候选；每个地面候选点会尝试多个朝向，避免一个朝向挡窗/挡门就直接失败。
   - `findSafeWallPlacement()` 会在四面墙和多个高度上做网格兜底扫描，悬挂家具不会只因首选窗边墙失败就停止。
-  - `createWaypoint()` 为 `seat` / `bed` 造梦家具生成 `isFurniture` waypoint，并写入 `frontVector`，该向量来自家具 `frontDirection` 和当前摆放旋转。
+  - `createWaypoint()` 仅为 `seat` 造梦家具生成可触发坐下动作的 `isFurniture` waypoint，并写入 `frontVector`，该向量来自家具 `frontDirection` 和当前摆放旋转；`bed` 造梦家具保留普通动态家具 waypoint，不进入平躺动作判定。
   - `hasEditableDreamPainting()`：判断当前正在管理的造梦家具是否为 `painting`。
   - `isDreamPaintingFurniture(furnitureId)`：判断指定造梦家具是否为 `painting`，供主界面提示和快捷键入口使用。
   - `requestDreamPaintingTextureUpload()`：请求从本地选择图片替换 painting 类家具内容。
@@ -1636,9 +1636,9 @@ Escape：
 
 - `character.js`
   - `seat` 类造梦家具在抵达 waypoint 后按 `interactionRate` 决定是否触发坐下。触发时不会派发 `fritia-dream-furniture-visited`，因此不会同时出现家具台词气泡。
-  - `bed` 类造梦家具在抵达 waypoint 后按 `interactionRate` 决定是否触发平躺。触发时同样不会显示家具台词气泡。
-  - 旧房间床的睡眠仍使用 `applySleepingPose(cd)` 和固定旧床位置；造梦床使用 `applyDreamBedPose(cd)`，由 `estimateDreamBedSurfaceY()` 优先识别床垫/床面等宽大水平组件作为躺倒高度，再叠加 `DREAM_BED_LIE_Y_OFFSET` 偏移量，身体与地面平行并面向天花板。
-  - 坐下/平躺的边缘选择优先使用 waypoint 的 `frontVector`，避免继续硬编码到某一条世界坐标边。
+  - `bed` 类造梦家具抵达 waypoint 后不再触发平躺判定，会和普通动态家具一样派发 `fritia-dream-furniture-visited`，因此可显示家具台词气泡。
+  - 旧房间床的睡眠仍使用 `applySleepingPose(cd)` 和固定旧床位置；造梦床的 `applyDreamBedPose(cd)` 等动作函数保留在 `character.js` 中，但当前不由造梦家具 waypoint 触发。
+  - 坐下的边缘选择优先使用 waypoint 的 `frontVector`，避免继续硬编码到某一条世界坐标边。
   - 若 `seat` / `bed` 的碰撞盒尺寸明显不支持对应动作，会跳过动作并在 console 输出提示。
 
 - `main.js`
