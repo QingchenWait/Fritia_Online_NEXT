@@ -176,13 +176,12 @@ async function handleSend() {
     try {
         abortController = new AbortController();
         const contextMessages = getContextMessages(settings);
-        const ragMessage = dialogueContext.scene === 'daily'
-            ? await buildRagReferenceMessage({
-                mode: 'daily',
-                query: msg,
-                recentMessages: contextMessages
-            })
-            : null;
+        const ragMode = dialogueContext.scene === 'bar' ? 'bar' : 'daily';
+        const ragMessage = await buildRagReferenceMessage({
+            mode: ragMode,
+            query: msg,
+            recentMessages: contextMessages
+        });
         const intimateMessage = dialogueContext.scene === 'daily'
             ? await buildDeepSeekIntimateUserMessage(settings)
             : null;

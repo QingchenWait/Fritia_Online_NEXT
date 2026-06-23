@@ -3,6 +3,7 @@ import { MMDLoader } from 'three/addons/loaders/MMDLoader.js';
 import { loadCharacterFromModel, updateCharacter, getCharacterPosition, startInteraction, endInteraction, applyIdlePose } from './character.js';
 import { getSettings } from './settings.js';
 import { getGameTimeContext, recordDialogueInteraction } from './game_state.js';
+import { buildRagReferenceMessage } from './knowledge_base.js';
 
 const CHERNO_CARD_ID = 'special:cherno';
 const CHERNO_MODEL_PATH = 'src/_char_card/Cherno/悖谬-见习侍奉.pmx';
@@ -1151,6 +1152,12 @@ async function sendGuestMessage() {
     const thinking = appendGuestThinking(runtime.card.name);
     try {
         const history = getRuntimeHistory(runtime).map(item => ({ role: item.role, content: item.content }));
+        const ragMessage = await buildRagReferenceMessage({
+            mode: 'bar',
+            query: msg,
+            recentMessages: history,
+            limit: 5
+        });
         const response = await fetch(`${settings.baseUrl}/chat/completions`, {
             method: 'POST',
             headers: {
@@ -1161,6 +1168,7 @@ async function sendGuestMessage() {
                 model: settings.model,
                 messages: [
                     { role: 'system', content: buildGuestSystemPrompt(runtime) },
+                    ...(ragMessage ? [ragMessage] : []),
                     ...history
                 ],
                 stream: true,

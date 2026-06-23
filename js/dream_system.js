@@ -795,7 +795,7 @@ function createWaypoint(record, group) {
         position.x = Math.max(position.x, doorClearanceZone.max.x + 0.45);
     }
 
-    const interactionType = record.category === 'bed' ? 'bed' : (record.category === 'seat' ? 'seat' : '');
+    const interactionType = record.category === 'seat' ? 'seat' : '';
     const interactionRate = interactionType === 'bed' ? BED_INTERACTION_RATE : (interactionType === 'seat' ? SEAT_INTERACTION_RATE : 0);
     const frontVector = getWorldFurnitureFrontVector(record, group);
     const bedSurfaceY = interactionType === 'bed' ? estimateDreamBedSurfaceY(record, group) : null;

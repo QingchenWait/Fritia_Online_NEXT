@@ -1132,7 +1132,7 @@ function buildSearchQueryText(options = {}) {
 
 export async function buildRagReferenceMessage(options = {}) {
     const mode = String(options.mode || '').trim();
-    if (!['daily', 'date', 'roundtable'].includes(mode)) return null;
+    if (!['daily', 'date', 'bar', 'roundtable'].includes(mode)) return null;
     const { primary, query } = buildSearchQueryText(options);
     if (!query) return null;
     try {

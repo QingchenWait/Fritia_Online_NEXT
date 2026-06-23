@@ -723,6 +723,7 @@ function setRoundtableBug(kind, title, details = {}) {
         ts: nowMs()
     };
     state.bugPopoverOpen = false;
+    cancelQueuedRoundtableRepliesAfterBug(kind, details);
     renderBugWarning();
 }
 
@@ -731,6 +732,22 @@ function clearRoundtableBug() {
     state.bug = null;
     state.bugPopoverOpen = false;
     renderBugWarning();
+}
+
+function cancelQueuedRoundtableRepliesAfterBug(kind = '', details = {}) {
+    if (state.queue.length <= 0) return;
+    const dropped = state.queue.map(describeEvent);
+    state.queue = [];
+    if (state.processTimer) {
+        clearTimeout(state.processTimer);
+        state.processTimer = 0;
+    }
+    console.warn('[Roundtable][bug-queue-cancelled]', {
+        kind,
+        dropped,
+        event: details?.event || null
+    });
+    renderStatus();
 }
 
 function renderBugWarning() {
@@ -2223,16 +2240,52 @@ async function requestRoundtableCompletion({ settings, speaker, event, ragMessag
 }
 
 async function buildRoundtableRagMessage(event, settings = getSettings()) {
-    const recentMessages = getRoundtableRequestMessages(settings)
-        .slice(-8)
-        .map(item => `${item.speakerName}：${item.text}`);
-    const query = [event?.text || '', event?.sourceText || '', getRoundtableRequestTopicSummary(settings)].filter(Boolean).join('\n');
-    return buildRagReferenceMessage({
-        mode: 'roundtable',
-        query,
-        recentMessages,
-        limit: 5
-    });
+    const requestMessages = getRoundtableRequestMessages(settings);
+    const queries = buildRoundtableRagQueries(event, requestMessages);
+    for (const query of queries) {
+        const message = await buildRagReferenceMessage({
+            mode: 'roundtable',
+            query,
+            limit: 5
+        });
+        if (message) return message;
+    }
+    return null;
+}
+
+function buildRoundtableRagQueries(event, requestMessages = []) {
+    const recentPlayerTexts = requestMessages
+        .filter(item => item.role === 'player')
+        .map(item => item.text)
+        .filter(isRoundtableRagQueryUseful)
+        .slice(-3)
+        .reverse();
+    return uniqueNonEmptyLines([
+        event?.text || '',
+        stripLeadingTargetPrefix(event?.sourceText || ''),
+        ...recentPlayerTexts
+    ]);
+}
+
+function isRoundtableRagQueryUseful(text) {
+    const value = String(text || '').trim();
+    if (!value) return false;
+    if (value.length <= 8 && /^(嗯|恩|好|继续|然后呢|你们说|你们继续|接着说|说吧|啊|哦|对|是的|可以)[。.!！?？~]*$/i.test(value)) {
+        return false;
+    }
+    return true;
+}
+
+function uniqueNonEmptyLines(lines = []) {
+    const seen = new Set();
+    const result = [];
+    for (const line of lines) {
+        const text = String(line || '').trim();
+        if (!text || seen.has(text)) continue;
+        seen.add(text);
+        result.push(text);
+    }
+    return result;
 }
 
 function buildRequestBody(settings, speaker, event, ragMessage = null, intimateMessage = null) {
@@ -2283,6 +2336,7 @@ function buildRequestBody(settings, speaker, event, ragMessage = null, intimateM
                     '',
                     `本次你只扮演：${speaker.name}。不要代替其他角色发言。`,
                     `你的完整人格设定如下：\n${speaker.prompt || `你正在扮演 ${speaker.name}。`}`,
+                    '重要：人格设定只影响 JSON 的 text 字段语气与事实取材，不能覆盖本轮“只输出 JSON”的格式要求。即使人格设定要求自然对话，也必须保留外层 JSON。',
                     '',
                     `其他在场成员：${others}。`,
                     getGameTimeContext(),
@@ -2294,8 +2348,11 @@ function buildRequestBody(settings, speaker, event, ragMessage = null, intimateM
                     '如果本次要求 forcedIntent 为 handoff_to_player，你必须把话题交还给分析员，提出轻量问题、邀请选择、邀请评价或邀请参与，并且 wantsFollowUp 必须为 false。',
                     '',
                     '输出规则：只输出 JSON，不要输出 Markdown。不要代替其他角色说话。不要输出多轮对话。不要说“作为 AI”。消息长度 10-60 个中文字符，最多 100 字。',
+                    '严格 JSON 规则：回复的第一个非空字符必须是 {，最后一个非空字符必须是 }。禁止在 JSON 前后添加角色台词、解释、Markdown、代码块或多余文字。',
+                    'JSON 字符串内部如果需要引号，请使用中文引号或正确转义英文双引号，保证 JSON.parse 可直接解析。',
                     'JSON 字段固定为：text, targetId, intent, emotion, wantsFollowUp, suggestedFollowUpTargetId, topicHint。',
-                    'targetId 只能是 player、all 或某个参与者 id。intent 只能是 answer/react/tease/ask/shift_topic/idle/handoff_to_player。emotion 只能是 neutral/happy/shy/jealous/teasing/serious。'
+                    'targetId 只能是 player、all 或某个参与者 id。intent 只能是 answer/react/tease/ask/shift_topic/idle/handoff_to_player。emotion 只能是 neutral/happy/shy/jealous/teasing/serious。',
+                    '示例结构（只参考字段，不要照抄 text）：{"text":"@分析员 我听见啦，先这样说哦","targetId":"player","intent":"answer","emotion":"happy","wantsFollowUp":false,"suggestedFollowUpTargetId":"","topicHint":"简短主题"}'
                 ].join('\n')
             },
             ...(ragMessage ? [ragMessage] : []),
@@ -2304,6 +2361,7 @@ function buildRequestBody(settings, speaker, event, ragMessage = null, intimateM
                 role: 'user',
                 content: [
                     '请根据以下圆桌状态，只生成你这一位角色的一条 JSON 消息：',
+                    '再次强调：只返回一个可被 JSON.parse 直接解析的对象，不要普通聊天文本。',
                     JSON.stringify(userContext, null, 2)
                 ].join('\n')
             }

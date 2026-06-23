@@ -344,6 +344,7 @@ LLM JSON 协议：
 - 访客只在 `currentPlayerRoomId === "bar"` 时加载、更新和互动；离开酒吧时卸载运行时资源。未保存的临时访客不会再次加载，已保存的访客下次进入酒吧自动加载。
 - 琴诺接近玩家时会在固定点转身并让头部看向玩家镜头；玩家离开判定范围后，身体会平滑转回初始朝向；对话使用独立紫色主题。玩家按 `F` 与琴诺开始对话时，会在 `src/_voices/Cherno_welcome_1.wav` 与 `src/_voices/Cherno_welcome_2.wav` 中随机播放一段欢迎语，该语音仅限琴诺角色。
 - 访客对话使用设置面板中的 OpenAI 兼容 `chat/completions` 配置，不新增后端和独立 API Key；请求不设置本地 `max_tokens` 硬上限，避免琴诺、芬妮和自定义访客回复被截断。
+- 访客个人对话会在请求前调用 `buildRagReferenceMessage({ mode: "bar", query: msg, recentMessages: history, limit: 5 })`，让琴诺、芬妮和自定义访客都能使用已启用知识库；参考资料只作为额外 system 消息注入，不写入 `fritia_bar_conversation_history`。
 - 暖调闲聚访客对话开始后，全局 `F/E/1/2` 等功能键不再触发游戏交互，按键会保留给文本输入；访客对话只通过 `Esc` 或右上角关闭按钮手动结束。
 - `getActiveBarGuestParticipants()` 提供当前已加载且可见访客的只读快照，供圆桌密语读取自定义参与者；只返回 `id/name/prompt/type/avatarText/isBuiltin/isSpecial`，不暴露 runtime、mesh、object URL 或 IndexedDB 句柄。
 
@@ -380,6 +381,7 @@ LLM JSON 协议：
 - 玩家或 bot 文本中提到成员名字时，调度器会把被提到的成员加入回复队列；玩家批量 `@` 产生的 bot 回复正文如果点到其他成员，也会启动 bot-to-bot 互聊链；bot 提到自己的名字不会再次唤醒自己。
 - bot 开头的 `@某人` 显示前缀默认会被忽略，但正文仍会扫描成员名；例如默认设置下 `@芬妮 早上好` 不唤醒芬妮，`@芬妮 芬妮早上好` 会唤醒芬妮。开启“bot 开头 @ 也触发回复”后，开头 `@芬妮` 也会唤醒芬妮。
 - 预算充足且概率命中时，bot 回复后可追加自然 follow-up，默认概率约 `55%`；显式点名队列优先于随机 follow-up，只要未触发硬预算、API 错误或互聊上限，就不会被概率分支吞掉。
+- 任意会显示 `#roundtable-bug-warning` 的异常路径都会在警告设置后清空尚未发言的圆桌队列并取消待触发的队列 timer，避免某个角色 API/JSON/配置/硬限制失败后，后续排队角色继续依次回复；这不改变 ⚠️ 警告本身的触发条件，也不改变当前失败事件的原有 fallback/提示机制。
 - bot-to-bot 互聊链可由系统主动 follow-up 或 bot 正文点名其他成员启动；互聊链启动后，模型过早输出 `handoff_to_player` 会被本地延后；默认互聊上限为 `3` 时，通常第 `2~3` 轮才会交还话题。达到上限前最后一轮会被本地强制为 handoff，让该轮主动把话题交还给分析员。
 - idle 主动发言只在面板打开、仍在酒吧、已开启 idle、长时间无对话且预算允许时触发，默认间隔约 `45s`。
 - 芙提雅在圆桌密语中成功发送面向 `@分析员` 的 bot 消息时，好感度 `+1`；芙提雅面向其他成员的回复不增加好感。
@@ -403,6 +405,7 @@ LLM 输出协议：
 - `targetId/intent/emotion` 不合法会改为安全默认值；`handoff_to_player` 必须面向玩家且 `wantsFollowUp=false`。
 - 禁止 `eval`、`new Function` 或执行任何 LLM 输出。
 - 圆桌发起请求前调用 `buildRagReferenceMessage({ mode: "roundtable", ... })`，默认最多注入 5 条参考分块；该消息作为额外 system 消息插入，不写入 `fritia_roundtable_whispers`，并保持 JSON 输出协议不变。
+- 圆桌 RAG 查询会把当前玩家事件文本、上一条 bot 源文本和最近有效玩家消息拆成多个候选 query 依次尝试，任一候选命中知识库就注入本轮请求；不会把多个话题拼成一个大 query，避免后续角色接话时因关键词被稀释而检索为空。滚动 `topicSummary` 只保留给圆桌上下文，不作为 RAG primary query。BM25、候选召回和排序算法不在圆桌模块中修改。
 
 持久化：
 
@@ -619,14 +622,14 @@ DeepSeek 亲密模式：`js/deepseek_intimate_mode.js`
 
 - 管理静态网页本地知识库、txt/md 上传解析、Markdown 清洗、分块、BM25 / 关键词倒排索引、RAG 检索、prompt 注入和存档迁移。
 - 不使用 embedding、向量数据库、reranker、后端服务或独立 API Key。
-- 知识库只为日常对话、约会进程、圆桌密语提供参考资料，不替代角色人格 prompt，不写入普通对话历史。
+- 知识库只为日常对话、约会进程、暖调闲聚个人对话和圆桌密语提供参考资料，不替代角色人格 prompt，不写入普通对话历史。
 
 默认参数：
 
 - 分块大小：默认 `512` 字符，可由高级设置 `kbChunkSize` 覆盖。
 - 分块重叠：默认 `50` 字符，可由高级设置 `kbChunkOverlap` 覆盖。
 - BM25 候选召回：默认 `50`，可由高级设置 `kbCandidateLimit` 覆盖。
-- 最终注入：默认 `6` 条；圆桌密语默认 `5` 条，避免挤压 JSON 输出合同。
+- 最终注入：默认 `6` 条；暖调闲聚访客个人对话和圆桌密语默认 `5` 条，避免挤压角色回复或 JSON 输出合同。
 - 单文件上传软限制：约 `1.5 MB`。
 
 IndexedDB：
@@ -1556,7 +1559,7 @@ Escape：
 8. 窄屏知识库页中，文件列表和详细分块默认折叠，点击对应面板可展开/收起。
 9. 空文件、非 txt/md 文件、超过限制的大文件应显示失败提示，不留下不可用半成品。
 10. 删除文件会确认并重建索引；删除知识库会确认并清空其文件、分块和索引。
-11. 启用知识库后，日常对话、约会开场/发送、圆桌密语会自动检索相关分块并注入本轮 LLM 请求；未启用知识库时原行为不变。
+11. 启用知识库后，日常对话、约会开场/发送、暖调闲聚个人对话和圆桌密语会自动检索相关分块并注入本轮 LLM 请求；未启用知识库时原行为不变。
 12. 知识库参考资料不应出现在历史面板、日常/约会历史或圆桌消息列表中。
 13. 导出 ZIP 后重新导入，知识库、文件、分块和启用状态可恢复，并能继续检索；导入旧存档缺少 `knowledgeBase` 字段时不报错。
 
@@ -1621,11 +1624,11 @@ Escape：
 
 - `dream_system.js`
   - `SEAT_INTERACTION_RATE` 控制造梦 `seat` 家具触发坐下动作的概率。
-  - `BED_INTERACTION_RATE` 控制造梦 `bed` 家具触发平躺动作的概率。
-  - 当前二者默认都是 `0.42`。需要调高或调低交互频率时，直接修改这两个常量，取值范围建议为 `0` 到 `1`。
+  - `BED_INTERACTION_RATE` 暂不参与运行时判定；造梦 `bed` 家具不再触发平躺动作，只作为普通访问 waypoint 触发家具访问事件和台词。
+  - `SEAT_INTERACTION_RATE` 默认 `0.42`。需要调高或调低座椅交互频率时，直接修改该常量，取值范围建议为 `0` 到 `1`。
   - `findSafePlacement()` 会先尝试玩家语义位置，再追加全房间地面网格兜底候选；每个地面候选点会尝试多个朝向，避免一个朝向挡窗/挡门就直接失败。
   - `findSafeWallPlacement()` 会在四面墙和多个高度上做网格兜底扫描，悬挂家具不会只因首选窗边墙失败就停止。
-  - `createWaypoint()` 为 `seat` / `bed` 造梦家具生成 `isFurniture` waypoint，并写入 `frontVector`，该向量来自家具 `frontDirection` 和当前摆放旋转。
+  - `createWaypoint()` 仅为 `seat` 造梦家具生成可触发坐下动作的 `isFurniture` waypoint，并写入 `frontVector`，该向量来自家具 `frontDirection` 和当前摆放旋转；`bed` 造梦家具保留普通动态家具 waypoint，不进入平躺动作判定。
   - `hasEditableDreamPainting()`：判断当前正在管理的造梦家具是否为 `painting`。
   - `isDreamPaintingFurniture(furnitureId)`：判断指定造梦家具是否为 `painting`，供主界面提示和快捷键入口使用。
   - `requestDreamPaintingTextureUpload()`：请求从本地选择图片替换 painting 类家具内容。
@@ -1633,9 +1636,9 @@ Escape：
 
 - `character.js`
   - `seat` 类造梦家具在抵达 waypoint 后按 `interactionRate` 决定是否触发坐下。触发时不会派发 `fritia-dream-furniture-visited`，因此不会同时出现家具台词气泡。
-  - `bed` 类造梦家具在抵达 waypoint 后按 `interactionRate` 决定是否触发平躺。触发时同样不会显示家具台词气泡。
-  - 旧房间床的睡眠仍使用 `applySleepingPose(cd)` 和固定旧床位置；造梦床使用 `applyDreamBedPose(cd)`，由 `estimateDreamBedSurfaceY()` 优先识别床垫/床面等宽大水平组件作为躺倒高度，再叠加 `DREAM_BED_LIE_Y_OFFSET` 偏移量，身体与地面平行并面向天花板。
-  - 坐下/平躺的边缘选择优先使用 waypoint 的 `frontVector`，避免继续硬编码到某一条世界坐标边。
+  - `bed` 类造梦家具抵达 waypoint 后不再触发平躺判定，会和普通动态家具一样派发 `fritia-dream-furniture-visited`，因此可显示家具台词气泡。
+  - 旧房间床的睡眠仍使用 `applySleepingPose(cd)` 和固定旧床位置；造梦床的 `applyDreamBedPose(cd)` 等动作函数保留在 `character.js` 中，但当前不由造梦家具 waypoint 触发。
+  - 坐下的边缘选择优先使用 waypoint 的 `frontVector`，避免继续硬编码到某一条世界坐标边。
   - 若 `seat` / `bed` 的碰撞盒尺寸明显不支持对应动作，会跳过动作并在 console 输出提示。
 
 - `main.js`
