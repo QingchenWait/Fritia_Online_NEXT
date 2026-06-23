@@ -18,6 +18,7 @@
 #dream-terminal-panel,
 #dream-furniture-editor-panel,
 #dream-placement-editor-panel { z-index: 76; }
+#side-scroller-adventure { z-index: 82; }
 #achievements-panel  { z-index: 83; }
 
 /* 通用辅助 */
@@ -137,6 +138,148 @@
 .bar-admission-panel__task.complete,
 .bar-admission-panel__task.complete strong {
     color: #8ee6a8;
+}
+
+/* =============================================================
+   冰雪横板小游戏
+   ============================================================= */
+#side-scroller-adventure {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    color: var(--hud-text);
+    background: #12313c;
+    pointer-events: auto;
+    user-select: none;
+    touch-action: none;
+}
+
+#side-scroller-adventure.hidden {
+    display: none;
+}
+
+#side-scroller-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.side-scroller-topbar {
+    position: absolute;
+    top: 24px;
+    left: 24px;
+    right: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    pointer-events: none;
+}
+
+.side-scroller-title,
+.side-scroller-close,
+.side-scroller-hint,
+.side-scroller-touch-btn {
+    color: var(--hud-text);
+    background: var(--hud-bg-strong);
+    border: 1px solid var(--hud-line);
+    box-shadow: var(--shadow-hud), inset 0 1px 0 rgba(255,255,255,0.12);
+    -webkit-backdrop-filter: blur(var(--blur-hud));
+    backdrop-filter: blur(var(--blur-hud));
+}
+
+.side-scroller-title {
+    min-width: 178px;
+    padding: 11px 16px;
+    border-radius: var(--r-lg);
+}
+
+.side-scroller-title span {
+    display: block;
+    margin-bottom: 2px;
+    color: rgba(255,247,250,0.68);
+    font-size: 0.68rem;
+    font-weight: 800;
+}
+
+.side-scroller-title strong {
+    display: block;
+    font-size: 1rem;
+}
+
+.side-scroller-close {
+    min-height: 42px;
+    padding: 0 18px;
+    border-radius: var(--r-pill);
+    font: inherit;
+    font-size: 0.88rem;
+    font-weight: 700;
+    cursor: pointer;
+    pointer-events: auto;
+    transition: transform var(--t-fast), border-color var(--t-fast), background var(--t-fast);
+}
+
+.side-scroller-close:hover {
+    border-color: rgba(244,184,200,0.6);
+    transform: translateY(-1px);
+}
+
+.side-scroller-close:active {
+    transform: translateY(0);
+    background: rgba(229,138,166,0.36);
+}
+
+.side-scroller-hint {
+    position: absolute;
+    left: 50%;
+    bottom: 30px;
+    transform: translateX(-50%);
+    padding: 10px 20px;
+    border-radius: var(--r-pill);
+    font-size: 0.84rem;
+    white-space: nowrap;
+}
+
+.side-scroller-touch {
+    position: absolute;
+    left: 22px;
+    right: 22px;
+    bottom: 78px;
+    display: none;
+    justify-content: space-between;
+    pointer-events: none;
+}
+
+.side-scroller-touch-btn {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    font: inherit;
+    font-size: 2.3rem;
+    line-height: 1;
+    cursor: pointer;
+    pointer-events: auto;
+    touch-action: none;
+    transition: transform var(--t-fast), background var(--t-fast), border-color var(--t-fast);
+}
+
+.side-scroller-touch-btn.is-active,
+.side-scroller-touch-btn:active {
+    transform: scale(0.96);
+    background: rgba(229,138,166,0.42);
+    border-color: rgba(244,184,200,0.74);
+}
+
+body.side-scroller-active #touch-controls {
+    display: none !important;
+}
+
+@media (pointer: coarse) {
+    .side-scroller-touch {
+        display: flex;
+    }
 }
 
 /* click-to-play */

@@ -242,6 +242,41 @@
 
 /* ===== 小屏 ===== */
 @media (max-width: 600px) {
+    body.side-scroller-active #touch-controls { display: none !important; }
+    .side-scroller-topbar {
+        top: 12px;
+        left: 12px;
+        right: 12px;
+        gap: 10px;
+    }
+    .side-scroller-title {
+        min-width: 132px;
+        padding: 9px 12px;
+        border-radius: var(--r-md);
+    }
+    .side-scroller-title span { font-size: 0.58rem; }
+    .side-scroller-title strong { font-size: 0.9rem; }
+    .side-scroller-close {
+        min-height: 38px;
+        padding: 0 14px;
+        font-size: 0.82rem;
+    }
+    .side-scroller-hint {
+        bottom: 16px;
+        max-width: calc(100vw - 28px);
+        white-space: normal;
+        text-align: center;
+        font-size: 0.76rem;
+    }
+    .side-scroller-touch {
+        display: flex;
+        bottom: 64px;
+    }
+    .side-scroller-touch-btn {
+        width: 66px;
+        height: 66px;
+    }
+
     /* 保留区域：左上游戏状态（原样迁移） */
     #game-status {
         top: 10px;

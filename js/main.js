@@ -43,6 +43,13 @@ import {
     updateRoomPanorama
 } from './room_panorama.js';
 import {
+    closeSideScrollerAdventure,
+    initSideScrollerAdventure,
+    isSideScrollerAdventureVisible,
+    openSideScrollerAdventure,
+    updateSideScrollerAdventure
+} from './side_scroller_adventure.js';
+import {
     BAR_ROOM_ID,
     ensureBarScene,
     getBarBounds,
@@ -561,6 +568,7 @@ async function init() {
     initGiftSystem();
     initAchievements();
     initBartendingChallenge();
+    initSideScrollerAdventure({ controlsModule });
     initDreamSystem({
         scene,
         camera,
@@ -704,6 +712,11 @@ async function init() {
 }
 
 function onKeyDown(e) {
+    if (isSideScrollerAdventureVisible()) {
+        if (e.code === 'Escape') closeSideScrollerAdventure();
+        return;
+    }
+
     if (isGuestInteracting()) {
         if (e.code === 'Escape') endGuestInteraction();
         return;
@@ -749,6 +762,10 @@ function onKeyDown(e) {
         const lookedDreamFurniture = isBarSceneActive ? null : getLookingDreamFurniture(camera);
         if (!isBarSceneActive && controlsModule?.state?.isLocked && isLookingAtDreamTerminal(camera)) {
             enterRoomPanorama();
+            return;
+        }
+        if (!isBarSceneActive && controlsModule?.state?.isLocked && isLookingAtDoor()) {
+            openSideScrollerAdventure();
             return;
         }
         if (!isBarSceneActive && hasEditableDreamPainting()) {
@@ -1625,6 +1642,7 @@ function animate() {
     updateDreamDoor(delta);
     updateDreamFurnitureCinematic(delta);
     updateRoomPanorama();
+    updateSideScrollerAdventure(delta);
     updateBarAdmissionPanelPosition();
 
     if (controlsModule) {
@@ -1692,7 +1710,7 @@ function updateInteractionPrompt() {
         stackPromptButtons(prompt, paintingPrompt, dreamPaintingPrompt);
         return;
     }
-    if (isSleeping || isInteracting || isDialogueVisible() || isDatePanelVisible() || isGiftOverlayVisible() || isDreamOverlayVisible() || isDanceOverlayVisible() || isInvitePanelVisible() || isBartendingChallengeVisible() || isRoundtableWhispersVisible() || isGuestInteracting() || isUtilityOverlayVisible()) {
+    if (isSleeping || isInteracting || isDialogueVisible() || isDatePanelVisible() || isGiftOverlayVisible() || isDreamOverlayVisible() || isDanceOverlayVisible() || isInvitePanelVisible() || isBartendingChallengeVisible() || isRoundtableWhispersVisible() || isGuestInteracting() || isUtilityOverlayVisible() || isSideScrollerAdventureVisible()) {
         hideActionPrompts();
         return;
     }
@@ -1784,6 +1802,10 @@ function updateInteractionPrompt() {
         } else if (lookDoor) {
             setKeyPromptHTML(paintingPrompt, '按 <kbd>E</kbd> 进入暖调闲聚', 'KeyE');
             paintingPrompt.classList.remove('hidden');
+            if (dreamPaintingPrompt) {
+                setKeyPromptHTML(dreamPaintingPrompt, '按 <kbd>1</kbd> 进入冰雪横板', 'Digit1');
+                dreamPaintingPrompt.classList.remove('hidden');
+            }
         } else {
             paintingPrompt.classList.add('hidden');
         }

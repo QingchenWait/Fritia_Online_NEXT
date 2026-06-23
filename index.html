@@ -9,8 +9,8 @@
     <link rel="stylesheet" href="css/base.css?v=20260621-loading-size">
     <link rel="stylesheet" href="css/components.css?v=20260619-otome">
     <link rel="stylesheet" href="css/effects.css?v=20260619-otome">
-    <link rel="stylesheet" href="css/panels.css?v=20260622-advanced-settings">
-    <link rel="stylesheet" href="css/responsive.css?v=20260622-advanced-settings">
+    <link rel="stylesheet" href="css/panels.css?v=20260623-side-scroller">
+    <link rel="stylesheet" href="css/responsive.css?v=20260623-side-scroller">
     <script type="importmap">
     {
         "imports": {
@@ -495,6 +495,22 @@
         <div id="dream-screen-toast" class="hidden" aria-live="polite"></div>
         <div id="click-to-play" class="hidden">
             <span class="click-to-play-inner">点击屏幕进入操作模式</span>
+        </div>
+    </div>
+
+    <div id="side-scroller-adventure" class="hidden" aria-label="冰雪横板场景">
+        <canvas id="side-scroller-canvas"></canvas>
+        <div class="side-scroller-topbar">
+            <div class="side-scroller-title">
+                <span>SNOWFIELD</span>
+                <strong>冰雪横板</strong>
+            </div>
+            <button id="side-scroller-close" class="side-scroller-close" type="button" aria-label="返回房间">返回</button>
+        </div>
+        <div class="side-scroller-hint">A / D 或方向键移动，Esc 返回房间</div>
+        <div class="side-scroller-touch" aria-label="横板移动控制">
+            <button id="side-scroller-left" class="side-scroller-touch-btn" type="button" aria-label="向左移动">‹</button>
+            <button id="side-scroller-right" class="side-scroller-touch-btn" type="button" aria-label="向右移动">›</button>
         </div>
     </div>
 
@@ -1130,6 +1146,6 @@
         </div>
     </div>
 
-    <script type="module" src="js/main.js?v=20260621-history-active-refresh"></script>
+    <script type="module" src="js/main.js?v=20260623-side-scroller"></script>
 </body>
 </html>

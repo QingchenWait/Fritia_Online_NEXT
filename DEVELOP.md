@@ -53,6 +53,7 @@ fritia_online_v3/
 │   ├── dance_system.js
 │   ├── bar_guest_system.js
 │   ├── bartending_challenge.js
+│   ├── side_scroller_adventure.js
 │   ├── roundtable_whispers.js
 │   ├── deepseek_intimate_mode.js
 │   ├── knowledge_base.js
@@ -88,6 +89,8 @@ fritia_online_v3/
     │   └── license files
     ├── _maps/
     │   └── bar/              # 暖调闲聚 PMX 地图与贴图
+    ├── _2d_adventure/
+    │   └── 2d_fritia/        # 2D 横板芙提雅身体部件 PNG
     ├── _fritia_3d_model/
     └── _fritia_alterable_models/
 ```
@@ -270,6 +273,38 @@ npm run dev
 
 - 该模块只服务暖调闲聚，不改变旧卧室、造梦空间、造梦家具和普通 UI 的碰撞逻辑。
 - 角色寻路的 A* 格子站立高度/阻挡结果缓存只在 colliders 带 `barSpatialIndex` 时启用，且只存在于单次寻路调用内。
+
+## 2D 横板冰雪小游戏：`js/side_scroller_adventure.js`
+
+职责：
+
+- 管理 `#side-scroller-adventure` 全屏 Canvas 场景，不依赖后端、不调用 LLM、不写入存档。
+- 使用 `src/_2d_adventure/2d_fritia/` 下的 `Head/Body/Arm/Arm_Back/Leg_*` PNG 部件在 Canvas 中拼装 2D 芙提雅。
+- 按后腿/后臂、身体、前腿/前臂、头部的层级绘制，并用正弦步态驱动手臂和腿部旋转，支持左右朝向翻转。
+- 绘制低多边形渐变冰雪世界：天空渐变、飘雪、远近山脉、雪地坡面和冰面裂纹；背景、地面按不同 parallax 系数随玩家移动循环滚动，形成无限左右移动视觉。
+- 场景打开时调用 `controlsModule.releaseControlMode({ resumeOnClose: true })` 释放 3D 控制，关闭时派发 `fritia-overlay-closed` 恢复控制。
+
+导出：
+
+- `initSideScrollerAdventure({ controlsModule })`：绑定 DOM、预加载 PNG、注册键盘和触控事件。
+- `openSideScrollerAdventure()` / `closeSideScrollerAdventure()`：打开或关闭小游戏场景。
+- `isSideScrollerAdventureVisible()`：供主流程屏蔽普通 3D 交互提示与按键。
+- `updateSideScrollerAdventure(delta)`：由 `main.js#animate()` 每帧驱动移动和绘制。
+
+入口与 DOM：
+
+- 初始房间看向南侧门时，`E` 仍进入暖调闲聚/显示入场券任务；`1` 打开冰雪横板场景。
+- `#side-scroller-adventure`：全屏小游戏容器，已加入 `controls.js` overlay 管理列表。
+- `#side-scroller-canvas`：2D 渲染画布。
+- `#side-scroller-close`：返回房间按钮。
+- `#side-scroller-left` / `#side-scroller-right`：移动端独立左右移动按钮。
+- `#dream-painting-prompt` 在看向南侧门时复用为 `按 1 进入冰雪横板`。
+
+运行约定：
+
+- 桌面端使用 `A/D` 或方向键移动，`Escape` 返回房间。
+- 移动端显示左右触控按钮；小游戏打开时隐藏原 3D 触控摇杆，避免输入重叠。
+- v1 不保存玩家横板位置，不新增 `localStorage` key，也不进入导出/导入 JSON。
 
 ## 舞蹈系统：`js/dance_system.js`
 
@@ -1335,6 +1370,8 @@ DOM ID：
 
 调酒挑战不新增 `localStorage` key；每局状态只存在于 `js/bartending_challenge.js` 内存中，关闭浮层后丢弃。
 
+2D 横板冰雪小游戏不新增 `localStorage` key；每次打开都会从默认站位开始，运行状态只存在于 `js/side_scroller_adventure.js` 内存中。
+
 造梦家具记录：
 
 ```json
@@ -1369,6 +1406,7 @@ DOM ID：
   - 用途：恢复控制模式和清理互动状态。
   - 调酒挑战关闭时 detail 为 `{ id: "bartending-challenge-panel" }`。
   - 圆桌密语关闭时 detail 为 `{ id: "roundtable-whispers-panel" }`；离开酒吧强制关闭时不派发该事件，并由 `controlsModule.cancelOverlayResume()` 清理恢复标记。
+  - 2D 横板冰雪小游戏关闭时 detail 为 `{ id: "side-scroller-adventure" }`。
 - `fritia-game-state-updated`
   - 来源：数据金变化、统计变化、礼物变化。
   - detail 可包含 `{ moneyDelta, reason }`。
@@ -1482,9 +1520,15 @@ DOM ID：
 - 睡眠模式：摸头。
 - 已在日常互动中：退出互动。
 
+按 1：
+
+- 看向造梦终端：进入房间全景拍照模式。
+- 看向 painting 类造梦家具：替换本地图片。
+- 看向旧房间南侧门：进入 2D 横板冰雪小游戏。
+
 Escape：
 
-- 优先关闭造梦、礼物、成就、约会、日常对话、换装面板。
+- 优先关闭造梦、礼物、成就、约会、日常对话、换装面板和 2D 横板冰雪小游戏。
 
 ## 手动测试清单
 
@@ -1506,6 +1550,16 @@ Escape：
 5. 推拉门关闭时阻挡玩家和角色。
 6. 推拉门打开时门板滑入负 Z 侧墙体内部，玩家和角色可通过。
 7. 门打开后准星对准门洞仍能按 E 关门，且不会穿透触发门后实体。
+
+2D 横板冰雪小游戏：
+
+1. 看向旧房间南侧门时，应同时显示 `按 E 进入暖调闲聚` 和 `按 1 进入冰雪横板`。
+2. 按 `1` 打开 `#side-scroller-adventure`，原 3D 准星/触控摇杆不应继续叠在小游戏输入之上。
+3. `A/D` 和方向键可左右移动，角色朝向随移动方向翻转，身体部件拼装完整且走路摆动可见。
+4. 背景山脉、雪地和近景地面随移动差速循环滚动，左右移动都没有明显断层。
+5. 点击 `#side-scroller-close` 或按 `Escape` 返回房间，并派发 `fritia-overlay-closed` 恢复控制模式。
+6. 移动端显示 `#side-scroller-left` / `#side-scroller-right`，长按移动、松开停止。
+7. 退出小游戏后，旧房间南侧门按 `E` 进入暖调闲聚/显示入场券任务的原逻辑保持不变。
 
 暖调闲聚：
 
