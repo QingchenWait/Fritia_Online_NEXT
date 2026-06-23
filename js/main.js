@@ -194,6 +194,7 @@ const cinematicCandidate = new THREE.Vector3();
 const cinematicSide = new THREE.Vector3();
 
 const clock = new THREE.Clock();
+const FRITIA_TEXTURE_READY_TIMEOUT_MS = 45000;
 const loadingResourceProgress = {
     entries: new Map(),
     live: new Map(),
@@ -307,8 +308,8 @@ function waitFrame() {
     return new Promise(resolve => requestAnimationFrame(() => resolve()));
 }
 
-function primeObjectTextures(object) {
-    if (!renderer || !object) return;
+function collectObjectTextures(object) {
+    const textures = new Set();
     object.traverse?.((node) => {
         const materials = Array.isArray(node.material)
             ? node.material
@@ -316,20 +317,107 @@ function primeObjectTextures(object) {
         for (const material of materials) {
             for (const value of Object.values(material || {})) {
                 if (value?.isTexture) {
-                    try {
-                        renderer.initTexture?.(value);
-                    } catch {}
+                    textures.add(value);
                 }
             }
         }
     });
+    return [...textures];
+}
+
+function getTextureImage(texture) {
+    return texture?.image || texture?.source?.data || null;
+}
+
+function isTextureImageReady(image) {
+    if (!image) return false;
+    if (Array.isArray(image)) return image.length > 0 && image.every(isTextureImageReady);
+    if (typeof HTMLImageElement !== 'undefined' && image instanceof HTMLImageElement) {
+        return image.complete && image.naturalWidth > 0 && image.naturalHeight > 0;
+    }
+    if (typeof ImageBitmap !== 'undefined' && image instanceof ImageBitmap) {
+        return image.width > 0 && image.height > 0;
+    }
+    if (typeof HTMLCanvasElement !== 'undefined' && image instanceof HTMLCanvasElement) {
+        return image.width > 0 && image.height > 0;
+    }
+    if (typeof HTMLVideoElement !== 'undefined' && image instanceof HTMLVideoElement) {
+        return image.readyState >= 2 && image.videoWidth > 0 && image.videoHeight > 0;
+    }
+    return Number(image.width) > 0 && Number(image.height) > 0;
+}
+
+function isTextureReady(texture) {
+    return isTextureImageReady(getTextureImage(texture));
+}
+
+function collectTextureImages(textures = []) {
+    const images = new Set();
+    for (const texture of textures) {
+        const image = getTextureImage(texture);
+        if (!image) continue;
+        if (Array.isArray(image)) {
+            image.filter(Boolean).forEach(item => images.add(item));
+        } else {
+            images.add(image);
+        }
+    }
+    return [...images];
+}
+
+async function decodeTextureImages(textures) {
+    const images = collectTextureImages(textures)
+        .filter(image => typeof image.decode === 'function');
+    if (images.length === 0) return;
+    await Promise.race([
+        Promise.allSettled(images.map(image => image.decode())),
+        wait(5000)
+    ]);
+}
+
+async function waitForTextureImages(textures) {
+    const start = Date.now();
+    let lastStatusAt = 0;
+    while (textures.length > 0) {
+        const pending = textures.filter(texture => !isTextureReady(texture));
+        if (pending.length === 0) return true;
+        const elapsed = Date.now() - start;
+        if (elapsed >= FRITIA_TEXTURE_READY_TIMEOUT_MS) {
+            console.warn('[Startup] Fritia texture wait timed out:', {
+                total: textures.length,
+                pending: pending.length
+            });
+            return false;
+        }
+        if (Date.now() - lastStatusAt > 800) {
+            lastStatusAt = Date.now();
+            await setLoadingText(`小老师火种系统装载中... (${textures.length - pending.length}/${textures.length})`);
+        }
+        await wait(120);
+    }
+    return true;
+}
+
+function primeTextures(textures) {
+    if (!renderer) return;
+    for (const texture of textures) {
+        try {
+            texture.needsUpdate = true;
+            renderer.initTexture?.(texture);
+        } catch (err) {
+            console.warn('[Startup] Fritia texture upload skipped:', err);
+        }
+    }
 }
 
 async function waitForFritiaFirstRender() {
     if (!renderer || !scene || !camera || !charData?.root) return;
     await setLoadingText('小老师火种系统装载中...');
     charData.root.updateMatrixWorld?.(true);
-    primeObjectTextures(charData.root);
+    const textures = collectObjectTextures(charData.root);
+    await waitForTextureImages(textures);
+    await decodeTextureImages(textures);
+    primeTextures(textures);
     try {
         if (typeof renderer.compileAsync === 'function') {
             await renderer.compileAsync(scene, camera);

@@ -130,7 +130,7 @@ npm run dev
 - `startLoadingResourceMonitor()` / `trackLiveLoadingResource()`：加载页资源体积统计。通过浏览器 Resource Timing 读取已完成资源传输大小，并叠加角色 PMX、暖调闲聚地图 PMX 的 XHR 实时进度，在 `#loading-size-text` 显示 `XX.XX MB / XX.XX MB`；总量显示单调不下降，避免 Resource Timing 和实时 XHR 切换时跳动。
 - `onKeyDown(e)`：全局键盘交互。`E` 处理门、终端、家具、礼物、床、约会、挂画、衣柜、暖调闲聚准入/舞台/邀请/调酒挑战；`F` 处理角色互动和摸头；`1/2` 处理造梦家具样式修改确认/回退；看向造梦终端时 `1` 进入房间全景拍照模式；全景模式内 `E` / `Esc` / `1` 退出。
 - `animate()`：主循环。更新游戏时间、控制器、角色、门动画、房间作用域、窗户天空色、交互提示、暖调闲聚准入浮窗投影并渲染场景。
-- 启动预渲染：`#click-to-play` 出现前会调用 `waitForFritiaFirstRender()`，对芙提雅 root 进行纹理初始化、shader compile/compileAsync 和数帧 `renderer.render(scene, camera)`，确认 PMX 已进入渲染管线后才隐藏 loading，避免 GitHub Pages 慢网下进入操作界面时角色模型仍未完成首帧渲染。
+- 启动预渲染：`#click-to-play` 出现前会调用 `waitForFritiaFirstRender()`，先收集芙提雅 root 上的材质贴图并等待图片 load/decode 完成（最长约 45 秒，loading 文案显示已就绪贴图数量），随后执行纹理初始化、shader compile/compileAsync 和数帧 `renderer.render(scene, camera)`，确认 PMX 与贴图已进入渲染管线后才隐藏 loading，避免 GitHub Pages 慢网下进入操作界面时角色模型或贴图仍未完成首帧渲染。
 - 开局欢迎闸门：加载完成但玩家尚未点击 `#click-to-play` 前，角色只保留眨眼，不切换 waypoint、不随机移动；首次点击后先执行面向玩家镜头的挥手欢迎，挥手结束再恢复正常行动。
 - `updateInteractionPrompt()`：复用 `#painting-prompt` 和 `#interaction-prompt` 显示当前可用交互；造梦家具显示 `按 E 管理 [家具名]`；暖调闲聚准入浮窗显示时改为 `按 E 关闭`。
 - 暖调闲聚舞台：看向 `BarDanceInvisiblePlane` 时显示 `按 E 观看跳舞`，打开 `#dance-panel`；舞蹈流程中 `updateDanceSystem(delta)` 接管 VMD 动作，暂停角色日常 AI，但玩家移动/视角仍由 `controls.js` 正常更新。每完整观看一次跳舞会通过 `recordDanceWatched()` 记录观看次数并增加 `3` 点好感，选择“再来一次”并再次跳完整段也会另计一次。
