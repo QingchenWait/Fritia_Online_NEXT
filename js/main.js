@@ -43,6 +43,21 @@ import {
     updateRoomPanorama
 } from './room_panorama.js';
 import {
+    closeSideScrollerAdventure,
+    initSideScrollerAdventure,
+    isSideScrollerAdventureVisible,
+    openSideScrollerAdventure,
+    updateSideScrollerAdventure
+} from './side_scroller_adventure.js?v=20260624-combat-score';
+import {
+    exportSideScrollerArchive,
+    importSideScrollerArchive
+} from './side_scroller_archive.js?v=20260624-combat-ui';
+import {
+    exportSideScrollerScores,
+    importSideScrollerScores
+} from './side_scroller_scores.js?v=20260624-combat-score';
+import {
     BAR_ROOM_ID,
     ensureBarScene,
     getBarBounds,
@@ -163,6 +178,7 @@ let barTransitionInProgress = false;
 let barBgm = null;
 let barBgmFadeTimer = null;
 let barBgmResumeAfterDance = false;
+let sideScrollerOpenedFromBar = false;
 const BAR_BGM_TARGET_VOLUME = 0.7;
 let previousSceneFog = null;
 let previousSceneBackground = null;
@@ -194,6 +210,7 @@ const cinematicCandidate = new THREE.Vector3();
 const cinematicSide = new THREE.Vector3();
 
 const clock = new THREE.Clock();
+const FRITIA_TEXTURE_READY_TIMEOUT_MS = 45000;
 const loadingResourceProgress = {
     entries: new Map(),
     live: new Map(),
@@ -301,6 +318,135 @@ function trackLiveLoadingResource(id, progressEvent) {
 function finishLiveLoadingResource(id) {
     loadingResourceProgress.live.delete(id);
     collectLoadedResourceSizes();
+}
+
+function waitFrame() {
+    return new Promise(resolve => requestAnimationFrame(() => resolve()));
+}
+
+function collectObjectTextures(object) {
+    const textures = new Set();
+    object.traverse?.((node) => {
+        const materials = Array.isArray(node.material)
+            ? node.material
+            : (node.material ? [node.material] : []);
+        for (const material of materials) {
+            for (const value of Object.values(material || {})) {
+                if (value?.isTexture) {
+                    textures.add(value);
+                }
+            }
+        }
+    });
+    return [...textures];
+}
+
+function getTextureImage(texture) {
+    return texture?.image || texture?.source?.data || null;
+}
+
+function isTextureImageReady(image) {
+    if (!image) return false;
+    if (Array.isArray(image)) return image.length > 0 && image.every(isTextureImageReady);
+    if (typeof HTMLImageElement !== 'undefined' && image instanceof HTMLImageElement) {
+        return image.complete && image.naturalWidth > 0 && image.naturalHeight > 0;
+    }
+    if (typeof ImageBitmap !== 'undefined' && image instanceof ImageBitmap) {
+        return image.width > 0 && image.height > 0;
+    }
+    if (typeof HTMLCanvasElement !== 'undefined' && image instanceof HTMLCanvasElement) {
+        return image.width > 0 && image.height > 0;
+    }
+    if (typeof HTMLVideoElement !== 'undefined' && image instanceof HTMLVideoElement) {
+        return image.readyState >= 2 && image.videoWidth > 0 && image.videoHeight > 0;
+    }
+    return Number(image.width) > 0 && Number(image.height) > 0;
+}
+
+function isTextureReady(texture) {
+    return isTextureImageReady(getTextureImage(texture));
+}
+
+function collectTextureImages(textures = []) {
+    const images = new Set();
+    for (const texture of textures) {
+        const image = getTextureImage(texture);
+        if (!image) continue;
+        if (Array.isArray(image)) {
+            image.filter(Boolean).forEach(item => images.add(item));
+        } else {
+            images.add(image);
+        }
+    }
+    return [...images];
+}
+
+async function decodeTextureImages(textures) {
+    const images = collectTextureImages(textures)
+        .filter(image => typeof image.decode === 'function');
+    if (images.length === 0) return;
+    await Promise.race([
+        Promise.allSettled(images.map(image => image.decode())),
+        wait(5000)
+    ]);
+}
+
+async function waitForTextureImages(textures) {
+    const start = Date.now();
+    let lastStatusAt = 0;
+    while (textures.length > 0) {
+        const pending = textures.filter(texture => !isTextureReady(texture));
+        if (pending.length === 0) return true;
+        const elapsed = Date.now() - start;
+        if (elapsed >= FRITIA_TEXTURE_READY_TIMEOUT_MS) {
+            console.warn('[Startup] Fritia texture wait timed out:', {
+                total: textures.length,
+                pending: pending.length
+            });
+            return false;
+        }
+        if (Date.now() - lastStatusAt > 800) {
+            lastStatusAt = Date.now();
+            await setLoadingText(`小老师火种系统装载中... (${textures.length - pending.length}/${textures.length})`);
+        }
+        await wait(120);
+    }
+    return true;
+}
+
+function primeTextures(textures) {
+    if (!renderer) return;
+    for (const texture of textures) {
+        try {
+            texture.needsUpdate = true;
+            renderer.initTexture?.(texture);
+        } catch (err) {
+            console.warn('[Startup] Fritia texture upload skipped:', err);
+        }
+    }
+}
+
+async function waitForFritiaFirstRender() {
+    if (!renderer || !scene || !camera || !charData?.root) return;
+    await setLoadingText('小老师火种系统装载中...');
+    charData.root.updateMatrixWorld?.(true);
+    const textures = collectObjectTextures(charData.root);
+    await waitForTextureImages(textures);
+    await decodeTextureImages(textures);
+    primeTextures(textures);
+    try {
+        if (typeof renderer.compileAsync === 'function') {
+            await renderer.compileAsync(scene, camera);
+        } else if (typeof renderer.compile === 'function') {
+            renderer.compile(scene, camera);
+        }
+    } catch (err) {
+        console.warn('[Startup] Fritia shader precompile skipped:', err);
+    }
+    for (let i = 0; i < 4; i += 1) {
+        renderer.render(scene, camera);
+        await waitFrame();
+    }
 }
 
 async function init() {
@@ -431,6 +577,7 @@ async function init() {
     initGiftSystem();
     initAchievements();
     initBartendingChallenge();
+    initSideScrollerAdventure({ controlsModule, requestClose: closeTacticalExamFromMain });
     initDreamSystem({
         scene,
         camera,
@@ -539,6 +686,7 @@ async function init() {
     initHistoryPanel();
     initPromptButtons();
 
+    await waitForFritiaFirstRender();
     await setLoadingText('准备就绪！');
     setLoadingProgress(100);
     stopLoadingResourceMonitor();
@@ -573,6 +721,11 @@ async function init() {
 }
 
 function onKeyDown(e) {
+    if (isSideScrollerAdventureVisible()) {
+        if (e.code === 'Escape') closeTacticalExamFromMain();
+        return;
+    }
+
     if (isGuestInteracting()) {
         if (e.code === 'Escape') endGuestInteraction();
         return;
@@ -616,8 +769,16 @@ function onKeyDown(e) {
 
     if ((e.code === 'Digit1' || e.code === 'Numpad1') && !isTypingInEditableElement()) {
         const lookedDreamFurniture = isBarSceneActive ? null : getLookingDreamFurniture(camera);
+        if (isBarSceneActive && controlsModule?.state?.isLocked && getBarInteractionLookState(true)?.exit && !isDanceFlowActive()) {
+            openTacticalExamFromMain();
+            return;
+        }
         if (!isBarSceneActive && controlsModule?.state?.isLocked && isLookingAtDreamTerminal(camera)) {
             enterRoomPanorama();
+            return;
+        }
+        if (!isBarSceneActive && controlsModule?.state?.isLocked && isLookingAtDoor()) {
+            openTacticalExamFromMain();
             return;
         }
         if (!isBarSceneActive && hasEditableDreamPainting()) {
@@ -1494,6 +1655,7 @@ function animate() {
     updateDreamDoor(delta);
     updateDreamFurnitureCinematic(delta);
     updateRoomPanorama();
+    updateSideScrollerAdventure(delta);
     updateBarAdmissionPanelPosition();
 
     if (controlsModule) {
@@ -1561,7 +1723,7 @@ function updateInteractionPrompt() {
         stackPromptButtons(prompt, paintingPrompt, dreamPaintingPrompt);
         return;
     }
-    if (isSleeping || isInteracting || isDialogueVisible() || isDatePanelVisible() || isGiftOverlayVisible() || isDreamOverlayVisible() || isDanceOverlayVisible() || isInvitePanelVisible() || isBartendingChallengeVisible() || isRoundtableWhispersVisible() || isGuestInteracting() || isUtilityOverlayVisible()) {
+    if (isSleeping || isInteracting || isDialogueVisible() || isDatePanelVisible() || isGiftOverlayVisible() || isDreamOverlayVisible() || isDanceOverlayVisible() || isInvitePanelVisible() || isBartendingChallengeVisible() || isRoundtableWhispersVisible() || isGuestInteracting() || isUtilityOverlayVisible() || isSideScrollerAdventureVisible()) {
         hideActionPrompts();
         return;
     }
@@ -1653,6 +1815,10 @@ function updateInteractionPrompt() {
         } else if (lookDoor) {
             setKeyPromptHTML(paintingPrompt, '按 <kbd>E</kbd> 进入暖调闲聚', 'KeyE');
             paintingPrompt.classList.remove('hidden');
+            if (dreamPaintingPrompt) {
+                setKeyPromptHTML(dreamPaintingPrompt, '按 <kbd>1</kbd> 进入战术考核', 'Digit1');
+                dreamPaintingPrompt.classList.remove('hidden');
+            }
         } else {
             paintingPrompt.classList.add('hidden');
         }
@@ -1687,6 +1853,9 @@ function updateBarInteractionPrompt(prompt, paintingPrompt, dreamPaintingPrompt,
         if (isDanceFlowActive()) {
             delete paintingPrompt.dataset.promptKey;
             paintingPrompt.classList.add('is-disabled');
+        } else if (dreamPaintingPrompt) {
+            setKeyPromptHTML(dreamPaintingPrompt, '按 <kbd>1</kbd> 进入战术考核', 'Digit1');
+            dreamPaintingPrompt.classList.remove('hidden');
         }
     } else {
         paintingPrompt.classList.add('hidden');
@@ -1728,6 +1897,9 @@ function updateBarInteractionPromptV2(prompt, paintingPrompt, dreamPaintingPromp
         if (isDanceFlowActive()) {
             delete paintingPrompt.dataset.promptKey;
             paintingPrompt.classList.add('is-disabled');
+        } else if (dreamPaintingPrompt) {
+            setKeyPromptHTML(dreamPaintingPrompt, '按 <kbd>1</kbd> 进入战术考核', 'Digit1');
+            dreamPaintingPrompt.classList.remove('hidden');
         }
     } else {
         paintingPrompt.classList.add('hidden');
@@ -2254,6 +2426,19 @@ async function hideBarLoadingOverlay() {
     document.getElementById('fade-overlay')?.classList.remove('is-bar-loading');
 }
 
+function openTacticalExamFromMain() {
+    sideScrollerOpenedFromBar = Boolean(isBarSceneActive);
+    if (sideScrollerOpenedFromBar) pauseBarBgmForTacticalExam();
+    openSideScrollerAdventure();
+}
+
+function closeTacticalExamFromMain() {
+    const shouldResumeBarBgm = sideScrollerOpenedFromBar;
+    closeSideScrollerAdventure();
+    sideScrollerOpenedFromBar = false;
+    if (shouldResumeBarBgm) resumeBarBgmAfterTacticalExam();
+}
+
 function startBarBgm() {
     if (barBgmFadeTimer) {
         clearInterval(barBgmFadeTimer);
@@ -2311,6 +2496,20 @@ function stopBarBgm({ fade = true } = {}) {
             barBgmFadeTimer = null;
         }
     }, 70);
+}
+
+function pauseBarBgmForTacticalExam() {
+    if (!barBgm || barBgm.paused) return;
+    if (barBgmFadeTimer) {
+        clearInterval(barBgmFadeTimer);
+        barBgmFadeTimer = null;
+    }
+    barBgm.pause();
+}
+
+function resumeBarBgmAfterTacticalExam() {
+    if (!barBgm || !isBarSceneActive) return;
+    startBarBgm();
 }
 
 function pauseBarBgmForDance() {
@@ -3075,7 +3274,9 @@ async function buildExportPayloadV3(options = {}) {
         roundtableWhispers: exportRoundtableWhispers(),
         knowledgeBase: await exportKnowledgeBaseArchive(),
         barGuestBuiltinState: exportBarGuestBuiltinState(),
-        barGuestCards: options.barGuestCards || exportBarGuestCards()
+        barGuestCards: options.barGuestCards || exportBarGuestCards(),
+        sideScrollerCardArchive: exportSideScrollerArchive(),
+        sideScrollerScores: exportSideScrollerScores()
     };
 }
 
@@ -3134,6 +3335,8 @@ async function applyImportedDataV3(data, assetFiles = new Map()) {
         importBarConversationHistory(data.barConversations);
     }
     const roundtableImport = importRoundtableWhispers(data.roundtableWhispers || data.barRoundtableWhispers || {});
+    const sideScrollerArchiveImport = importSideScrollerArchive(data.sideScrollerCardArchive || data.sideScrollerArchive || {});
+    const sideScrollerScoresImport = importSideScrollerScores(data.sideScrollerScores || data.sideScrollerScoreRecords || {});
     const knowledgeImport = await importKnowledgeBaseArchive(data.knowledgeBase || data.knowledgeBasesArchive || {}, { replacePreloaded: true });
 
     const guestAssets = [];
@@ -3156,7 +3359,7 @@ async function applyImportedDataV3(data, assetFiles = new Map()) {
     refreshDreamFurnitureAfterImport();
     updateGameHud(true);
     renderGiftCollection();
-    return { importResult, dreamImport, guestImport, roundtableImport, knowledgeImport };
+    return { importResult, dreamImport, guestImport, roundtableImport, knowledgeImport, sideScrollerArchiveImport, sideScrollerScoresImport };
 }
 
 async function handleImportFileV2(e) {
@@ -3172,8 +3375,8 @@ async function handleImportFileV2(e) {
         } else {
             data = JSON.parse(await file.text());
         }
-        const { importResult, dreamImport, guestImport, roundtableImport, knowledgeImport } = await applyImportedDataV3(data, assetFiles);
-        alert(`导入成功！礼物新增 ${importResult.giftsAdded || 0} 条，造梦家具新增 ${dreamImport.added || 0} 件，访客角色导入 ${guestImport.imported || 0} 个，圆桌消息新增 ${roundtableImport.imported || 0} 条，知识库新增 ${knowledgeImport.knowledgeBases || 0} 个 / ${knowledgeImport.files || 0} 个文件。刷新页面以应用设置。`);
+        const { importResult, dreamImport, guestImport, roundtableImport, knowledgeImport, sideScrollerArchiveImport, sideScrollerScoresImport } = await applyImportedDataV3(data, assetFiles);
+        alert(`导入成功！礼物新增 ${importResult.giftsAdded || 0} 条，造梦家具新增 ${dreamImport.added || 0} 件，访客角色导入 ${guestImport.imported || 0} 个，圆桌消息新增 ${roundtableImport.imported || 0} 条，典藏卡牌新增 ${sideScrollerArchiveImport.imported || 0} 张，分数记录新增 ${sideScrollerScoresImport.imported || 0} 条，知识库新增 ${knowledgeImport.knowledgeBases || 0} 个 / ${knowledgeImport.files || 0} 个文件。刷新页面以应用设置。`);
     } catch (err) {
         alert('导入失败：文件格式不正确或资源缺失');
         console.error('Import error:', err);
@@ -3202,6 +3405,8 @@ function handleImportFile(e) {
                 importDateConversationHistory(data.dateConversations);
             }
             importRoundtableWhispers(data.roundtableWhispers || data.barRoundtableWhispers || {});
+            const sideScrollerArchiveImport = importSideScrollerArchive(data.sideScrollerCardArchive || data.sideScrollerArchive || {});
+            const sideScrollerScoresImport = importSideScrollerScores(data.sideScrollerScores || data.sideScrollerScoreRecords || {});
             const knowledgeImport = await importKnowledgeBaseArchive(data.knowledgeBase || data.knowledgeBasesArchive || {}, { replacePreloaded: true });
             const importResult = importGameState(data, { suppressEvent: true });
             const dreamImport = importDreamFurniture(data.dreamFurniture || data.gameState?.dreamFurniture || []);
@@ -3210,7 +3415,7 @@ function handleImportFile(e) {
             refreshDreamFurnitureAfterImport();
             updateGameHud(true);
             renderGiftCollection();
-            alert(`导入成功！礼物同步新增 ${importResult.giftsAdded || 0} 条，造梦家具新增 ${dreamImport.added || 0} 件，跳过 ${dreamImport.skipped || 0} 件，知识库新增 ${knowledgeImport.knowledgeBases || 0} 个 / ${knowledgeImport.files || 0} 个文件。刷新页面以应用设置。`);
+            alert(`导入成功！礼物同步新增 ${importResult.giftsAdded || 0} 条，造梦家具新增 ${dreamImport.added || 0} 件，跳过 ${dreamImport.skipped || 0} 件，典藏卡牌新增 ${sideScrollerArchiveImport.imported || 0} 张，分数记录新增 ${sideScrollerScoresImport.imported || 0} 条，知识库新增 ${knowledgeImport.knowledgeBases || 0} 个 / ${knowledgeImport.files || 0} 个文件。刷新页面以应用设置。`);
         } catch (err) {
             alert('导入失败：文件格式不正确');
             console.error('Import error:', err);

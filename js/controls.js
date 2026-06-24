@@ -106,7 +106,8 @@ export function initControls(camera, domElement, colliders) {
         'dream-terminal-panel',
         'dream-furniture-editor-panel',
         'dream-placement-editor-panel',
-        'room-panorama-ui'
+        'room-panorama-ui',
+        'side-scroller-adventure'
     ];
     let resumeAfterOverlay = false;
     let resumeInProgress = false;

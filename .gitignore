@@ -12,6 +12,7 @@ desktop.ini
 # Node modules (unused but just in case)
 node_modules/
 ui/
+2D_TEST.png
 
 # User data - never commit
 *.env
