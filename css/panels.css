@@ -166,6 +166,81 @@
     display: block;
 }
 
+.side-scroller-orientation-blocker {
+    position: absolute;
+    inset: 0;
+    z-index: 999;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    background: rgba(8, 24, 32, 0.42);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    pointer-events: auto;
+}
+
+.side-scroller-orientation-blocker.hidden {
+    display: none;
+}
+
+.side-scroller-orientation-card {
+    display: grid;
+    justify-items: center;
+    gap: 18px;
+    width: min(420px, calc(100vw - 48px));
+    padding: 26px 24px;
+    color: #f8feff;
+    text-align: center;
+    background:
+        linear-gradient(145deg, rgba(24, 54, 64, 0.9), rgba(60, 42, 55, 0.78)),
+        rgba(18, 34, 42, 0.88);
+    border: 1px solid rgba(255, 232, 164, 0.42);
+    border-radius: 10px;
+    box-shadow: 0 24px 70px rgba(3, 15, 22, 0.48), inset 0 1px 0 rgba(255,255,255,0.14);
+}
+
+.side-scroller-orientation-card strong {
+    color: #fff0b8;
+    font-size: clamp(1.12rem, 4.8vw, 1.7rem);
+    line-height: 1.35;
+    text-shadow: 0 0 18px rgba(255, 232, 164, 0.34);
+    animation: side-scroller-orientation-blink 920ms ease-in-out infinite alternate;
+}
+
+.side-scroller-orientation-card button {
+    min-height: 42px;
+    padding: 0 20px;
+    border: 0;
+    border-radius: 999px;
+    color: #16323a;
+    background: linear-gradient(135deg, #fff0b8, #8fe9ee);
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+#side-scroller-adventure.is-orientation-transitioning::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 998;
+    pointer-events: none;
+    background: #f7ffff;
+    animation: side-scroller-orientation-fade 520ms ease both;
+}
+
+@keyframes side-scroller-orientation-blink {
+    from { opacity: 0.48; filter: drop-shadow(0 0 0 rgba(255, 232, 164, 0)); }
+    to { opacity: 1; filter: drop-shadow(0 0 16px rgba(255, 232, 164, 0.7)); }
+}
+
+@keyframes side-scroller-orientation-fade {
+    0% { opacity: 0; }
+    35% { opacity: 0.82; }
+    100% { opacity: 0; }
+}
+
 .side-scroller-topbar {
     position: absolute;
     z-index: 8;

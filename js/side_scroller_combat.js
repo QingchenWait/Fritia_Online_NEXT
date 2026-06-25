@@ -1,5 +1,5 @@
 import { buildSideScrollerCardBatch, SIDE_CARD_CATEGORY_LABELS, SIDE_CARD_RARITY_LABELS } from './side_scroller_cards_llm.js?v=20260624-combat-ui';
-import { getAffinity } from './game_state.js';
+import { addAffinity, getAffinity } from './game_state.js';
 import {
     addCardToSideScrollerArchive,
     cloneArchivedCardForCombat,
@@ -108,6 +108,11 @@ const SCORE_RULES = {
     turnPenalty: 22,
     minimumRate: 0.35
 };
+const RUN_AFFINITY_REWARDS = {
+    standard: 8,
+    hard: 12,
+    legend: 16
+};
 const COMPACT_VIEWPORT = {
     minWidth: 760,
     maxHeight: 620,
@@ -190,6 +195,7 @@ const state = {
     scoredEnemyIds: new Set(),
     lastScoreRecord: null,
     isNewScoreRecord: false,
+    runAffinityAwarded: false,
     busy: false,
     preloading: false,
     preloadedBatch: null,
@@ -321,6 +327,7 @@ function resetCombatState() {
     state.scoredEnemyIds = new Set();
     state.lastScoreRecord = null;
     state.isNewScoreRecord = false;
+    state.runAffinityAwarded = false;
     state.busy = false;
     state.preloading = false;
     state.preloadedBatch = null;
@@ -1588,6 +1595,7 @@ function completeRun(victory) {
     state.els.rewardPanel?.classList.add('hidden');
     state.els.completePanel?.classList.remove('hidden');
     finalizeRunScore();
+    if (victory) awardRunAffinityReward();
     if (state.els.completeTitle) state.els.completeTitle.textContent = victory ? 'RUN COMPLETE' : 'RUN FAILED';
     renderCompleteScore();
     if (state.els.completeText) {
@@ -1597,6 +1605,16 @@ function completeRun(victory) {
     }
     pushLog(victory ? '战术考核完成。' : '路线中断。');
     renderCombat();
+}
+
+function awardRunAffinityReward() {
+    if (state.runAffinityAwarded) return 0;
+    const difficulty = currentDifficulty();
+    const reward = RUN_AFFINITY_REWARDS[difficulty.id] || 0;
+    if (reward <= 0) return 0;
+    const result = addAffinity(reward);
+    state.runAffinityAwarded = result.delta > 0;
+    return result.delta;
 }
 
 function showReward(title, text) {
