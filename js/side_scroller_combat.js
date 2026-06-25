@@ -500,8 +500,8 @@ function ensureDom() {
             <div class="side-combat-modal__panel side-combat-modal__panel--small">
                 <span id="side-combat-complete-title" class="side-combat-modal__eyebrow">RUN COMPLETE</span>
                 <div id="side-combat-complete-score" class="side-combat-complete-score"></div>
-                <p id="side-combat-complete-text">雪原路线完成。</p>
-                <button id="side-combat-restart" type="button">重新开始</button>
+                <p id="side-combat-complete-text">战术考核完成。</p>
+                <button id="side-combat-restart" type="button">返回起点</button>
             </div>
         </div>
         <div id="side-combat-tooltip" class="side-combat-tooltip hidden"></div>
@@ -1592,10 +1592,10 @@ function completeRun(victory) {
     renderCompleteScore();
     if (state.els.completeText) {
         state.els.completeText.textContent = victory
-            ? '雪原路线完成，芙提雅安全返回信标点。'
+            ? '战术考核完成，芙提雅安全返回信标点。'
             : '芙提雅生命值归零，路线已中断。';
     }
-    pushLog(victory ? '雪原路线完成。' : '路线中断。');
+    pushLog(victory ? '战术考核完成。' : '路线中断。');
     renderCombat();
 }
 
@@ -1790,6 +1790,7 @@ function positionCompactRuleToggle() {
 
 function setScaledStyleVars(scale) {
     if (!state.root) return;
+    state.root.style.setProperty('--side-combat-side-rail-scale', Math.max(0.82, scale).toFixed(3));
     const pxVars = {
         '--side-combat-route-top': 7,
         '--side-combat-route-width': 470,

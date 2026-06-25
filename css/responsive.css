@@ -1885,9 +1885,13 @@
 }
 
 #side-scroller-adventure.is-side-combat-compact-wide .side-combat-archive,
-#side-scroller-adventure.is-side-combat-compact-wide .side-combat-info-toggle,
 #side-scroller-adventure.is-side-combat-compact-wide .side-combat.is-started .side-combat-rule-toggle {
     left: var(--side-combat-safe-left);
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-archive {
+    transform: translateY(-50%) scale(var(--side-combat-side-rail-scale, 1));
+    transform-origin: left center;
 }
 
 #side-scroller-adventure.is-side-combat-compact-wide .side-combat.is-started .side-combat-rule-toggle {
@@ -1899,9 +1903,23 @@
 }
 
 #side-scroller-adventure.is-side-combat-compact-wide .side-combat-rule-toggle,
-#side-scroller-adventure.is-side-combat-compact-wide .side-combat-scoreboard-toggle,
-#side-scroller-adventure.is-side-combat-compact-wide .side-combat-actions {
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-scoreboard-toggle {
     right: var(--side-combat-safe-right);
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-info-toggle {
+    left: max(12px, env(safe-area-inset-left, 0px));
+    bottom: 18px;
+    width: max(var(--side-combat-round-size), 42px);
+    height: max(var(--side-combat-round-size), 42px);
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-actions {
+    right: max(12px, env(safe-area-inset-right, 0px));
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-actions button {
+    min-height: max(var(--side-combat-round-size), 42px);
 }
 
 #side-scroller-adventure.is-side-combat-compact-wide .side-combat-log {
@@ -2021,13 +2039,27 @@
     }
 
     #side-scroller-adventure.is-side-combat-extreme-wide .side-combat-info-toggle {
-        left: var(--side-combat-safe-left);
-        bottom: 22px;
+        left: max(12px, env(safe-area-inset-left, 0px));
+        bottom: 18px;
     }
 
     #side-scroller-adventure.is-side-combat-extreme-wide .side-combat-actions {
-        right: var(--side-combat-safe-right);
-        bottom: 22px;
+        right: max(12px, env(safe-area-inset-right, 0px));
+        bottom: 18px;
+    }
+}
+
+@media (pointer: coarse) {
+    #side-scroller-adventure.is-side-combat-compact-wide .side-scroller-touch {
+        left: max(18px, env(safe-area-inset-left, 0px));
+        right: max(18px, env(safe-area-inset-right, 0px));
+        bottom: 62px;
+    }
+
+    #side-scroller-adventure.is-side-combat-compact-wide .side-scroller-touch-btn {
+        width: 54px;
+        height: 54px;
+        font-size: 1.8rem;
     }
 }
 
