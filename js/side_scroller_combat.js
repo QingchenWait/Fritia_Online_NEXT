@@ -1,5 +1,5 @@
 import { buildSideScrollerCardBatch, SIDE_CARD_CATEGORY_LABELS, SIDE_CARD_RARITY_LABELS } from './side_scroller_cards_llm.js?v=20260624-combat-ui';
-import { getAffinity } from './game_state.js';
+import { addAffinity, getAffinity } from './game_state.js';
 import {
     addCardToSideScrollerArchive,
     cloneArchivedCardForCombat,
@@ -108,6 +108,18 @@ const SCORE_RULES = {
     turnPenalty: 22,
     minimumRate: 0.35
 };
+const RUN_AFFINITY_REWARDS = {
+    standard: 8,
+    hard: 12,
+    legend: 16
+};
+const COMPACT_VIEWPORT = {
+    minWidth: 760,
+    maxHeight: 620,
+    extremeMaxHeight: 540,
+    minAspect: 2.15,
+    extremeAspect: 2.2
+};
 const DIFFICULTIES = [
     { id: 'standard', label: '标准', detail: '5 关卡 + 1 BOSS', normalEvents: 5, bossEvents: 1 },
     { id: 'hard', label: '困难', detail: '7 关卡 + 1 BOSS', normalEvents: 7, bossEvents: 1 },
@@ -175,6 +187,7 @@ const state = {
     carriedUsedIds: new Set(),
     activeArchiveCard: null,
     infoExpanded: true,
+    compactInfoDefaultApplied: false,
     enemyFloatBursts: new Map(),
     playerFloatBursts: { index: 0, at: 0 },
     score: 0,
@@ -182,6 +195,7 @@ const state = {
     scoredEnemyIds: new Set(),
     lastScoreRecord: null,
     isNewScoreRecord: false,
+    runAffinityAwarded: false,
     busy: false,
     preloading: false,
     preloadedBatch: null,
@@ -212,6 +226,7 @@ export function openSideScrollerCombat() {
     state.visible = true;
     state.root?.classList.remove('hidden');
     state.root?.classList.remove('is-started', 'is-battle', 'is-loading', 'has-visible-hand');
+    state.panel?.classList.add('is-side-combat-active');
     state.panel?.classList.remove('is-side-combat-started', 'is-side-combat-hint-visible');
     renderCombat();
 }
@@ -228,7 +243,11 @@ export function closeSideScrollerCombat() {
     closeStatusPopover();
     closeDeckPopover();
     closeArchivePanel();
-    state.panel?.classList.remove('is-side-combat-started', 'is-side-combat-hint-visible');
+    state.panel?.classList.remove('is-side-combat-active', 'is-side-combat-started', 'is-side-combat-hint-visible');
+    state.panel?.classList.remove('is-side-combat-compact-wide', 'is-side-combat-extreme-wide');
+    state.root?.classList.remove('is-compact-wide', 'is-extreme-wide');
+    state.root?.style.removeProperty('--side-combat-ui-scale');
+    state.root?.style.removeProperty('--side-combat-compact-progress');
 }
 
 export function updateSideScrollerCombat(delta) {
@@ -300,6 +319,7 @@ function resetCombatState() {
     state.carriedUsedIds = new Set();
     state.activeArchiveCard = null;
     state.infoExpanded = true;
+    state.compactInfoDefaultApplied = false;
     state.enemyFloatBursts = new Map();
     state.playerFloatBursts = { index: 0, at: 0 };
     state.score = 0;
@@ -307,6 +327,7 @@ function resetCombatState() {
     state.scoredEnemyIds = new Set();
     state.lastScoreRecord = null;
     state.isNewScoreRecord = false;
+    state.runAffinityAwarded = false;
     state.busy = false;
     state.preloading = false;
     state.preloadedBatch = null;
@@ -486,8 +507,8 @@ function ensureDom() {
             <div class="side-combat-modal__panel side-combat-modal__panel--small">
                 <span id="side-combat-complete-title" class="side-combat-modal__eyebrow">RUN COMPLETE</span>
                 <div id="side-combat-complete-score" class="side-combat-complete-score"></div>
-                <p id="side-combat-complete-text">雪原路线完成。</p>
-                <button id="side-combat-restart" type="button">重新开始</button>
+                <p id="side-combat-complete-text">战术考核完成。</p>
+                <button id="side-combat-restart" type="button">返回起点</button>
             </div>
         </div>
         <div id="side-combat-tooltip" class="side-combat-tooltip hidden"></div>
@@ -647,6 +668,8 @@ function bindEvents() {
             handleTargetSelection('self');
         }
     });
+    window.addEventListener('resize', handleCombatViewportChange);
+    window.addEventListener('orientationchange', handleCombatViewportChange);
 }
 
 async function startRun() {
@@ -1572,15 +1595,26 @@ function completeRun(victory) {
     state.els.rewardPanel?.classList.add('hidden');
     state.els.completePanel?.classList.remove('hidden');
     finalizeRunScore();
+    if (victory) awardRunAffinityReward();
     if (state.els.completeTitle) state.els.completeTitle.textContent = victory ? 'RUN COMPLETE' : 'RUN FAILED';
     renderCompleteScore();
     if (state.els.completeText) {
         state.els.completeText.textContent = victory
-            ? '雪原路线完成，芙提雅安全返回信标点。'
+            ? '战术考核完成，芙提雅安全返回信标点。'
             : '芙提雅生命值归零，路线已中断。';
     }
-    pushLog(victory ? '雪原路线完成。' : '路线中断。');
+    pushLog(victory ? '战术考核完成。' : '路线中断。');
     renderCombat();
+}
+
+function awardRunAffinityReward() {
+    if (state.runAffinityAwarded) return 0;
+    const difficulty = currentDifficulty();
+    const reward = RUN_AFFINITY_REWARDS[difficulty.id] || 0;
+    if (reward <= 0) return 0;
+    const result = addAffinity(reward);
+    state.runAffinityAwarded = result.delta > 0;
+    return result.delta;
 }
 
 function showReward(title, text) {
@@ -1665,6 +1699,7 @@ async function useExecuteSkill(enemy) {
 
 function renderCombat() {
     if (!state.root) return;
+    syncCombatViewportClass();
     const stylePanelVisible = state.phase === 'intro' || state.phase === 'loading';
     const combatStarted = !stylePanelVisible;
     const hintVisible = state.visible && (state.phase === 'walk' || state.phase === 'encounter');
@@ -1693,7 +1728,146 @@ function renderCombat() {
     renderRuleDocControls();
     renderScoreboardPanel();
     renderArchiveControls();
+    positionCompactRuleToggle();
     renderLog();
+}
+
+function handleCombatViewportChange() {
+    syncCombatViewportClass();
+    positionCompactRuleToggle();
+}
+
+function syncCombatViewportClass() {
+    if (!state.root || !state.panel) return;
+    const rect = state.panel.getBoundingClientRect();
+    const width = rect.width || window.innerWidth || 0;
+    const height = rect.height || window.innerHeight || 0;
+    const aspect = height > 0 ? width / height : 0;
+    const compactByHeight = width >= COMPACT_VIEWPORT.minWidth && height <= COMPACT_VIEWPORT.maxHeight;
+    const compactByAspect = width >= COMPACT_VIEWPORT.minWidth && height <= 900 && aspect >= COMPACT_VIEWPORT.minAspect;
+    const compactWide = state.visible && (compactByHeight || compactByAspect);
+    const progress = compactWide
+        ? clamp01(Math.max(
+            (COMPACT_VIEWPORT.maxHeight - height) / (COMPACT_VIEWPORT.maxHeight - 360),
+            (aspect - COMPACT_VIEWPORT.minAspect) / 1.6
+        ))
+        : 0;
+    const scale = compactWide ? (1 - progress * 0.34).toFixed(3) : '1';
+    const extremeWide = compactWide && (
+        height <= COMPACT_VIEWPORT.extremeMaxHeight
+        || (height <= 820 && aspect >= COMPACT_VIEWPORT.extremeAspect)
+        || progress > 0.26
+    );
+    if (compactWide && !state.compactInfoDefaultApplied) {
+        state.infoExpanded = false;
+        state.compactInfoDefaultApplied = true;
+    } else if (!compactWide) {
+        state.compactInfoDefaultApplied = false;
+    }
+    state.panel.classList.toggle('is-side-combat-compact-wide', compactWide);
+    state.panel.classList.toggle('is-side-combat-extreme-wide', extremeWide);
+    state.root.classList.toggle('is-compact-wide', compactWide);
+    state.root.classList.toggle('is-extreme-wide', extremeWide);
+    state.root.style.setProperty('--side-combat-ui-scale', scale);
+    state.root.style.setProperty('--side-combat-compact-progress', progress.toFixed(3));
+    setScaledStyleVars(Number(scale));
+}
+
+function positionCompactRuleToggle() {
+    const button = state.els.ruleToggle;
+    const archiveButton = state.els.archiveToggle;
+    if (!button || !archiveButton || !state.root) return;
+    const shouldAnchor = state.visible
+        && state.root.classList.contains('is-started')
+        && state.root.classList.contains('is-compact-wide');
+    if (!shouldAnchor) {
+        button.style.removeProperty('left');
+        button.style.removeProperty('top');
+        button.style.removeProperty('right');
+        button.style.removeProperty('width');
+        button.style.removeProperty('height');
+        button.style.removeProperty('transform');
+        return;
+    }
+    const rootRect = state.root.getBoundingClientRect();
+    const anchorRect = archiveButton.getBoundingClientRect();
+    if (!rootRect.width || !anchorRect.width || !anchorRect.height) return;
+    const buttonRect = button.getBoundingClientRect();
+    const width = anchorRect.width || buttonRect.width || 48;
+    const height = anchorRect.height || buttonRect.height || 48;
+    const gap = Math.max(8, Math.min(14, anchorRect.height * 0.24));
+    const left = anchorRect.left - rootRect.left + anchorRect.width * 0.5 - width * 0.5;
+    const top = anchorRect.top - rootRect.top - gap - height * 0.5;
+    button.style.left = `${Math.round(left)}px`;
+    button.style.top = `${Math.round(top)}px`;
+    button.style.right = 'auto';
+    button.style.width = `${Math.round(width)}px`;
+    button.style.height = `${Math.round(height)}px`;
+    button.style.transform = 'translateY(-50%)';
+}
+
+function setScaledStyleVars(scale) {
+    if (!state.root) return;
+    state.root.style.setProperty('--side-combat-side-rail-scale', Math.max(0.82, scale).toFixed(3));
+    const pxVars = {
+        '--side-combat-route-top': 7,
+        '--side-combat-route-width': 470,
+        '--side-combat-route-map-height': 24,
+        '--side-combat-route-map-pad': 10,
+        '--side-combat-route-pointer-top': -10,
+        '--side-combat-route-node-width': 22,
+        '--side-combat-route-gap-width': 18,
+        '--side-combat-hand-width': 820,
+        '--side-combat-card-width': 150,
+        '--side-combat-card-height': 180,
+        '--side-combat-card-pad': 12,
+        '--side-combat-card-title-gap': 12,
+        '--side-combat-card-copy-height': 34,
+        '--side-combat-card-copy-gap': 7,
+        '--side-combat-card-value-gap': 10,
+        '--side-combat-round-size': 48,
+        '--side-combat-refresh-x': 396,
+        '--side-combat-deck-x': 340,
+        '--side-combat-side-x': 18,
+        '--side-combat-side-gap': 14,
+        '--side-combat-rule-archive-offset': 152,
+        '--side-combat-play-right': 166,
+        '--side-combat-play-width': 66,
+        '--side-combat-discard-right': 252,
+        '--side-combat-actions-right': 18,
+        '--side-combat-player-top': 68,
+        '--side-combat-player-right': 18,
+        '--side-combat-player-width': 232,
+        '--side-combat-player-height': 50,
+        '--side-combat-player-text-column': 104,
+        '--side-combat-player-avatar-column': 46,
+        '--side-combat-player-gap': 8,
+        '--side-combat-player-pad-y': 5,
+        '--side-combat-player-pad-x': 7,
+        '--side-combat-player-pad-left': 12,
+        '--side-combat-player-avatar': 42,
+        '--side-combat-hp-gap': 5
+    };
+    Object.entries(pxVars).forEach(([name, value]) => {
+        state.root.style.setProperty(name, `${value * scale}px`);
+    });
+    const remVars = {
+        '--side-combat-route-pointer-font': 1,
+        '--side-combat-route-node-font': 1,
+        '--side-combat-route-gap-font': 0.7,
+        '--side-combat-route-title-font': 1,
+        '--side-combat-score-font': 0.62,
+        '--side-combat-card-title-font': 1.08,
+        '--side-combat-card-copy-font': 0.68,
+        '--side-combat-card-meta-font': 0.62,
+        '--side-combat-round-font': 1.02,
+        '--side-combat-play-font': 0.96,
+        '--side-combat-action-font': 0.78,
+        '--side-combat-player-font': 0.84
+    };
+    Object.entries(remVars).forEach(([name, value]) => {
+        state.root.style.setProperty(name, `${value * scale}rem`);
+    });
 }
 
 function renderProgressOnly() {
@@ -2132,9 +2306,12 @@ function getSpriteEnemyMetrics(enemy, index = 0, spriteEnemies = []) {
     const groundY = panelRect.top - rootRect.top + fritiaHitbox.bottom;
     const area = getSpriteEnemyStandingArea(rootRect, groundY);
     const areaWidth = Math.max(80, area.right - area.left);
-    const maxHeight = rootRect.width <= 700
-        ? rootRect.height * (enemy?.boss ? 0.64 : 0.52)
-        : rootRect.height * (enemy?.boss ? 0.82 : 0.68);
+    const compactHeight = state.root?.classList.contains('is-compact-wide') || (rootRect.width >= 760 && rootRect.height <= 540);
+    const maxHeight = compactHeight
+        ? rootRect.height * (enemy?.boss ? 0.58 : 0.48)
+        : rootRect.width <= 700
+            ? rootRect.height * (enemy?.boss ? 0.64 : 0.52)
+            : rootRect.height * (enemy?.boss ? 0.82 : 0.68);
     const desiredHeight = clampNumber(referenceHeight * variant.heightToAdjutant, 180, maxHeight);
     const desiredWidth = desiredHeight * variant.imageRatio;
     const fitScale = desiredWidth > areaWidth ? areaWidth / desiredWidth : 1;

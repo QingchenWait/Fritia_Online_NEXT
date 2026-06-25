@@ -81,6 +81,9 @@ const state = {
     lastAdjutantHitbox: { left: 0, top: 0, right: 0, bottom: 0 },
     bgm: null,
     requestClose: null,
+    orientationBlocker: null,
+    orientationClose: null,
+    orientationBlocked: false,
     dpr: 1,
     width: 1,
     height: 1
@@ -133,6 +136,8 @@ export function initSideScrollerAdventure({ controlsModule, requestClose } = {})
     state.panel = document.getElementById(PANEL_ID);
     state.canvas = document.getElementById(CANVAS_ID);
     state.ctx = state.canvas?.getContext('2d') || null;
+    state.orientationBlocker = document.getElementById('side-scroller-orientation-blocker');
+    state.orientationClose = document.getElementById('side-scroller-orientation-close');
     if (!state.panel || !state.canvas || !state.ctx) {
         console.warn('[SideScroller] Missing adventure DOM.');
         return;
@@ -148,8 +153,8 @@ export function initSideScrollerAdventure({ controlsModule, requestClose } = {})
         triggerFireAttack: () => triggerFireAttack()
     });
     resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
-    window.addEventListener('orientationchange', resizeCanvas);
+    window.addEventListener('resize', handleViewportChange);
+    window.addEventListener('orientationchange', handleViewportChange);
     void preloadImages();
 }
 
@@ -176,6 +181,7 @@ export function openSideScrollerAdventure() {
     state.controlsModule?.releaseControlMode?.({ resumeOnClose: true });
     playTacticalExamBgm();
     openSideScrollerCombat();
+    syncOrientationWarning();
     render();
 }
 
@@ -187,6 +193,7 @@ export function closeSideScrollerAdventure() {
     stopTacticalExamBgm();
     closeSideScrollerCombat();
     state.panel.classList.add('hidden');
+    hideOrientationWarning();
     document.body.classList.remove('side-scroller-active');
     document.dispatchEvent(new CustomEvent('fritia-overlay-closed', { detail: { id: PANEL_ID } }));
 }
@@ -218,6 +225,13 @@ export function isSideScrollerAdventureVisible() {
 
 export function updateSideScrollerAdventure(delta) {
     if (!state.visible) return;
+    if (state.orientationBlocked) {
+        state.inputLeft = false;
+        state.inputRight = false;
+        updateSideScrollerCombat(0);
+        render();
+        return;
+    }
     const rawDirection = Number(state.inputRight) - Number(state.inputLeft);
     const direction = isSideScrollerCombatMovementBlocked() ? 0 : rawDirection;
     const dt = Math.max(0, delta);
@@ -275,6 +289,7 @@ function triggerFireAttack() {
 
 function bindEvents() {
     document.getElementById('side-scroller-close')?.addEventListener('click', requestCloseAdventure);
+    state.orientationClose?.addEventListener('click', requestCloseAdventure);
     bindHoldButton('side-scroller-left', 'left');
     bindHoldButton('side-scroller-right', 'right');
 
@@ -321,6 +336,46 @@ function bindEvents() {
         state.inputLeft = false;
         state.inputRight = false;
     });
+}
+
+function handleViewportChange() {
+    resizeCanvas();
+    syncOrientationWarning();
+}
+
+function syncOrientationWarning() {
+    if (!state.visible || !state.panel || !state.orientationBlocker) return;
+    const shouldBlock = isMobilePortraitViewport();
+    const wasBlocked = state.orientationBlocked;
+    state.orientationBlocked = shouldBlock;
+    if (shouldBlock) {
+        state.inputLeft = false;
+        state.inputRight = false;
+    }
+    state.panel.classList.toggle('is-orientation-blocked', shouldBlock);
+    state.orientationBlocker.classList.toggle('hidden', !shouldBlock);
+    if (wasBlocked && !shouldBlock) {
+        state.panel.classList.add('is-orientation-transitioning');
+        window.setTimeout(() => {
+            state.panel?.classList.remove('is-orientation-transitioning');
+        }, 520);
+        resizeCanvas();
+        render();
+    }
+}
+
+function hideOrientationWarning() {
+    state.orientationBlocked = false;
+    state.panel?.classList.remove('is-orientation-blocked', 'is-orientation-transitioning');
+    state.orientationBlocker?.classList.add('hidden');
+}
+
+function isMobilePortraitViewport() {
+    const coarse = window.matchMedia?.('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+    if (!coarse) return false;
+    const width = window.innerWidth || state.width || 0;
+    const height = window.innerHeight || state.height || 0;
+    return height > width;
 }
 
 function requestCloseAdventure() {
@@ -527,8 +582,10 @@ function drawIceCracks(ctx, w, h, horizon) {
 
 function drawFritia(ctx, w, h) {
     if (!state.ready) return;
-    const groundY = h * 0.87;
-    const baseScale = Math.max(0.46, Math.min(0.88, h / 760));
+    const compactCombat = isCompactCombatViewport();
+    const groundY = h * (compactCombat ? 0.8 : 0.87);
+    const compactScale = compactCombat ? Math.max(0.64, Math.min(0.92, h / 520)) : 1;
+    const baseScale = Math.max(0.46, Math.min(0.88, h / 760)) * compactScale;
     const scale = baseScale * CHARACTER_SCALE_FACTOR;
     const x = w * 0.5;
     const fritiaGait = createCharacterGait(0, scale);
@@ -553,6 +610,13 @@ function drawFritia(ctx, w, h) {
     drawFireCompanion(ctx, scale, fireFloatY);
     drawRiggedCharacter(ctx, FRITIA_RIG, fritiaGait, scale, 1);
     ctx.restore();
+}
+
+function isCompactCombatViewport() {
+    return Boolean(
+        state.panel?.classList.contains('is-side-combat-compact-wide')
+        || (state.panel?.classList.contains('is-side-combat-active') && state.height <= 540 && state.width >= 760)
+    );
 }
 
 function drawAdjutantCompanion(ctx, fritiaX, groundY, baseScale) {

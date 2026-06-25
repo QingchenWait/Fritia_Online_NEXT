@@ -351,6 +351,838 @@
     }
 }
 
+@media (min-width: 760px) and (max-height: 540px) {
+    #side-scroller-adventure.is-side-combat-active .side-scroller-title {
+        min-width: 148px;
+        padding: 8px 13px;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-scroller-title span {
+        font-size: 0.56rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-scroller-title strong {
+        font-size: 0.86rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-scroller-close {
+        min-height: 34px;
+        padding: 0 14px;
+        font-size: 0.78rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-scroller-hint {
+        bottom: 12px;
+        padding: 7px 15px;
+        font-size: 0.72rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-route {
+        top: 7px;
+        width: min(470px, calc(100vw - 520px));
+        min-width: 320px;
+        gap: 0;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-route__map {
+        min-height: 24px;
+        padding-top: 10px;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-route__pointer {
+        top: -10px;
+        font-size: 1rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-route__node {
+        min-width: 22px;
+        font-size: 1rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-route__gap {
+        min-width: 18px;
+        font-size: 0.7rem;
+        letter-spacing: 0.12em;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-route > strong {
+        font-size: 1rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-score-live {
+        margin-top: -10px;
+        font-size: 0.62rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-player {
+        top: 68px;
+        right: 18px;
+        width: 232px;
+        min-height: 50px;
+        grid-template-columns: minmax(112px, 1fr) 46px;
+        gap: 8px;
+        padding: 5px 7px 5px 12px;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-player__avatar {
+        width: 42px;
+        height: 42px;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-player strong {
+        font-size: 0.84rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-hp {
+        height: 6px;
+        margin-top: 5px;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-log {
+        left: 16px;
+        bottom: 158px;
+        width: min(430px, 28vw);
+        min-height: 54px;
+        max-height: 106px;
+        padding: 10px 12px;
+        overflow: hidden;
+        font-size: 0.66rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-hand {
+        bottom: 18px;
+        width: min(820px, calc(100vw - 520px));
+        min-width: 520px;
+        gap: 8px;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-card {
+        width: 150px;
+        height: 180px;
+        min-width: 0;
+        padding: 12px;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-card:nth-child(1) { transform: rotate(-3deg) translateY(5px); }
+    #side-scroller-adventure.is-side-combat-active .side-combat-card:nth-child(2) { transform: rotate(-1deg); }
+    #side-scroller-adventure.is-side-combat-active .side-combat-card:nth-child(3) { transform: rotate(1deg); }
+    #side-scroller-adventure.is-side-combat-active .side-combat-card:nth-child(4) { transform: rotate(3deg) translateY(5px); }
+    #side-scroller-adventure.is-side-combat-active .side-combat-card strong {
+        margin-top: 12px;
+        font-size: 1.08rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-card small {
+        min-height: 34px;
+        margin-top: 7px;
+        font-size: 0.68rem;
+        line-height: 1.35;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-card__top,
+    #side-scroller-adventure.is-side-combat-active .side-combat-card__value {
+        font-size: 0.62rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-round,
+    #side-scroller-adventure.is-side-combat-active .side-combat-discard {
+        width: 48px;
+        height: 48px;
+        bottom: 28px;
+        font-size: 1.02rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-deck-toggle {
+        left: calc(50% - 340px);
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-refresh-round {
+        left: calc(50% - 396px);
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-refresh-tag {
+        min-width: 72px;
+        padding: 3px 8px;
+        font-size: 0.58rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-discard {
+        left: auto;
+        right: 252px;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-discard::after {
+        min-width: 58px;
+        padding: 3px 8px;
+        font-size: 0.56rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-play-count {
+        left: auto;
+        right: 166px;
+        bottom: 28px;
+        min-width: 66px;
+        height: 48px;
+        padding: 0 10px;
+        font-size: 0.96rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-actions {
+        right: 18px;
+        bottom: 30px;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-actions button {
+        min-height: 48px;
+        padding: 0 15px;
+        font-size: 0.78rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-info-toggle {
+        left: 18px;
+        bottom: 28px;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-archive {
+        left: 18px;
+        top: 52%;
+        gap: 14px;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-archive-toggle,
+    #side-scroller-adventure.is-side-combat-active .side-combat-rule-toggle,
+    #side-scroller-adventure.is-side-combat-active .side-combat-scoreboard-toggle {
+        width: 48px;
+        height: 48px;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-archive-toggle::after,
+    #side-scroller-adventure.is-side-combat-active .side-combat-rule-toggle::after {
+        width: 54px;
+        font-size: 0.56rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-carry-slots {
+        gap: 6px;
+        padding: 8px 6px;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-carry-slot {
+        width: 36px;
+        height: 36px;
+        font-size: 0.88rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-rule-toggle {
+        right: 18px;
+        top: calc(50% - 118px);
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-scoreboard-toggle {
+        right: 18px;
+        top: calc(50% - 18px);
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat.is-started .side-combat-rule-toggle {
+        left: 18px;
+        top: calc(50% - 156px);
+        right: auto;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-skill {
+        width: 44px;
+        height: 44px;
+        min-height: 44px;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-skill img {
+        width: 38px;
+        height: 38px;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-skill span {
+        min-width: 18px;
+        height: 18px;
+        font-size: 0.62rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-sprite-enemy__hud {
+        width: min(150px, 92%);
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-sprite-enemy__row .side-combat-enemy__name,
+    #side-scroller-adventure.is-side-combat-active .side-combat-sprite-enemy__row strong {
+        font-size: 0.68rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-sprite-enemy__hp-track {
+        height: 4px;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-modal {
+        inset: 54px 0 0;
+        padding: 10px;
+        align-items: start;
+        justify-items: center;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-modal__panel {
+        width: min(520px, calc(100vw - 240px));
+        max-height: calc(100vh - 76px);
+        overflow: auto;
+        padding: 18px 22px;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-modal__eyebrow {
+        font-size: 0.68rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-modal h2 {
+        margin: 6px 0 8px;
+        font-size: 1.18rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-modal p {
+        margin-bottom: 10px;
+        font-size: 0.76rem;
+        line-height: 1.45;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-difficulty {
+        grid-template-columns: 42px minmax(120px, 1fr) 42px;
+        gap: 10px;
+        width: min(294px, 100%);
+        margin: 4px auto 10px;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-modal .side-combat-difficulty__arrow {
+        width: 42px;
+        height: 42px;
+        min-height: 42px;
+        font-size: 2rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-difficulty strong {
+        font-size: 0.98rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-difficulty__text span {
+        font-size: 0.68rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-modal textarea {
+        min-height: 76px;
+        padding: 10px 12px;
+        font-size: 0.88rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-modal button {
+        min-height: 36px;
+        margin-top: 10px;
+        padding: 0 15px;
+        font-size: 0.78rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-archive-panel,
+    #side-scroller-adventure.is-side-combat-active .side-combat-rule-panel,
+    #side-scroller-adventure.is-side-combat-active .side-combat-scoreboard-panel {
+        max-height: calc(100vh - 72px);
+        overflow: hidden;
+        padding: 12px;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-archive-panel {
+        left: 84px;
+        width: min(500px, calc(100vw - 180px));
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-rule-panel {
+        right: 84px;
+        width: min(390px, calc(100vw - 180px));
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat.is-started .side-combat-rule-panel {
+        left: 84px;
+        right: auto;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-scoreboard-panel {
+        right: 84px;
+        width: min(330px, calc(100vw - 180px));
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-archive-grid {
+        grid-auto-rows: 112px;
+        min-height: 0;
+        gap: 8px;
+        margin: 10px 0;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-archive-card {
+        height: 112px;
+        gap: 5px;
+        padding: 9px 34px 9px 10px;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-archive-card strong {
+        font-size: 0.9rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-archive-card small,
+    #side-scroller-adventure.is-side-combat-active .side-combat-archive-card em,
+    #side-scroller-adventure.is-side-combat-active .side-combat-deck-item span {
+        font-size: 0.62rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-rule-content,
+    #side-scroller-adventure.is-side-combat-active .side-combat-scoreboard-list {
+        font-size: 0.74rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-tooltip--deck {
+        max-height: calc(100vh - 92px);
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-deck-list {
+        max-height: calc(100vh - 158px);
+    }
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-route {
+    top: calc(7px * var(--side-combat-ui-scale, 1));
+    width: min(calc(470px * var(--side-combat-ui-scale, 1)), calc(100vw - 520px));
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-route__map {
+    min-height: calc(24px * var(--side-combat-ui-scale, 1));
+    padding-top: calc(10px * var(--side-combat-ui-scale, 1));
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-route__pointer {
+    top: calc(-10px * var(--side-combat-ui-scale, 1));
+    font-size: calc(1rem * var(--side-combat-ui-scale, 1));
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-route__node {
+    min-width: calc(22px * var(--side-combat-ui-scale, 1));
+    font-size: calc(1rem * var(--side-combat-ui-scale, 1));
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-route__gap {
+    min-width: calc(18px * var(--side-combat-ui-scale, 1));
+    font-size: calc(0.7rem * var(--side-combat-ui-scale, 1));
+    letter-spacing: calc(0.12em * var(--side-combat-ui-scale, 1));
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-route > strong {
+    margin-top: calc(4px * var(--side-combat-ui-scale, 1));
+    font-size: calc(1rem * var(--side-combat-ui-scale, 1));
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-score-live {
+    margin-top: calc(-3px * var(--side-combat-ui-scale, 1));
+    font-size: calc(0.62rem * var(--side-combat-ui-scale, 1));
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-hand {
+    bottom: calc(12px + 6px * var(--side-combat-ui-scale, 1));
+    width: min(calc(820px * var(--side-combat-ui-scale, 1)), calc(100vw - 520px));
+    min-width: min(520px, calc(100vw - 760px));
+    gap: calc(8px * var(--side-combat-ui-scale, 1));
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-card {
+    width: calc(150px * var(--side-combat-ui-scale, 1));
+    height: calc(180px * var(--side-combat-ui-scale, 1));
+    padding: calc(12px * var(--side-combat-ui-scale, 1));
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-card strong {
+    margin-top: calc(12px * var(--side-combat-ui-scale, 1));
+    font-size: calc(1.08rem * var(--side-combat-ui-scale, 1));
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-card small {
+    min-height: calc(34px * var(--side-combat-ui-scale, 1));
+    margin-top: calc(7px * var(--side-combat-ui-scale, 1));
+    font-size: calc(0.68rem * var(--side-combat-ui-scale, 1));
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-card__top,
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-card__value {
+    font-size: calc(0.62rem * var(--side-combat-ui-scale, 1));
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-card__value {
+    left: calc(12px * var(--side-combat-ui-scale, 1));
+    right: calc(12px * var(--side-combat-ui-scale, 1));
+    bottom: calc(12px * var(--side-combat-ui-scale, 1));
+    padding-top: calc(10px * var(--side-combat-ui-scale, 1));
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-round,
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-discard {
+    width: calc(48px * var(--side-combat-ui-scale, 1));
+    height: calc(48px * var(--side-combat-ui-scale, 1));
+    bottom: calc(18px + 10px * var(--side-combat-ui-scale, 1));
+    font-size: calc(1.02rem * var(--side-combat-ui-scale, 1));
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-refresh-round {
+    left: calc(50% - 396px * var(--side-combat-ui-scale, 1));
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-deck-toggle {
+    left: calc(50% - 340px * var(--side-combat-ui-scale, 1));
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-info-toggle {
+    left: calc(18px * var(--side-combat-ui-scale, 1));
+    bottom: calc(18px + 10px * var(--side-combat-ui-scale, 1));
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-archive {
+    left: calc(18px * var(--side-combat-ui-scale, 1));
+    gap: calc(14px * var(--side-combat-ui-scale, 1));
+    transform: translateY(-50%) scale(var(--side-combat-ui-scale, 1));
+    transform-origin: left center;
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-play-count {
+    right: calc(166px * var(--side-combat-ui-scale, 1));
+    bottom: calc(18px + 10px * var(--side-combat-ui-scale, 1));
+    min-width: calc(66px * var(--side-combat-ui-scale, 1));
+    height: calc(48px * var(--side-combat-ui-scale, 1));
+    padding: 0 calc(10px * var(--side-combat-ui-scale, 1));
+    font-size: calc(0.96rem * var(--side-combat-ui-scale, 1));
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-discard {
+    right: calc(252px * var(--side-combat-ui-scale, 1));
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-actions {
+    right: calc(18px * var(--side-combat-ui-scale, 1));
+    bottom: calc(20px + 10px * var(--side-combat-ui-scale, 1));
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-actions button {
+    min-height: calc(48px * var(--side-combat-ui-scale, 1));
+    padding: 0 calc(15px * var(--side-combat-ui-scale, 1));
+    font-size: calc(0.78rem * var(--side-combat-ui-scale, 1));
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-player {
+    top: calc(68px * var(--side-combat-ui-scale, 1));
+    right: calc(18px * var(--side-combat-ui-scale, 1));
+    width: calc(232px * var(--side-combat-ui-scale, 1));
+    min-height: calc(50px * var(--side-combat-ui-scale, 1));
+    grid-template-columns: minmax(calc(104px * var(--side-combat-ui-scale, 1)), 1fr) calc(46px * var(--side-combat-ui-scale, 1));
+    gap: calc(8px * var(--side-combat-ui-scale, 1));
+    padding: calc(5px * var(--side-combat-ui-scale, 1)) calc(7px * var(--side-combat-ui-scale, 1)) calc(5px * var(--side-combat-ui-scale, 1)) calc(12px * var(--side-combat-ui-scale, 1));
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-player__avatar {
+    width: calc(42px * var(--side-combat-ui-scale, 1));
+    height: calc(42px * var(--side-combat-ui-scale, 1));
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-player strong {
+    font-size: calc(0.84rem * var(--side-combat-ui-scale, 1));
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-hp {
+    height: max(4px, calc(6px * var(--side-combat-ui-scale, 1)));
+    margin-top: calc(5px * var(--side-combat-ui-scale, 1));
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-route {
+    top: 4px;
+    width: min(430px, calc(100vw - 650px));
+    min-width: 300px;
+    z-index: 346;
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-route__map {
+    min-height: 20px;
+    padding-top: 8px;
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-route > strong {
+    margin-top: 2px;
+    font-size: 0.9rem;
+    line-height: 1;
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-score-live {
+    margin-top: 4px;
+    font-size: 0.6rem;
+    line-height: 1;
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-player {
+    top: 74px;
+    left: 50%;
+    right: auto;
+    width: min(240px, calc(100vw - 820px));
+    min-width: 168px;
+    min-height: 34px;
+    grid-template-columns: 1fr;
+    justify-items: center;
+    padding: 6px 12px;
+    transform: translateX(-50%);
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-player__meta {
+    width: 100%;
+    justify-items: center;
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-player strong {
+    width: 100%;
+    text-align: center;
+    font-size: 0.78rem;
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-player__avatar,
+#side-scroller-adventure.is-side-combat-extreme-wide #side-combat-player-status {
+    display: none;
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-hp {
+    width: 100%;
+    height: 5px;
+    margin-top: 4px;
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-hand {
+    bottom: 8px;
+    width: min(calc(760px * var(--side-combat-ui-scale, 1)), calc(100vw - 620px));
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-card {
+    width: calc(142px * var(--side-combat-ui-scale, 1));
+    height: calc(170px * var(--side-combat-ui-scale, 1));
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-info-toggle {
+    left: calc(16px * var(--side-combat-ui-scale, 1));
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-archive {
+    left: calc(16px * var(--side-combat-ui-scale, 1));
+    top: 51%;
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-refresh-round {
+    left: calc(50% - 330px * var(--side-combat-ui-scale, 1));
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-deck-toggle {
+    left: calc(50% - 276px * var(--side-combat-ui-scale, 1));
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-discard {
+    right: calc(210px * var(--side-combat-ui-scale, 1));
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-play-count {
+    right: calc(130px * var(--side-combat-ui-scale, 1));
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-actions {
+    right: calc(12px * var(--side-combat-ui-scale, 1));
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-route {
+    top: var(--side-combat-route-top);
+    width: min(var(--side-combat-route-width), calc(100vw - 520px));
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-route__map {
+    min-height: var(--side-combat-route-map-height);
+    padding-top: var(--side-combat-route-map-pad);
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-route__pointer {
+    top: var(--side-combat-route-pointer-top);
+    font-size: var(--side-combat-route-pointer-font);
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-route__node {
+    min-width: var(--side-combat-route-node-width);
+    font-size: var(--side-combat-route-node-font);
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-route__gap {
+    min-width: var(--side-combat-route-gap-width);
+    font-size: var(--side-combat-route-gap-font);
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-route > strong {
+    font-size: var(--side-combat-route-title-font);
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-score-live {
+    margin-top: 2px;
+    font-size: var(--side-combat-score-font);
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-hand {
+    width: min(var(--side-combat-hand-width), calc(100vw - 520px));
+    gap: var(--side-combat-player-gap);
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-card {
+    width: var(--side-combat-card-width);
+    height: var(--side-combat-card-height);
+    padding: var(--side-combat-card-pad);
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-card strong {
+    margin-top: var(--side-combat-card-title-gap);
+    font-size: var(--side-combat-card-title-font);
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-card small {
+    min-height: var(--side-combat-card-copy-height);
+    margin-top: var(--side-combat-card-copy-gap);
+    font-size: var(--side-combat-card-copy-font);
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-card__top,
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-card__value {
+    font-size: var(--side-combat-card-meta-font);
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-card__value {
+    left: var(--side-combat-card-pad);
+    right: var(--side-combat-card-pad);
+    bottom: var(--side-combat-card-pad);
+    padding-top: var(--side-combat-card-value-gap);
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-round,
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-discard {
+    width: var(--side-combat-round-size);
+    height: var(--side-combat-round-size);
+    font-size: var(--side-combat-round-font);
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-refresh-round {
+    left: calc(50% - var(--side-combat-refresh-x));
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-deck-toggle {
+    left: calc(50% - var(--side-combat-deck-x));
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-info-toggle,
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-archive {
+    left: var(--side-combat-side-x);
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-archive {
+    gap: var(--side-combat-side-gap);
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-play-count {
+    right: var(--side-combat-play-right);
+    min-width: var(--side-combat-play-width);
+    height: var(--side-combat-round-size);
+    font-size: var(--side-combat-play-font);
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-discard {
+    right: var(--side-combat-discard-right);
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-actions {
+    right: var(--side-combat-actions-right);
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-actions button {
+    min-height: var(--side-combat-round-size);
+    font-size: var(--side-combat-action-font);
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-player {
+    top: var(--side-combat-player-top);
+    right: var(--side-combat-player-right);
+    width: var(--side-combat-player-width);
+    min-height: var(--side-combat-player-height);
+    grid-template-columns: minmax(var(--side-combat-player-text-column), 1fr) var(--side-combat-player-avatar-column);
+    gap: var(--side-combat-player-gap);
+    padding: var(--side-combat-player-pad-y) var(--side-combat-player-pad-x) var(--side-combat-player-pad-y) var(--side-combat-player-pad-left);
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-player__avatar {
+    width: var(--side-combat-player-avatar);
+    height: var(--side-combat-player-avatar);
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-player strong {
+    font-size: var(--side-combat-player-font);
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-hp {
+    margin-top: var(--side-combat-hp-gap);
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-hand {
+    width: min(var(--side-combat-hand-width), calc(100vw - 620px));
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-card {
+    width: calc(var(--side-combat-card-width) - 8px);
+    height: calc(var(--side-combat-card-height) - 10px);
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-refresh-round {
+    left: calc(50% - 350px);
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-deck-toggle {
+    left: calc(50% - 296px);
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-discard {
+    right: 228px;
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-play-count {
+    right: 146px;
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-actions {
+    right: 12px;
+}
+
+@media (min-width: 760px) and (max-height: 420px) {
+    #side-scroller-adventure.is-side-combat-active .side-scroller-title {
+        min-width: 132px;
+        padding: 6px 11px;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-scroller-close {
+        min-height: 30px;
+        padding: 0 12px;
+        font-size: 0.72rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-route {
+        top: 4px;
+        width: min(410px, calc(100vw - 560px));
+        min-width: 260px;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-player {
+        top: 58px;
+        width: 210px;
+        min-height: 44px;
+        grid-template-columns: minmax(100px, 1fr) 38px;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-player__avatar {
+        width: 36px;
+        height: 36px;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-hand {
+        bottom: 10px;
+        width: min(690px, calc(100vw - 610px));
+        min-width: 440px;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-card {
+        width: 128px;
+        height: 150px;
+        padding: 10px;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-card strong {
+        margin-top: 8px;
+        font-size: 0.94rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-card small {
+        min-height: 28px;
+        margin-top: 5px;
+        font-size: 0.6rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-log {
+        bottom: 126px;
+        width: min(360px, 27vw);
+        max-height: 82px;
+        font-size: 0.6rem;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-actions,
+    #side-scroller-adventure.is-side-combat-active .side-combat-round,
+    #side-scroller-adventure.is-side-combat-active .side-combat-discard,
+    #side-scroller-adventure.is-side-combat-active .side-combat-play-count {
+        bottom: 16px;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-modal {
+        inset: 48px 0 0;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-modal__panel {
+        width: min(480px, calc(100vw - 260px));
+        max-height: calc(100vh - 62px);
+        padding: 14px 20px;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-modal textarea {
+        min-height: 58px;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-archive {
+        gap: 10px;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-carry-slot {
+        width: 32px;
+        height: 32px;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-archive-panel,
+    #side-scroller-adventure.is-side-combat-active .side-combat-rule-panel,
+    #side-scroller-adventure.is-side-combat-active .side-combat-scoreboard-panel {
+        max-height: calc(100vh - 58px);
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-archive-grid {
+        grid-auto-rows: 96px;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-archive-card {
+        height: 96px;
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-tooltip--deck {
+        max-height: calc(100vh - 70px);
+    }
+    #side-scroller-adventure.is-side-combat-active .side-combat-deck-list {
+        max-height: calc(100vh - 128px);
+    }
+}
+
 /* ===== 中屏：造梦双栏折叠 ===== */
 @media (max-width: 820px) {
     .dream-grid { grid-template-columns: 1fr; }
@@ -1040,4 +1872,211 @@
     .room-panorama-bottom { gap: 8px; }
     #room-panorama-capture { min-width: 148px; padding: 0 18px; }
     #room-panorama-close { min-width: 112px; padding: 0 16px; }
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide {
+    --side-combat-safe-left: max(32px, calc(env(safe-area-inset-left, 0px) + 24px));
+    --side-combat-safe-right: max(32px, calc(env(safe-area-inset-right, 0px) + 24px));
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-scroller-topbar {
+    left: var(--side-combat-safe-left);
+    right: var(--side-combat-safe-right);
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-archive,
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat.is-started .side-combat-rule-toggle {
+    left: var(--side-combat-safe-left);
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-archive {
+    transform: translateY(-50%) scale(var(--side-combat-side-rail-scale, 1));
+    transform-origin: left center;
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat.is-started .side-combat-rule-toggle {
+    top: calc(50% - var(--side-combat-rule-archive-offset, 152px));
+    right: auto;
+    width: var(--side-combat-round-size);
+    height: var(--side-combat-round-size);
+    transform: translateY(-50%);
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-rule-toggle,
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-scoreboard-toggle {
+    right: var(--side-combat-safe-right);
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-info-toggle {
+    left: max(12px, env(safe-area-inset-left, 0px));
+    bottom: 18px;
+    width: max(var(--side-combat-round-size), 42px);
+    height: max(var(--side-combat-round-size), 42px);
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-actions {
+    right: max(12px, env(safe-area-inset-right, 0px));
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-actions button {
+    min-height: max(var(--side-combat-round-size), 42px);
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide .side-combat-log {
+    left: calc(var(--side-combat-safe-left) + 54px);
+    bottom: 124px;
+    width: min(340px, 25vw);
+    max-height: 92px;
+    min-height: 0;
+    padding: 10px 12px;
+    font-size: 0.64rem;
+    line-height: 1.5;
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide #side-combat-reward-panel,
+#side-scroller-adventure.is-side-combat-compact-wide #side-combat-complete-panel {
+    inset: 0;
+    display: grid;
+    place-items: center;
+    align-items: center;
+    justify-items: center;
+    padding: 18px max(var(--side-combat-safe-right), 18px) 18px max(var(--side-combat-safe-left), 18px);
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide #side-combat-reward-panel.hidden,
+#side-scroller-adventure.is-side-combat-compact-wide #side-combat-complete-panel.hidden {
+    display: none;
+}
+
+#side-scroller-adventure.is-side-combat-compact-wide #side-combat-reward-panel .side-combat-modal__panel,
+#side-scroller-adventure.is-side-combat-compact-wide #side-combat-complete-panel .side-combat-modal__panel {
+    width: min(420px, calc(100vw - var(--side-combat-safe-left) - var(--side-combat-safe-right) - 40px));
+    max-height: min(76vh, calc(100vh - 54px));
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-player {
+    top: 72px;
+    left: 50%;
+    right: auto;
+    width: min(270px, calc(100vw - 760px));
+    min-width: 208px;
+    min-height: 42px;
+    grid-template-columns: minmax(128px, 1fr) 38px;
+    gap: 8px;
+    justify-items: stretch;
+    padding: 5px 6px 5px 14px;
+    transform: translateX(-50%);
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-player__meta {
+    width: 100%;
+    justify-items: end;
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-player strong {
+    width: 100%;
+    text-align: right;
+    font-size: 0.76rem;
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-player__avatar {
+    display: block;
+    width: 34px;
+    height: 34px;
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide #side-combat-player-status {
+    display: none;
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-hp {
+    width: 100%;
+    height: 5px;
+    margin-top: 4px;
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-log {
+    left: calc(var(--side-combat-safe-left) + 52px);
+    bottom: 118px;
+    width: min(360px, 24vw);
+    max-height: 88px;
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-refresh-round,
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-deck-toggle,
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-discard,
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-play-count {
+    right: auto;
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-refresh-round {
+    left: calc(50% - 446px);
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-deck-toggle {
+    left: calc(50% - 386px);
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-discard {
+    left: calc(50% + 338px);
+}
+
+#side-scroller-adventure.is-side-combat-extreme-wide .side-combat-play-count {
+    left: calc(50% + 398px);
+}
+
+@media (max-height: 520px) and (min-width: 900px) {
+    #side-scroller-adventure.is-side-combat-extreme-wide .side-combat-archive {
+        left: var(--side-combat-safe-left);
+    }
+
+    #side-scroller-adventure.is-side-combat-extreme-wide .side-combat.is-started .side-combat-rule-toggle {
+        top: calc(51% - 122px);
+        left: var(--side-combat-safe-left);
+        right: auto;
+        width: var(--side-combat-round-size);
+        height: var(--side-combat-round-size);
+    }
+
+    #side-scroller-adventure.is-side-combat-extreme-wide .side-combat-info-toggle {
+        left: max(12px, env(safe-area-inset-left, 0px));
+        bottom: 18px;
+    }
+
+    #side-scroller-adventure.is-side-combat-extreme-wide .side-combat-actions {
+        right: max(12px, env(safe-area-inset-right, 0px));
+        bottom: 18px;
+    }
+}
+
+@media (pointer: coarse) {
+    #side-scroller-adventure.is-side-combat-compact-wide .side-scroller-touch {
+        left: max(18px, env(safe-area-inset-left, 0px));
+        right: max(18px, env(safe-area-inset-right, 0px));
+        bottom: 62px;
+    }
+
+    #side-scroller-adventure.is-side-combat-compact-wide .side-scroller-touch-btn {
+        width: 54px;
+        height: 54px;
+        font-size: 1.8rem;
+    }
+}
+
+@media (max-width: 1280px) and (max-height: 560px) {
+    #side-scroller-adventure.is-side-combat-extreme-wide .side-combat-refresh-round {
+        left: calc(50% - 400px);
+    }
+
+    #side-scroller-adventure.is-side-combat-extreme-wide .side-combat-deck-toggle {
+        left: calc(50% - 342px);
+    }
+
+    #side-scroller-adventure.is-side-combat-extreme-wide .side-combat-discard {
+        left: calc(50% + 292px);
+    }
+
+    #side-scroller-adventure.is-side-combat-extreme-wide .side-combat-play-count {
+        left: calc(50% + 352px);
+    }
 }
