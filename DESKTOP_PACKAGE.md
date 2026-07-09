@@ -6,8 +6,8 @@ The current verified target is v0.9.2:
 
 - Final EXE: `Fritia Online NEXT Ver. 0.9.2 Preview Portable.exe`
 - Main title: `芙提雅 ONLINE NEXT Ver. 0.9.2 (Preview Version) | 青尘工作室`
-- User-visible top-level window: one Rust loader window
-- Startup animation: white screen -> BMP fade-in -> static BMP while cache/extract/load happens -> BMP fade-out -> Electron game appears inside the same top-level window
+- User-visible top-level window: Rust loader during startup, then the Electron game window
+- Startup animation: white screen -> BMP fade-in -> static BMP while cache/extract/load happens -> BMP fade-out -> Electron game window appears
 - Initial logical resolution: `1920x1080`
 - Cache: `%LOCALAPPDATA%\FritiaOnlineNextPortable\0.9.2\app`
 - Save data: `%APPDATA%\fritia-online-next-desktop`
@@ -38,7 +38,7 @@ Asset roles:
 - `favicon.ico`: used as the final EXE package icon through `rcedit`.
 - `favicon_runtime.ico`: clean multi-size ICO used by the Rust loader for the runtime window/taskbar icon. This avoids the earlier cropped titlebar/taskbar icon caused by the original single-layer 256px PNG ICO.
 - `portableSplash_1280x720.bmp`: BMP embedded by the Rust loader for the startup fade animation.
-- `templates/electron-main.v0.9.2.js`: verified Electron main process for embedded-child mode.
+- `templates/electron-main.v0.9.2.js`: verified Electron main process for splash-coordinated desktop mode.
 - `templates/loader-v0.9.2`: verified Rust native loader template.
 - `build-desktop-v0.9.2.ps1`: reproducible build script.
 
@@ -152,25 +152,23 @@ Do not call `app.setName(PRODUCT_NAME)` in Electron. The long Chinese title prev
 The Rust loader does these important things:
 
 - Sets process DPI awareness before creating the window.
-- Creates a normal top-level window with a `1920x1080` client target.
+- Creates a temporary top-level startup window with a `1920x1080` client target.
 - Paints a white first frame.
 - Fades in `portableSplash_1280x720.bmp` over 900 ms.
 - Extracts or validates the appended ZIP payload in the background.
 - Launches Electron with these environment variables:
-  - `FRITIA_EMBEDDED_CHILD=1`
-  - `FRITIA_PARENT_HWND`
-  - `FRITIA_HWND_FILE`
+  - `FRITIA_SPLASH_MODE=1`
+  - `FRITIA_READY_SIGNAL_FILE`
   - `FRITIA_SHOW_SIGNAL_FILE`
   - `PORTABLE_EXECUTABLE_DIR`
   - `PORTABLE_EXECUTABLE_FILE`
   - `PORTABLE_EXECUTABLE_APP_FILENAME`
 - Removes `ELECTRON_RUN_AS_NODE` from the child environment.
-- Waits for Electron to write its native HWND.
-- Calls `SetParent` and converts Electron to a child window.
-- Resizes the child HWND to fill the loader client area.
+- Waits for Electron to finish loading and write `FRITIA_READY_SIGNAL_FILE`.
 - Fades out the BMP over 650 ms.
-- Shows Electron only after fade-out finishes.
-- Uses `AttachThreadInput + SetFocus` so WASD and pointer lock work correctly.
+- Writes `FRITIA_SHOW_SIGNAL_FILE` only after fade-out finishes.
+- Lets Electron show its own normal top-level `BrowserWindow`; the loader then exits.
+- Keeps Windows IME ownership inside Electron/Chromium instead of forwarding `WM_IME_*` or `WM_CHAR` through a parent window.
 - Writes `favicon_runtime.ico` to `%LOCALAPPDATA%\FritiaOnlineNextPortable\icon-cache\favicon_runtime_<hash>.ico` and uses it for `ICON_BIG`, `ICON_SMALL`, and `ICON_SMALL2`.
 
 ## Cache Behavior
@@ -250,14 +248,17 @@ Manual smoke test:
 1. Double-click the final EXE.
 2. A top-level window should appear quickly.
 3. The window should start white, fade into the BMP, wait, then fade into the game.
-4. No second visible Electron window should appear.
+4. The startup window should close as the Electron game window appears.
 5. The titlebar should show `芙提雅 ONLINE NEXT Ver. 0.9.2 (Preview Version) | 青尘工作室`.
 6. The window icon and taskbar icon should show the complete icon, not a cropped upper half.
 7. The game should fill the whole window.
 8. Click into the game, enter operation mode, and verify WASD works.
 9. Press Esc and verify pointer lock releases.
+10. Open a panel with a text input, type Chinese with a Windows IME, open and close a file picker, then type Chinese again in the same input.
+11. While a text input is focused, switch to another Windows app and back; Chinese IME composition should still work and the candidate window should stay under the text field.
+12. In operation mode, switch to a Chinese IME and press movement keys; no composition text should appear at the desktop upper-left corner.
 
-On a 125% Windows display scale, the Win32 physical client area for a `1920x1080` DPI-aware logical window may probe as `1536x864`. That is expected. The important condition is that the Electron child HWND fills the loader client area.
+On a 125% Windows display scale, the Win32 physical client area for a `1920x1080` DPI-aware logical window may probe as `1536x864`. That is expected for the loader splash window. The Electron game window is a normal DPI-aware BrowserWindow after startup.
 
 ## Common Problems
 
@@ -275,11 +276,15 @@ Then rebuild or relaunch.
 
 ### Game is blurry or only in the upper-left area
 
-The Rust loader must set DPI awareness before creating the top-level window, and the Electron child HWND must be resized to the parent client area after `SetParent`. Use the checked-in `loader-v0.9.2` template instead of recreating this logic by memory.
+The Rust loader must set DPI awareness before creating the startup window, and Electron must use the checked-in `electron-main.v0.9.2.js` BrowserWindow template. Do not reintroduce `SetParent` child-window embedding; it was removed because it breaks Windows IME ownership for focused HTML text fields.
 
 ### WASD does not work or mouse cannot be released
 
-The loader must transfer focus to the Electron child with `AttachThreadInput + SetFocus`. It should also forward keyboard messages received by the parent window. Use the checked-in loader template.
+Use the checked-in `js/controls.js` and `electron-main.v0.9.2.js` templates. Operation mode uses pointer lock plus a hidden read-only keyboard guard so movement keys continue bubbling to the game while IME composition cannot attach to a visible text insertion point.
+
+### Chinese IME stops working after file picker or Alt-Tab
+
+Use the checked-in `loader-v0.9.2` and `electron-main.v0.9.2.js` templates. The loader must not embed Electron with `SetParent` and must not forward `WM_CHAR` or `WM_IME_*` messages. Electron owns the real top-level window, so Chromium can report the focused HTML text field's caret rectangle to Windows IME normally after file picker use or Alt-Tab.
 
 ### Electron exits immediately
 

@@ -116,6 +116,87 @@ export function initControls(camera, domElement, colliders) {
     let resetTouchInputState = () => {};
     let detachedControlResumePending = false;
 
+    function isEditableElement(element) {
+        if (!element || element === document.body || element === document.documentElement) return false;
+        if (element.isContentEditable) return true;
+        const tag = element.tagName?.toLowerCase();
+        if (tag === 'textarea') return !element.disabled && !element.readOnly;
+        if (tag !== 'input') return false;
+        const type = (element.getAttribute('type') || element.type || 'text').toLowerCase();
+        const editableTypes = new Set([
+            'text',
+            'search',
+            'url',
+            'tel',
+            'email',
+            'password',
+            'number',
+            'date',
+            'datetime-local',
+            'month',
+            'time',
+            'week'
+        ]);
+        return editableTypes.has(type) && !element.disabled && !element.readOnly;
+    }
+
+    function ensureKeyboardGuard() {
+        let guard = document.getElementById('fritia-operation-keyboard-guard');
+        if (guard) return guard;
+
+        guard = document.createElement('input');
+        guard.id = 'fritia-operation-keyboard-guard';
+        guard.type = 'text';
+        guard.readOnly = true;
+        guard.tabIndex = -1;
+        guard.autocomplete = 'off';
+        guard.inputMode = 'none';
+        guard.setAttribute('aria-hidden', 'true');
+        guard.setAttribute('role', 'none');
+        guard.style.position = 'fixed';
+        guard.style.left = '-10000px';
+        guard.style.top = '-10000px';
+        guard.style.width = '1px';
+        guard.style.height = '1px';
+        guard.style.opacity = '0';
+        guard.style.pointerEvents = 'none';
+        guard.style.zIndex = '-1';
+        document.body.appendChild(guard);
+        return guard;
+    }
+
+    function focusKeyboardGuard() {
+        if (state.useTouchControls || !state.isLocked) return;
+        const active = document.activeElement;
+        if (isEditableElement(active)) {
+            active.blur();
+        }
+        const guard = ensureKeyboardGuard();
+        if (document.activeElement === guard) return;
+        try {
+            guard.focus({ preventScroll: true });
+        } catch {
+            guard.focus();
+        }
+    }
+
+    function blurKeyboardGuard() {
+        const guard = document.getElementById('fritia-operation-keyboard-guard');
+        if (guard && document.activeElement === guard && typeof guard.blur === 'function') {
+            guard.blur();
+        }
+    }
+
+    function preventOperationTextInput(event) {
+        if (!state.isLocked) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+    }
+
+    document.addEventListener('compositionstart', preventOperationTextInput, true);
+    document.addEventListener('compositionupdate', preventOperationTextInput, true);
+    document.addEventListener('beforeinput', preventOperationTextInput, true);
+
     document.addEventListener('fritia-settings-updated', (event) => {
         const next = event.detail || getSettings();
         mouseSensitivity = clampSensitivity(next.mouseSensitivity);
@@ -186,19 +267,25 @@ export function initControls(camera, domElement, colliders) {
         resumeInProgress = false;
         resetTouchInputState();
         state.isLocked = true;
-        syncEntryPrompt();
+        document.body.classList.add('fritia-control-mode');
         document.getElementById('crosshair').classList.add('active');
         if (state.useTouchControls) {
             document.getElementById('touch-controls').classList.add('active');
         }
+        focusKeyboardGuard();
+        document.dispatchEvent(new CustomEvent('fritia-control-mode-changed', { detail: { active: true } }));
+        syncEntryPrompt();
     }
 
     function leaveControlMode() {
         state.isLocked = false;
         clearMovementState();
         resetTouchInputState();
+        blurKeyboardGuard();
+        document.body.classList.remove('fritia-control-mode');
         document.getElementById('crosshair').classList.remove('active');
         document.getElementById('touch-controls').classList.remove('active');
+        document.dispatchEvent(new CustomEvent('fritia-control-mode-changed', { detail: { active: false } }));
         syncEntryPrompt();
     }
 
@@ -271,9 +358,19 @@ export function initControls(camera, domElement, colliders) {
     window.addEventListener('blur', () => {
         resetTransientInput();
     });
+    window.addEventListener('focus', () => {
+        if (state.isLocked && !isOverlayOpen()) {
+            requestAnimationFrame(focusKeyboardGuard);
+        }
+    });
     document.addEventListener('visibilitychange', () => {
         if (document.hidden) resetTransientInput();
-        else suppressPointerLook(160);
+        else {
+            suppressPointerLook(160);
+            if (state.isLocked && !isOverlayOpen()) {
+                requestAnimationFrame(focusKeyboardGuard);
+            }
+        }
     });
 
     if (state.useTouchControls) {

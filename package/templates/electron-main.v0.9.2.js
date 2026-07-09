@@ -7,7 +7,7 @@ const { Readable } = require('node:stream');
 const APP_SCHEME = 'fritia';
 const APP_HOST = 'app';
 const PRODUCT_NAME = '芙提雅 ONLINE NEXT Ver. 0.9.2 (Preview Version) | 青尘工作室';
-const EMBEDDED_MODE = process.env.FRITIA_EMBEDDED_CHILD === '1';
+const SPLASH_MODE = process.env.FRITIA_SPLASH_MODE === '1';
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -122,16 +122,23 @@ async function handleAppProtocol(request) {
   }
 }
 
-function nativeHandleToDecimalString(win) {
-  const buffer = win.getNativeWindowHandle();
-  if (buffer.length >= 8) return buffer.readBigUInt64LE(0).toString(10);
-  return BigInt(buffer.readUInt32LE(0)).toString(10);
+function focusWebContents(win) {
+  if (win.isDestroyed()) return;
+  win.webContents.focus();
+}
+
+async function signalReady() {
+  const signal = process.env.FRITIA_READY_SIGNAL_FILE;
+  if (!SPLASH_MODE || !signal) return;
+  await fsp.mkdir(path.dirname(signal), { recursive: true });
+  await fsp.writeFile(signal, 'ready', 'utf8');
 }
 
 async function waitForShowSignal(win) {
   const signal = process.env.FRITIA_SHOW_SIGNAL_FILE;
-  if (!EMBEDDED_MODE || !signal) {
+  if (!SPLASH_MODE || !signal) {
     win.show();
+    focusWebContents(win);
     return;
   }
 
@@ -140,6 +147,7 @@ async function waitForShowSignal(win) {
     if (fs.existsSync(signal)) {
       win.show();
       win.focus();
+      focusWebContents(win);
       return;
     }
     if (Date.now() - start > 120000) {
@@ -155,10 +163,10 @@ async function createWindow() {
   const win = new BrowserWindow({
     width: 1920,
     height: 1080,
-    minWidth: EMBEDDED_MODE ? 0 : 960,
-    minHeight: EMBEDDED_MODE ? 0 : 640,
+    minWidth: 960,
+    minHeight: 640,
     show: false,
-    frame: !EMBEDDED_MODE,
+    frame: true,
     transparent: false,
     backgroundColor: '#000000',
     title: PRODUCT_NAME,
@@ -175,6 +183,15 @@ async function createWindow() {
   win.on('page-title-updated', (event) => {
     event.preventDefault();
     win.setTitle(PRODUCT_NAME);
+  });
+  win.on('focus', () => {
+    focusWebContents(win);
+  });
+  win.on('restore', () => {
+    focusWebContents(win);
+  });
+  win.on('show', () => {
+    focusWebContents(win);
   });
 
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -199,16 +216,8 @@ async function createWindow() {
     return;
   }
 
-  if (EMBEDDED_MODE) {
-    const hwndFile = process.env.FRITIA_HWND_FILE;
-    if (hwndFile) {
-      await fsp.mkdir(path.dirname(hwndFile), { recursive: true });
-      await fsp.writeFile(hwndFile, nativeHandleToDecimalString(win), 'utf8');
-    }
-    await waitForShowSignal(win);
-  } else {
-    win.show();
-  }
+  await signalReady();
+  await waitForShowSignal(win);
 }
 
 app.whenReady().then(async () => {
@@ -216,7 +225,7 @@ app.whenReady().then(async () => {
   await createWindow();
 
   app.on('activate', () => {
-    if (!EMBEDDED_MODE && BrowserWindow.getAllWindows().length === 0) void createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) void createWindow();
   });
 });
 
