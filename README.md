@@ -28,7 +28,7 @@
 
 打开下面的网址，等待加载完成后即可游玩：
 
-[https://game.qingchen.de](https://game.qingchen.de)
+[https://next.fritia.online](https://next.fritia.online)
 
 **注意**：即使在同一台设备中，也不能换浏览器进行游戏，因为**存档数据只保存在浏览器内部**！
 
