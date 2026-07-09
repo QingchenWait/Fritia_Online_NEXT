@@ -1,28 +1,28 @@
 # Desktop Portable Packaging Guide
 
-This document is the reproducible packaging guide for `芙提雅 ONLINE NEXT` desktop builds. It is written for a fresh Windows machine where Codex has no prior context and only this source project directory is available.
+This `package` directory contains the reproducible Windows portable EXE packaging flow for `芙提雅 ONLINE NEXT`.
 
-The current verified target is v0.9.2:
+Current target: v1.0.2.
 
-- Final EXE: `Fritia Online NEXT Ver. 0.9.2 Preview Portable.exe`
-- Main title: `芙提雅 ONLINE NEXT Ver. 0.9.2 (Preview Version) | 青尘工作室`
-- User-visible top-level window: Rust loader during startup, then the Electron game window
-- Startup animation: white screen -> BMP fade-in -> static BMP while cache/extract/load happens -> BMP fade-out -> Electron game window appears
-- Initial logical resolution: `1920x1080`
-- Cache: `%LOCALAPPDATA%\FritiaOnlineNextPortable\0.9.2\app`
-- Save data: `%APPDATA%\fritia-online-next-desktop`
-- Signature: unsigned by default
+- Default source web app: this repository root, resolved as `package\..`.
+- Default build workspace: `..\fritia_online_next_desktop\v1.0.2\win_x64` next to this repository.
+- Final EXE: `dist_v1.0.2\Fritia Online NEXT Ver. 1.0.2 Portable.exe` inside the build workspace.
+- Main title: `芙提雅 ONLINE NEXT Ver. 1.0.2 | 青尘工作室`.
+- Package icon: `package\favicon.ico`, a 512x512 PNG ICO frame used by `rcedit` for the final EXE.
+- Runtime titlebar/taskbar icon: `package\favicon_runtime.ico` multi-size ICO.
+- Cache: `%LOCALAPPDATA%\FritiaOnlineNextPortable\1.0.2\app`.
+- Save data: `%APPDATA%\fritia-online-next-desktop`.
+- Signature: unsigned by default.
 
 ## Repository Files
 
-This source project now contains a `package` folder with all packaging-specific files that must travel with the source code:
-
 ```text
 package/
-  favicon.ico
-  favicon_runtime.ico
-  portableSplash_1280x720.bmp
-  build-desktop-v0.9.2.ps1
+  build-win-portable-v1.0.2.ps1
+  build-desktop-v0.9.2.ps1        # compatibility entry, delegates to v1.0.2 script
+  favicon.ico                     # final EXE icon
+  favicon_runtime.ico             # runtime window/taskbar icon
+  portableSplash_1280x720.bmp     # loader splash image
   templates/
     electron-main.v0.9.2.js
     loader-v0.9.2/
@@ -33,24 +33,14 @@ package/
       src/main.rs
 ```
 
-Asset roles:
-
-- `favicon.ico`: used as the final EXE package icon through `rcedit`.
-- `favicon_runtime.ico`: clean multi-size ICO used by the Rust loader for the runtime window/taskbar icon. This avoids the earlier cropped titlebar/taskbar icon caused by the original single-layer 256px PNG ICO.
-- `portableSplash_1280x720.bmp`: BMP embedded by the Rust loader for the startup fade animation.
-- `templates/electron-main.v0.9.2.js`: verified Electron main process for splash-coordinated desktop mode.
-- `templates/loader-v0.9.2`: verified Rust native loader template.
-- `build-desktop-v0.9.2.ps1`: reproducible build script.
-
 ## Required Tools
 
-Install these before building on a fresh machine:
+Install these before building on a fresh Windows machine:
 
 1. Node.js 20 LTS or newer.
 2. Rust stable for Windows MSVC via rustup.
-3. Visual Studio Build Tools with the C++ desktop workload, because Rust MSVC target needs the Microsoft linker.
-4. Git is useful but not required by the packaging script.
-5. Internet access for the first build, because `npm install` and `cargo build` download Electron/npm packages and Rust crates.
+3. Visual Studio Build Tools with the C++ desktop workload.
+4. Internet access for the first build, unless a complete `node_modules` seed already exists.
 
 Quick checks:
 
@@ -61,74 +51,48 @@ rustc --version
 cargo --version
 ```
 
-
-## Script Encoding Rule
-
-Keep `package\build-desktop-v0.9.2.ps1` ASCII-only. Windows PowerShell 5.1 may parse UTF-8 no-BOM `.ps1` files as the system ANSI code page on a fresh machine. Literal Chinese strings in the `param()` block can break parsing. The script intentionally stores the default Chinese title and product name as UTF-8 byte arrays and decodes them at runtime. Do not replace those byte arrays with direct Chinese string literals unless the script is also saved with a BOM or the target shell is guaranteed to be PowerShell 7+.
-
 ## One-Command Build
 
-Open PowerShell in the project root and run:
+Open PowerShell in the repository root and run:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass -Force
-.\package\build-desktop-v0.9.2.ps1
+.\package\build-win-portable-v1.0.2.ps1
 ```
 
-By default the script creates an external packaging workspace next to this project:
-
-```text
-..\fritia_online_next_desktop\v1.0.0
-```
-
-The final EXE is written to:
-
-```text
-..\fritia_online_next_desktop\v1.0.0\dist_v0.9.2\Fritia Online NEXT Ver. 0.9.2 Preview Portable.exe
-```
-
-You can override the workspace:
+You can override paths explicitly:
 
 ```powershell
-.\package\build-desktop-v0.9.2.ps1 -WorkDir "D:\Models\vibe_coding\fritia_online_next_desktop\v1.0.0"
+.\package\build-win-portable-v1.0.2.ps1 `
+  -SourceDir "D:\Models\vibe_coding\fritia_online_v3 (dev)" `
+  -WorkDir "D:\Models\vibe_coding\fritia_online_next_desktop\v1.0.2\win_x64"
 ```
+
+The old `build-desktop-v0.9.2.ps1` filename is kept only as a compatibility entry and delegates to the v1.0.2 script.
 
 ## What The Script Does
 
 1. Creates the external wrapper workspace.
 2. Copies packaging assets from `package` into `WORKDIR\build`.
-3. Copies the web app source folders into `WORKDIR\app`:
+3. Copies the static web app source into `WORKDIR\app`:
    - `css`
    - `js`
    - `src`
    - `ui`
-   - selected root files such as `index.html`, `favicon.ico`, `README.md`, `UI_STYLE.md`, `LICENSE`
-4. Creates a wrapper `package.json` for Electron.
-5. Runs `npm install` in the wrapper workspace.
-6. Copies local Three.js from `node_modules\three` into `app\vendor\three`.
-7. Rewrites the app import map in `app\index.html` to use local Three.js, not CDN URLs.
-8. Rewrites the page `<title>` to the v0.9.2 title.
-9. Copies the verified Electron main template to `WORKDIR\electron-main.js`.
-10. Copies the verified Rust loader template to `WORKDIR\loader\v0.9.2`.
-11. Runs Electron Builder only as a directory build:
-
-```powershell
-npx electron-builder --win dir --x64 --config.directories.output=dist_v0.9.2_build
-```
-
-12. Zips `dist_v0.9.2_build\win-unpacked` into `payload-v0.9.2.zip`.
-13. Builds the Rust loader:
-
-```powershell
-cargo build --release
-```
-
-14. Applies `build\favicon.ico` to the loader EXE with `rcedit.exe`.
-15. Creates the final single-file portable EXE by concatenating:
-
-```text
-loader.exe + payload-v0.9.2.zip + 64-byte footer
-```
+   - `index.html`, `README.md`, `UI_STYLE.md`, `LICENSE`
+4. Copies `package\favicon.ico` into `WORKDIR\app\favicon.ico`.
+5. Creates an Electron wrapper `package.json`.
+6. Reuses a local `node_modules` seed when available, then falls back to `npm install`.
+7. Copies local Three.js into `app\vendor\three`.
+8. Rewrites the app import map to local Three.js paths.
+9. Rewrites the page `<title>` to the v1.0.2 title.
+10. Copies and patches `templates\electron-main.v0.9.2.js`.
+11. Copies and patches `templates\loader-v0.9.2` into `WORKDIR\loader\v1.0.2`.
+12. Runs Electron Builder as a directory build only.
+13. Zips `dist_v1.0.2_build\win-unpacked` into `payload-v1.0.2.zip`.
+14. Builds the Rust loader with `cargo build --release --locked`.
+15. Applies `build\favicon.ico` to the loader EXE with `rcedit.exe`.
+16. Concatenates `loader.exe + payload-v1.0.2.zip + 64-byte footer` into the final portable EXE.
 
 Footer layout:
 
@@ -139,77 +103,47 @@ payload length: u64 little-endian
 payload sha256: 32 bytes
 ```
 
-## Important Implementation Details
+## Important Rules
 
-Do not use `electron-builder` portable target for this build. The final entry is the Rust loader, not NSIS portable.
+Do not use Electron Builder's `portable` target. The final single-file app is the Rust loader plus appended ZIP payload.
 
-Do not call `app.setName(PRODUCT_NAME)` in Electron. The long Chinese title previously caused a crash in this project. The title is set only by:
+Do not call `app.setName(PRODUCT_NAME)` in Electron. The long Chinese title previously caused a crash. The title must only be set through:
 
 - `BrowserWindow.title`
 - `win.setTitle(PRODUCT_NAME)`
 - page `<title>`
 
-The Rust loader does these important things:
+The v1.0.2 loader must not embed Electron into a parent Win32 window. These are intentionally forbidden in the generated loader:
 
-- Sets process DPI awareness before creating the window.
-- Creates a temporary top-level startup window with a `1920x1080` client target.
-- Paints a white first frame.
-- Fades in `portableSplash_1280x720.bmp` over 900 ms.
-- Extracts or validates the appended ZIP payload in the background.
-- Launches Electron with these environment variables:
-  - `FRITIA_SPLASH_MODE=1`
-  - `FRITIA_READY_SIGNAL_FILE`
-  - `FRITIA_SHOW_SIGNAL_FILE`
-  - `PORTABLE_EXECUTABLE_DIR`
-  - `PORTABLE_EXECUTABLE_FILE`
-  - `PORTABLE_EXECUTABLE_APP_FILENAME`
-- Removes `ELECTRON_RUN_AS_NODE` from the child environment.
-- Waits for Electron to finish loading and write `FRITIA_READY_SIGNAL_FILE`.
-- Fades out the BMP over 650 ms.
-- Writes `FRITIA_SHOW_SIGNAL_FILE` only after fade-out finishes.
-- Lets Electron show its own normal top-level `BrowserWindow`; the loader then exits.
-- Keeps Windows IME ownership inside Electron/Chromium instead of forwarding `WM_IME_*` or `WM_CHAR` through a parent window.
-- Writes `favicon_runtime.ico` to `%LOCALAPPDATA%\FritiaOnlineNextPortable\icon-cache\favicon_runtime_<hash>.ico` and uses it for `ICON_BIG`, `ICON_SMALL`, and `ICON_SMALL2`.
+- `SetParent`
+- `FRITIA_EMBEDDED_CHILD`
+- `forward_to_child`
+- keyboard message forwarding such as `WM_KEYDOWN` / `WM_KEYUP`
+- IME or character forwarding such as `WM_CHAR` / `WM_IME_*`
 
-## Cache Behavior
+The loader startup flow is:
 
-The loader extracts Electron to:
+- Sets DPI awareness before creating the splash window.
+- Shows the splash window.
+- Repaints the splash only during fade-in/fade-out animation frames.
+- Holds the fully visible splash as a static frame while extracting or validating the appended ZIP payload.
+- Launches Electron as its own normal top-level window with `FRITIA_SPLASH_MODE=1`.
+- Waits for Electron to write `FRITIA_READY_SIGNAL_FILE`.
+- Fades out the splash.
+- Writes `FRITIA_SHOW_SIGNAL_FILE` so Electron can show its own window.
+- Exits the loader splash process.
 
-```text
-%LOCALAPPDATA%\FritiaOnlineNextPortable\0.9.2\app
-```
-
-It writes:
-
-```text
-%LOCALAPPDATA%\FritiaOnlineNextPortable\0.9.2\manifest.json
-```
-
-The cache is reused only when version, payload hash, and main executable path match.
-
-To force a clean extraction:
-
-```powershell
-& "..\fritia_online_next_desktop\v1.0.0\dist_v0.9.2\Fritia Online NEXT Ver. 0.9.2 Preview Portable.exe" --clear-cache
-```
-
-Clearing this cache does not delete user saves. Saves are under:
-
-```text
-%APPDATA%\fritia-online-next-desktop
-```
+This keeps Windows mouse, keyboard, and IME ownership inside Electron/Chromium after native file pickers. It also fixes splash flicker during self-extraction by avoiding continuous 16 ms invalidation in the static hold phase.
 
 ## Verification
 
-After building, run these checks.
-
-Signature should be unsigned unless you intentionally sign it:
+Verify final EXE signature:
 
 ```powershell
-Get-AuthenticodeSignature "..\fritia_online_next_desktop\v1.0.0\dist_v0.9.2\Fritia Online NEXT Ver. 0.9.2 Preview Portable.exe"
+Get-AuthenticodeSignature "..\fritia_online_next_desktop\v1.0.2\win_x64\dist_v1.0.2\Fritia Online NEXT Ver. 1.0.2 Portable.exe"
 ```
 
-Expected status:
+Expected default status:
 
 ```text
 NotSigned
@@ -218,18 +152,20 @@ NotSigned
 Verify footer:
 
 ```powershell
-$exe = "..\fritia_online_next_desktop\v1.0.0\dist_v0.9.2\Fritia Online NEXT Ver. 0.9.2 Preview Portable.exe"
+$exe = "..\fritia_online_next_desktop\v1.0.2\win_x64\dist_v1.0.2\Fritia Online NEXT Ver. 1.0.2 Portable.exe"
 $fs = [System.IO.File]::OpenRead((Resolve-Path $exe))
 try {
   $footer = New-Object byte[] 64
   $fs.Seek(-64, [System.IO.SeekOrigin]::End) | Out-Null
   $fs.Read($footer, 0, 64) | Out-Null
+  $offset = [BitConverter]::ToUInt64($footer, 16)
+  $length = [BitConverter]::ToUInt64($footer, 24)
   [PSCustomObject]@{
     Magic = [System.Text.Encoding]::ASCII.GetString($footer, 0, 16)
-    Offset = [BitConverter]::ToUInt64($footer, 16)
-    PayloadLength = [BitConverter]::ToUInt64($footer, 24)
+    Offset = $offset
+    PayloadLength = $length
     Hash = [BitConverter]::ToString($footer[32..63]).Replace('-', '').ToLowerInvariant()
-    ArithmeticOk = ([BitConverter]::ToUInt64($footer, 16) + [BitConverter]::ToUInt64($footer, 24) + 64 -eq $fs.Length)
+    ArithmeticOk = ($offset + $length + 64 -eq [uint64]$fs.Length)
   }
 } finally {
   $fs.Dispose()
@@ -243,72 +179,47 @@ Magic = FRITIA_PAYLOAD_1
 ArithmeticOk = True
 ```
 
+Verify the generated loader did not reintroduce the embedded-window path:
+
+```powershell
+Select-String -LiteralPath "..\fritia_online_next_desktop\v1.0.2\win_x64\loader\v1.0.2\src\main.rs" `
+  -Pattern 'SetParent|forward_to_child|FRITIA_EMBEDDED_CHILD|WM_CHAR|WM_IME|WM_KEYDOWN|WM_KEYUP'
+```
+
+Expected: no matches.
+
+Verify the self-extraction splash remains static outside fade animation frames:
+
+```powershell
+Select-String -LiteralPath "..\fritia_online_next_desktop\v1.0.2\win_x64\loader\v1.0.2\src\main.rs" `
+  -Pattern 'let mut repaint|if repaint && phase_from'
+```
+
+Expected: both patterns are present.
+
 Manual smoke test:
 
 1. Double-click the final EXE.
-2. A top-level window should appear quickly.
-3. The window should start white, fade into the BMP, wait, then fade into the game.
-4. The startup window should close as the Electron game window appears.
-5. The titlebar should show `芙提雅 ONLINE NEXT Ver. 0.9.2 (Preview Version) | 青尘工作室`.
-6. The window icon and taskbar icon should show the complete icon, not a cropped upper half.
-7. The game should fill the whole window.
-8. Click into the game, enter operation mode, and verify WASD works.
-9. Press Esc and verify pointer lock releases.
-10. Open a panel with a text input, type Chinese with a Windows IME, open and close a file picker, then type Chinese again in the same input.
-11. While a text input is focused, switch to another Windows app and back; Chinese IME composition should still work and the candidate window should stay under the text field.
-12. In operation mode, switch to a Chinese IME and press movement keys; no composition text should appear at the desktop upper-left corner.
-
-On a 125% Windows display scale, the Win32 physical client area for a `1920x1080` DPI-aware logical window may probe as `1536x864`. That is expected for the loader splash window. The Electron game window is a normal DPI-aware BrowserWindow after startup.
-
-## Common Problems
-
-### Window icon is cropped
-
-Use `package\favicon_runtime.ico` for runtime window icons. Do not rely on the original `favicon.ico` for `WM_SETICON`. The original icon is a single 256px PNG layer and can produce bad small-icon scaling in the titlebar/taskbar.
-
-If Windows keeps showing a stale icon, delete:
-
-```text
-%LOCALAPPDATA%\FritiaOnlineNextPortable\icon-cache
-```
-
-Then rebuild or relaunch.
-
-### Game is blurry or only in the upper-left area
-
-The Rust loader must set DPI awareness before creating the startup window, and Electron must use the checked-in `electron-main.v0.9.2.js` BrowserWindow template. Do not reintroduce `SetParent` child-window embedding; it was removed because it breaks Windows IME ownership for focused HTML text fields.
-
-### WASD does not work or mouse cannot be released
-
-Use the checked-in `js/controls.js` and `electron-main.v0.9.2.js` templates. Operation mode uses pointer lock plus a hidden read-only keyboard guard so movement keys continue bubbling to the game while IME composition cannot attach to a visible text insertion point.
-
-### Chinese IME stops working after file picker or Alt-Tab
-
-Use the checked-in `loader-v0.9.2` and `electron-main.v0.9.2.js` templates. The loader must not embed Electron with `SetParent` and must not forward `WM_CHAR` or `WM_IME_*` messages. Electron owns the real top-level window, so Chromium can report the focused HTML text field's caret rectangle to Windows IME normally after file picker use or Alt-Tab.
-
-### Electron exits immediately
-
-Clear `ELECTRON_RUN_AS_NODE` before tests or rely on the loader template, which removes it for the Electron child process.
-
-```powershell
-Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
-```
-
-### Long Chinese title crashes
-
-Do not call `app.setName(PRODUCT_NAME)`. Only use BrowserWindow title, `win.setTitle`, and HTML `<title>`.
+2. Splash fades in, remains stable during extraction/loading, then fades out to the game window.
+3. The game window title is `芙提雅 ONLINE NEXT Ver. 1.0.2 | 青尘工作室`.
+4. Window icon and taskbar icon show the complete icon.
+5. Enter operation mode and verify WASD works.
+6. Press Esc and verify pointer lock releases.
+7. Open a native file picker, for example by changing a wall painting.
+8. While the file picker is open, verify the mouse cursor is visible and usable.
+9. Close the picker, return to operation mode, switch to a Chinese IME, and press movement keys. No composition text should appear outside the game.
+10. Open a panel with a text input and verify Chinese IME composition still works under the focused text field.
 
 ## Changing Version Later
 
 For a new version, update all of these together:
 
-- `Version` parameter in `build-desktop-v0.9.2.ps1`
-- output directories, for example `dist_v0.9.3_build` and `dist_v0.9.3`
-- loader `APP_VERSION`
-- loader temp/cache names if desired
-- title string
-- final EXE name
-- Electron main title
-- package artifact name
+- Build script filename and default `Version`.
+- Default title byte array and `OutputName`.
+- Electron Builder artifact name.
+- Loader `APP_VERSION`, title, cache version, and window class name through `Patch-Loader`.
+- Output directories, for example `dist_v1.0.3_build` and `dist_v1.0.3`.
+- Final EXE name.
+- README paths and verification commands.
 
 Keep cache version and output version aligned so old payloads are not mixed with new runtime files.

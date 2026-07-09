@@ -548,9 +548,11 @@ unsafe fn apply_window_icons(hwnd: HWND, instance: HINSTANCE) {
                 let elapsed = ui.start.elapsed().as_millis().min(u128::from(u32::MAX)) as u32;
                 let phase = phase_from(ui.state.phase.load(Ordering::Relaxed));
                 let start = ui.state.fade_start_ms.load(Ordering::Relaxed);
+                let mut repaint = matches!(phase, Phase::FadeIn | Phase::FadeOut);
                 match phase {
                     Phase::FadeIn if elapsed.saturating_sub(start) >= FADE_IN_MS => {
                         set_phase(&ui.state, Phase::Hold, elapsed);
+                        repaint = true;
                     }
                     Phase::FadeOut if elapsed.saturating_sub(start) >= FADE_OUT_MS => {
                         if let Ok(guard) = ui.state.show_signal_file.lock() {
@@ -559,11 +561,12 @@ unsafe fn apply_window_icons(hwnd: HWND, instance: HINSTANCE) {
                             }
                         }
                         set_phase(&ui.state, Phase::Embedded, elapsed);
+                        repaint = false;
                         let _ = DestroyWindow(hwnd);
                     }
                     _ => {}
                 }
-                if phase_from(ui.state.phase.load(Ordering::Relaxed)) != Phase::Embedded {
+                if repaint && phase_from(ui.state.phase.load(Ordering::Relaxed)) != Phase::Embedded {
                     let _ = InvalidateRect(Some(hwnd), None, false);
                 }
             }
