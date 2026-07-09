@@ -1,6 +1,7 @@
 import { getSettings } from './settings.js';
 import { addAffinity, getGameTimeContext, recordDialogueInteraction } from './game_state.js';
 import { buildRagReferenceMessage } from './knowledge_base.js';
+import { buildLongTermMemoryMessage, recordLongTermMemoryTurn } from './long_term_memory.js';
 import {
     buildDeepSeekIntimateUserMessage,
     shouldKeepMessageForCurrentDeepSeekMode
@@ -311,10 +312,18 @@ async function startDateConversation(loc) {
             query: `${loc.name} 约会开场`,
             recentMessages: []
         });
+        const memoryMessage = await buildLongTermMemoryMessage({
+            mode: 'date',
+            query: `${loc.name} 约会开场`,
+            recentMessages: [],
+            characterId: 'fritia',
+            characterName: '芙提雅'
+        });
         const intimateMessage = await buildDeepSeekIntimateUserMessage(settings);
         const messages = [
             { role: 'system', content: systemPrompt },
             ...(ragMessage ? [ragMessage] : []),
+            ...(memoryMessage ? [memoryMessage] : []),
             ...(intimateMessage ? [intimateMessage] : []),
             buildDateOpeningMessage(loc.name)
         ];
@@ -369,13 +378,24 @@ async function startDateConversation(loc) {
         }
 
         if (fullText.trim()) {
+            const assistantTs = Date.now();
             dateConversationHistory[loc.id].push({
                 role: 'assistant',
                 content: fullText,
-                ts: Date.now(),
+                ts: assistantTs,
                 deepseekIntimateMode: Boolean(intimateMessage)
             });
             saveDateHistory();
+            recordLongTermMemoryTurn({
+                source: 'date',
+                userText: `来到${loc.name}开始约会`,
+                assistantText: fullText,
+                characterId: 'fritia',
+                characterName: '芙提雅',
+                locationId: loc.id,
+                sourceMessageIds: [`date:${loc.id}:${assistantTs}:assistant`],
+                deepseekIntimateMode: Boolean(intimateMessage)
+            });
         } else {
             bubbleEl.remove();
             appendDateSystemMessage('模型没有返回约会开场白，请返回地点列表后重新选择，或稍后再试。');
@@ -432,6 +452,13 @@ async function handleDateSend() {
             query: msg,
             recentMessages: contextMsgs
         });
+        const memoryMessage = await buildLongTermMemoryMessage({
+            mode: 'date',
+            query: msg,
+            recentMessages: contextMsgs,
+            characterId: 'fritia',
+            characterName: '芙提雅'
+        });
         const intimateMessage = await buildDeepSeekIntimateUserMessage(settings);
 
         const response = await fetch(`${settings.baseUrl}/chat/completions`, {
@@ -445,6 +472,7 @@ async function handleDateSend() {
                 messages: [
                     { role: 'system', content: systemPrompt },
                     ...(ragMessage ? [ragMessage] : []),
+                    ...(memoryMessage ? [memoryMessage] : []),
                     ...(intimateMessage ? [intimateMessage] : []),
                     ...contextMsgs
                 ],
@@ -488,14 +516,25 @@ async function handleDateSend() {
             }
         }
 
+        const assistantTs = Date.now();
         dateConversationHistory[currentLocationId].push({
             role: 'assistant',
             content: fullText,
-            ts: Date.now(),
+            ts: assistantTs,
             deepseekIntimateMode: Boolean(intimateMessage)
         });
         saveDateHistory();
         if (fullText.trim()) {
+            recordLongTermMemoryTurn({
+                source: 'date',
+                userText: msg,
+                assistantText: fullText,
+                characterId: 'fritia',
+                characterName: '芙提雅',
+                locationId: currentLocationId,
+                sourceMessageIds: [`date:${currentLocationId}:${assistantTs}:assistant`],
+                deepseekIntimateMode: Boolean(intimateMessage)
+            });
             addAffinity(1);
             recordDialogueInteraction('date', fullText, currentLocationId);
         }

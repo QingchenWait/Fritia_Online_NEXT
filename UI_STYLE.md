@@ -38,12 +38,14 @@ css/
 ├── effects.css         动画与光效：入场、msg-in、爱心脉动、花瓣、点燃 ignite、进度扫描
 ├── panels.css          各浮层专属布局/配色（含 JS 动态生成内容的样式）+ 浮层 z-index
 ├── responsive.css      响应式（≤820 折叠双栏，≤600 移动端单列）
+├── mobile_landscape.css 移动端横屏专属布局（独立层，最后 link，仅 html.ml-active 生效）
 └── style.css           兼容入口：仅 @import 上述模块（旧引用安全网）
 
 src/_ui/                UI 美术资源（原创手绘 SVG，详见 src/_ui/README.md）
 ```
 
 > 维护原则：改主题只动 `tokens.css`；加通用控件进 `components.css`；某个浮层的专属样式进 `panels.css`；动画/光效进 `effects.css`。**勿在 base.css 堆业务样式，勿改三区域保留规则。**
+> **移动端横屏**：所有「触屏 + 横屏」下的尺寸/位置重排都集中在 `css/mobile_landscape.css`（配套 `js/mobile_landscape.js`），与桌面端/竖屏完全解耦。接手或为新浮层补横屏适配前，先读 **`UI_MOBILE.md`**；切勿把横屏规则写进其它 CSS 文件。
 
 ---
 

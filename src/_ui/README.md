@@ -5,8 +5,12 @@
 
 ## 来源与许可
 
-全部资源均为本项目**原创手绘 SVG**（无外部下载位图），与游戏代码同许可（见仓库根 `LICENSE`）。
-选择纯 SVG 的原因：矢量可缩放、可通过 `currentColor` 主题化、体积小、离线与 GitHub Pages 友好、无第三方版权风险。
+除特别标注外，资源均为本项目**原创手绘 SVG**（无外部下载位图），与游戏代码同许可（见仓库根 `LICENSE`）。
+选择纯 SVG 的原因：矢量可缩放、可通过 `currentColor` 主题化、体积小、离线与 GitHub Pages 友好。
+
+第三方图标：
+
+- `icon_search.svg`、`icon_check.svg`、`icon_trash.svg` 来自 Lucide Icons，按其上游许可使用；文件已保存到本目录，运行时不依赖外网。
 
 ## 资源清单
 
@@ -21,6 +25,7 @@
 | `spark.svg` | 按键提示「点燃」效果的四角星火花 sprite |
 | `heart_motif.svg` | 通用玫瑰心标记（kicker、列表项、名牌） |
 | `icon_close.svg` | 统一关闭按钮图标（`currentColor`） |
+| `icon_search.svg` / `icon_check.svg` / `icon_trash.svg` | 记忆节点搜索与关系删除图标（Lucide Icons） |
 | `icon_date / gift / dream / settings / history / wardrobe / terminal / achievement.svg` | 各浮层头部暖色线性图标（主体 `currentColor` + 金/玫瑰点缀） |
 
 ## 约定

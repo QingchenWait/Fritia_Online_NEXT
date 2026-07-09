@@ -549,6 +549,9 @@ body.room-panorama-active #top-bar { display: none !important; }
     inset: 0;
     z-index: 120;
     pointer-events: auto;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
     opacity: 1;
     transition: opacity 0.18s ease;
     cursor: grab;

@@ -2,6 +2,7 @@ import { getSettings } from './settings.js';
 import { addAffinity, getGameTimeContext, recordDialogueInteraction } from './game_state.js';
 import { getDreamFurnitureDialogueContext } from './dream_system.js';
 import { buildRagReferenceMessage } from './knowledge_base.js';
+import { buildLongTermMemoryMessage, recordLongTermMemoryTurn } from './long_term_memory.js';
 import {
     buildDeepSeekIntimateUserMessage,
     shouldKeepMessageForCurrentDeepSeekMode
@@ -182,12 +183,20 @@ async function handleSend() {
             query: msg,
             recentMessages: contextMessages
         });
+        const memoryMessage = await buildLongTermMemoryMessage({
+            mode: ragMode,
+            query: msg,
+            recentMessages: contextMessages,
+            characterId: dialogueContext.characterId,
+            characterName: dialogueContext.characterName
+        });
         const intimateMessage = dialogueContext.scene === 'daily'
             ? await buildDeepSeekIntimateUserMessage(settings)
             : null;
         const messages = [
             { role: 'system', content: buildSystemPrompt() },
             ...(ragMessage ? [ragMessage] : []),
+            ...(memoryMessage ? [memoryMessage] : []),
             ...(intimateMessage ? [intimateMessage] : []),
             ...contextMessages
         ];
@@ -259,6 +268,15 @@ async function handleSend() {
         conversationHistory.push(assistantMsg);
         saveHistory();
         if (fullText.trim()) {
+            recordLongTermMemoryTurn({
+                source: ragMode,
+                userText: msg,
+                assistantText: fullText,
+                characterId: dialogueContext.characterId,
+                characterName: dialogueContext.characterName,
+                sourceMessageIds: [`${userMsg.ts}:user:${dialogueContext.characterId}`, `${assistantMsg.ts}:assistant:${dialogueContext.characterId}`],
+                deepseekIntimateMode: Boolean(intimateMessage)
+            });
             addAffinity(1);
             recordDialogueInteraction(dialogueContext.scene === 'bar' ? 'bar' : 'daily', fullText);
         }

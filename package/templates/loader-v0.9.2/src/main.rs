@@ -8,7 +8,7 @@ use std::mem::size_of;
 use std::os::windows::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
-use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -21,25 +21,19 @@ use windows::Win32::Graphics::Gdi::{
     PAINTSTRUCT, RGBQUAD, SRCCOPY,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-use windows::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
 use windows::Win32::UI::HiDpi::{
     AdjustWindowRectExForDpi, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, GetDpiForSystem,
     GetDpiForWindow, GetSystemMetricsForDpi, SetProcessDpiAwarenessContext,
 };
-use windows::Win32::UI::Input::KeyboardAndMouse::SetFocus;
 use windows::Win32::UI::WindowsAndMessaging::{
-    AdjustWindowRectEx, BringWindowToTop, CreateWindowExW, DefWindowProcW, DestroyWindow,
-    DispatchMessageW, GetClientRect, GetMessageW, GetSystemMetrics, GetWindowLongPtrW,
-    GetWindowThreadProcessId, HICON, LoadCursorW, LoadImageW, MA_ACTIVATE,
-    MessageBoxW, PostMessageW, PostQuitMessage, RegisterClassW, SendMessageW,
-    SetForegroundWindow, SetParent, SetProcessDPIAware, SetTimer, SetWindowLongPtrW,
-    SetWindowPos, ShowWindow, TranslateMessage, GWL_STYLE, IDC_ARROW, ICON_BIG, ICON_SMALL,
-    IMAGE_ICON, LR_LOADFROMFILE, MB_ICONERROR, MB_OK, MSG, SM_CXSCREEN, SM_CXSMICON,
-    SM_CYSCREEN, SM_CYSMICON, SW_HIDE, SW_SHOW, SWP_FRAMECHANGED, SWP_NOMOVE,
-    SWP_NOSIZE, SWP_NOACTIVATE, SWP_NOZORDER, WM_CLOSE, WM_DESTROY,
-    WM_DPICHANGED, WM_ERASEBKGND, WM_KEYDOWN, WM_KEYUP, WM_LBUTTONDOWN,
-    WM_MOUSEACTIVATE, WM_PAINT, WM_SETFOCUS, WM_SETICON, WM_SIZE, WM_SYSKEYDOWN,
-    WM_SYSKEYUP, WM_TIMER, WNDCLASSW, WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS,
+    AdjustWindowRectEx, CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW,
+    GetClientRect, GetMessageW, GetSystemMetrics, HICON, LoadCursorW, LoadImageW,
+    MA_ACTIVATE, MessageBoxW, PostMessageW, PostQuitMessage, RegisterClassW, SendMessageW,
+    SetProcessDPIAware, SetTimer, SetWindowPos, ShowWindow, TranslateMessage, IDC_ARROW,
+    ICON_BIG, ICON_SMALL, IMAGE_ICON, LR_LOADFROMFILE, MB_ICONERROR, MB_OK, MSG,
+    SM_CXSCREEN, SM_CXSMICON, SM_CYSCREEN, SM_CYSMICON, SW_SHOW, SWP_NOACTIVATE,
+    SWP_NOZORDER, WM_CLOSE, WM_DESTROY, WM_DPICHANGED, WM_ERASEBKGND, WM_MOUSEACTIVATE,
+    WM_PAINT, WM_SETICON, WM_SIZE, WM_TIMER, WNDCLASSW, WS_CLIPCHILDREN, WS_CLIPSIBLINGS,
     WS_EX_APPWINDOW, WS_EX_WINDOWEDGE, WS_OVERLAPPEDWINDOW,
 };
 
@@ -61,11 +55,9 @@ const RUNTIME_ICON_ICO: &[u8] = include_bytes!("../../../build/favicon_runtime.i
 struct UiState {
     phase: Arc<AtomicU32>,
     fade_start_ms: Arc<AtomicU32>,
-    electron_hwnd: Arc<AtomicI64>,
     child_pid: Arc<AtomicU32>,
     show_signal_file: Arc<Mutex<Option<PathBuf>>>,
     error: Arc<Mutex<Option<String>>>,
-    keep_loader: Arc<AtomicBool>,
 }
 
 struct AppUi {
@@ -292,14 +284,14 @@ fn temp_embed_dir() -> io::Result<PathBuf> {
     Ok(dir)
 }
 
-fn launch_app(hwnd_raw: isize, state: &UiState) -> io::Result<Child> {
+fn launch_app(state: &UiState) -> io::Result<Child> {
     let exe = app_dir().join(APP_EXE);
     let portable_file = current_exe()?;
     let portable_dir = portable_file.parent().unwrap_or(Path::new("")).to_path_buf();
     let embed_dir = temp_embed_dir()?;
-    let hwnd_file = embed_dir.join("electron.hwnd");
+    let ready_file = embed_dir.join("ready.signal");
     let signal_file = embed_dir.join("show.signal");
-    let _ = fs::remove_file(&hwnd_file);
+    let _ = fs::remove_file(&ready_file);
     let _ = fs::remove_file(&signal_file);
     if let Ok(mut guard) = state.show_signal_file.lock() {
         *guard = Some(signal_file.clone());
@@ -310,9 +302,8 @@ fn launch_app(hwnd_raw: isize, state: &UiState) -> io::Result<Child> {
     command.env("PORTABLE_EXECUTABLE_DIR", portable_dir);
     command.env("PORTABLE_EXECUTABLE_FILE", portable_file);
     command.env("PORTABLE_EXECUTABLE_APP_FILENAME", APP_EXE);
-    command.env("FRITIA_EMBEDDED_CHILD", "1");
-    command.env("FRITIA_PARENT_HWND", hwnd_raw.to_string());
-    command.env("FRITIA_HWND_FILE", hwnd_file.as_os_str());
+    command.env("FRITIA_SPLASH_MODE", "1");
+    command.env("FRITIA_READY_SIGNAL_FILE", ready_file.as_os_str());
     command.env("FRITIA_SHOW_SIGNAL_FILE", signal_file.as_os_str());
     command.env_remove("ELECTRON_RUN_AS_NODE");
     let child = command.spawn()?;
@@ -320,21 +311,17 @@ fn launch_app(hwnd_raw: isize, state: &UiState) -> io::Result<Child> {
     Ok(child)
 }
 
-fn wait_for_hwnd_file(state: &UiState) -> io::Result<isize> {
+fn wait_for_ready_signal(state: &UiState) -> io::Result<()> {
     let signal_file = state.show_signal_file.lock().ok().and_then(|guard| guard.clone())
         .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "embedded signal file not configured"))?;
-    let hwnd_file = signal_file.with_file_name("electron.hwnd");
+    let ready_file = signal_file.with_file_name("ready.signal");
     let start = Instant::now();
     loop {
-        if hwnd_file.is_file() {
-            let raw = fs::read_to_string(&hwnd_file)?;
-            let trimmed = raw.trim();
-            let parsed = trimmed.parse::<u64>()
-                .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid electron hwnd"))?;
-            return Ok(parsed as isize);
+        if ready_file.is_file() {
+            return Ok(());
         }
         if start.elapsed() > Duration::from_secs(30) {
-            return Err(io::Error::new(io::ErrorKind::TimedOut, "timed out waiting for electron hwnd"));
+            return Err(io::Error::new(io::ErrorKind::TimedOut, "timed out waiting for electron readiness"));
         }
         thread::sleep(Duration::from_millis(25));
     }
@@ -350,9 +337,8 @@ fn prepare_cache_and_launch(state: UiState, hwnd_raw: isize, clear: bool) {
             let data = read_payload(offset, size, &hash)?;
             extract_payload(data, &hash)?;
         }
-        let _child = launch_app(hwnd_raw, &state)?;
-        let electron = wait_for_hwnd_file(&state)?;
-        state.electron_hwnd.store(electron as i64, Ordering::Relaxed);
+        let _child = launch_app(&state)?;
+        wait_for_ready_signal(&state)?;
         unsafe { let _ = PostMessageW(Some(HWND(hwnd_raw as *mut c_void)), WM_READY_TO_FADE, WPARAM(0), LPARAM(0)); }
         Ok(())
     })();
@@ -361,7 +347,6 @@ fn prepare_cache_and_launch(state: UiState, hwnd_raw: isize, clear: bool) {
         if let Ok(mut guard) = state.error.lock() {
             *guard = Some(error.to_string());
         }
-        state.keep_loader.store(true, Ordering::Relaxed);
         unsafe { let _ = PostMessageW(Some(HWND(hwnd_raw as *mut c_void)), WM_ERROR, WPARAM(0), LPARAM(0)); }
     }
 }
@@ -470,78 +455,6 @@ unsafe fn draw_splash(hdc: HDC, rect: RECT, alpha: u8) {
     }
 }
 
-unsafe fn electron_child_hwnd() -> Option<HWND> {
-    let ui = UI.get()?;
-    let child = ui.state.electron_hwnd.load(Ordering::Relaxed);
-    if child == 0 {
-        None
-    } else {
-        Some(HWND(child as isize as *mut c_void))
-    }
-}
-
-unsafe fn resize_child(hwnd: HWND) {
-    let Some(child_hwnd) = electron_child_hwnd() else { return; };
-    let mut rect = RECT::default();
-    if GetClientRect(hwnd, &mut rect).is_ok() {
-        let width = (rect.right - rect.left).max(1);
-        let height = (rect.bottom - rect.top).max(1);
-        let _ = SetWindowPos(
-            child_hwnd,
-            None,
-            0,
-            0,
-            width,
-            height,
-            SWP_NOZORDER | SWP_NOACTIVATE,
-        );
-    }
-}
-
-unsafe fn focus_child(parent: HWND) {
-    let Some(child_hwnd) = electron_child_hwnd() else { return; };
-    let _ = SetForegroundWindow(parent);
-
-    let current_thread = GetCurrentThreadId();
-    let child_thread = GetWindowThreadProcessId(child_hwnd, None);
-    let attached = child_thread != 0
-        && child_thread != current_thread
-        && AttachThreadInput(current_thread, child_thread, true).as_bool();
-
-    let _ = BringWindowToTop(child_hwnd);
-    let _ = SetFocus(Some(child_hwnd));
-
-    if attached {
-        let _ = AttachThreadInput(current_thread, child_thread, false);
-    }
-}
-
-unsafe fn forward_to_child(msg: u32, wparam: WPARAM, lparam: LPARAM) -> bool {
-    let Some(child_hwnd) = electron_child_hwnd() else { return false; };
-    PostMessageW(Some(child_hwnd), msg, wparam, lparam).is_ok()
-}
-unsafe fn embed_child(parent: HWND, child_raw: i64) -> io::Result<()> {
-    let child = HWND(child_raw as isize as *mut c_void);
-    let _ = ShowWindow(child, SW_HIDE);
-    let old_style = GetWindowLongPtrW(child, GWL_STYLE) as u32;
-    let new_style = ((old_style & !WS_OVERLAPPEDWINDOW.0)
-        | WS_CHILD.0
-        | WS_CLIPSIBLINGS.0
-        | WS_CLIPCHILDREN.0) as isize;
-    SetWindowLongPtrW(child, GWL_STYLE, new_style);
-    SetParent(child, Some(parent)).map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
-    let _ = SetWindowPos(
-        child,
-        None,
-        0,
-        0,
-        0,
-        0,
-        SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
-    );
-    resize_child(parent);
-    Ok(())
-}
 fn runtime_icon_path() -> Option<PathBuf> {
     let mut hasher = Sha256::new();
     hasher.update(RUNTIME_ICON_ICO);
@@ -635,32 +548,25 @@ unsafe fn apply_window_icons(hwnd: HWND, instance: HINSTANCE) {
                 let elapsed = ui.start.elapsed().as_millis().min(u128::from(u32::MAX)) as u32;
                 let phase = phase_from(ui.state.phase.load(Ordering::Relaxed));
                 let start = ui.state.fade_start_ms.load(Ordering::Relaxed);
+                let mut repaint = matches!(phase, Phase::FadeIn | Phase::FadeOut);
                 match phase {
                     Phase::FadeIn if elapsed.saturating_sub(start) >= FADE_IN_MS => {
                         set_phase(&ui.state, Phase::Hold, elapsed);
+                        repaint = true;
                     }
                     Phase::FadeOut if elapsed.saturating_sub(start) >= FADE_OUT_MS => {
-                        let child = ui.state.electron_hwnd.load(Ordering::Relaxed);
-                        if child != 0 {
-                            if let Ok(guard) = ui.state.show_signal_file.lock() {
-                                if let Some(path) = guard.as_ref() {
-                                    let _ = fs::write(path, b"show");
-                                }
+                        if let Ok(guard) = ui.state.show_signal_file.lock() {
+                            if let Some(path) = guard.as_ref() {
+                                let _ = fs::write(path, b"show");
                             }
-                            let child_hwnd = HWND(child as isize as *mut c_void);
-                            resize_child(hwnd);
-                            let _ = ShowWindow(child_hwnd, SW_SHOW);
-                            resize_child(hwnd);
-                            focus_child(hwnd);
-                            set_phase(&ui.state, Phase::Embedded, elapsed);
                         }
-                    }
-                    Phase::Embedded if elapsed.saturating_sub(start) < 2_000 => {
-                        resize_child(hwnd);
+                        set_phase(&ui.state, Phase::Embedded, elapsed);
+                        repaint = false;
+                        let _ = DestroyWindow(hwnd);
                     }
                     _ => {}
                 }
-                if phase_from(ui.state.phase.load(Ordering::Relaxed)) != Phase::Embedded {
+                if repaint && phase_from(ui.state.phase.load(Ordering::Relaxed)) != Phase::Embedded {
                     let _ = InvalidateRect(Some(hwnd), None, false);
                 }
             }
@@ -668,19 +574,9 @@ unsafe fn apply_window_icons(hwnd: HWND, instance: HINSTANCE) {
         }
         WM_READY_TO_FADE => {
             if let Some(ui) = UI.get() {
-                let child = ui.state.electron_hwnd.load(Ordering::Relaxed);
-                if child != 0 {
-                    if let Err(error) = embed_child(hwnd, child) {
-                        if let Ok(mut guard) = ui.state.error.lock() {
-                            *guard = Some(error.to_string());
-                        }
-                        set_phase(&ui.state, Phase::Error, ui.start.elapsed().as_millis().min(u128::from(u32::MAX)) as u32);
-                    } else {
-                        let elapsed = ui.start.elapsed().as_millis().min(u128::from(u32::MAX)) as u32;
-                        set_phase(&ui.state, Phase::FadeOut, elapsed);
-                    }
-                    let _ = InvalidateRect(Some(hwnd), None, false);
-                }
+                let elapsed = ui.start.elapsed().as_millis().min(u128::from(u32::MAX)) as u32;
+                set_phase(&ui.state, Phase::FadeOut, elapsed);
+                let _ = InvalidateRect(Some(hwnd), None, false);
             }
             LRESULT(0)
         }
@@ -695,7 +591,6 @@ unsafe fn apply_window_icons(hwnd: HWND, instance: HINSTANCE) {
             LRESULT(0)
         }
         WM_SIZE => {
-            resize_child(hwnd);
             LRESULT(0)
         }
         WM_DPICHANGED => {
@@ -712,42 +607,15 @@ unsafe fn apply_window_icons(hwnd: HWND, instance: HINSTANCE) {
                     SWP_NOZORDER | SWP_NOACTIVATE,
                 );
             }
-            resize_child(hwnd);
             if let Ok(module) = GetModuleHandleW(PCWSTR::null()) {
                 apply_window_icons(hwnd, HINSTANCE(module.0));
             }
             LRESULT(0)
         }
         WM_MOUSEACTIVATE => {
-            focus_child(hwnd);
             LRESULT(MA_ACTIVATE as isize)
         }
-        WM_LBUTTONDOWN => {
-            focus_child(hwnd);
-            if forward_to_child(msg, wparam, lparam) {
-                LRESULT(0)
-            } else {
-                DefWindowProcW(hwnd, msg, wparam, lparam)
-            }
-        }
-        WM_KEYDOWN | WM_KEYUP | WM_SYSKEYDOWN | WM_SYSKEYUP => {
-            if forward_to_child(msg, wparam, lparam) {
-                LRESULT(0)
-            } else {
-                DefWindowProcW(hwnd, msg, wparam, lparam)
-            }
-        }
-        WM_SETFOCUS => {
-            focus_child(hwnd);
-            LRESULT(0)
-        }
         WM_CLOSE => {
-            if let Some(ui) = UI.get() {
-                let child = ui.state.electron_hwnd.load(Ordering::Relaxed);
-                if child != 0 {
-                    let _ = DestroyWindow(HWND(child as isize as *mut c_void));
-                }
-            }
             let _ = DestroyWindow(hwnd);
             LRESULT(0)
         }
@@ -767,15 +635,14 @@ unsafe fn apply_window_icons(hwnd: HWND, instance: HINSTANCE) {
 }
 
 fn run_window(clear: bool, keep_loader: bool) -> windows::core::Result<()> {
+    let _ = keep_loader;
     unsafe { configure_dpi_awareness(); }
     let state = UiState {
         phase: Arc::new(AtomicU32::new(Phase::FadeIn as u32)),
         fade_start_ms: Arc::new(AtomicU32::new(0)),
-        electron_hwnd: Arc::new(AtomicI64::new(0)),
         child_pid: Arc::new(AtomicU32::new(0)),
         show_signal_file: Arc::new(Mutex::new(None)),
         error: Arc::new(Mutex::new(None)),
-        keep_loader: Arc::new(AtomicBool::new(keep_loader)),
     };
 
     let splash = unsafe { create_splash_bitmap() };

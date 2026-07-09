@@ -4,6 +4,7 @@ import { loadCharacterFromModel, updateCharacter, getCharacterPosition, startInt
 import { getSettings } from './settings.js';
 import { getGameTimeContext, recordDialogueInteraction } from './game_state.js';
 import { buildRagReferenceMessage } from './knowledge_base.js';
+import { buildLongTermMemoryMessage, recordLongTermMemoryTurn } from './long_term_memory.js';
 
 const CHERNO_CARD_ID = 'special:cherno';
 const CHERNO_MODEL_PATH = 'src/_char_card/Cherno/悖谬-见习侍奉.pmx';
@@ -34,6 +35,7 @@ const BAR_GUEST_SPAWN_AREA = {
 const BAR_GUEST_SPAWN_RADIUS = 0.35;
 const BAR_GUEST_SPAWN_HEIGHT = 1.5;
 const BAR_GUEST_SPAWN_FOOT_OFFSET = 0.04;
+const BAR_GUEST_WAYPOINT_SLOT_SPACING = 0.72;
 const BAR_GUEST_SPAWN_FALLBACKS = [
     { x: -1.6, z: 47.0 },
     { x: 1.6, z: 47.2 },
@@ -59,6 +61,7 @@ const state = {
         name: '',
         pmxFile: null,
         resourceFiles: [],
+        packageRoot: '',
         promptFile: null,
         promptText: '',
         previewUrl: '',
@@ -159,14 +162,84 @@ function normalizeAssetFileName(name) {
     return sanitizeName(name, 'asset.bin');
 }
 
+function normalizeResourcePath(path) {
+    let value = String(path || '').replace(/\\/g, '/');
+    try {
+        value = decodeURIComponent(value);
+    } catch {}
+    value = value.replace(/^blob:[^/]+\/+/i, '');
+    const assetRootIndex = value.lastIndexOf(`${USER_ASSET_ROOT}/`);
+    if (assetRootIndex >= 0) value = value.slice(assetRootIndex);
+    value = value
+        .replace(/^https?:\/\/[^/]+\//i, '')
+        .replace(/^file:\/\/\/?/i, '')
+        .replace(/^\.?\//, '')
+        .split('/')
+        .filter(part => part && part !== '.' && part !== '..')
+        .join('/');
+    return value;
+}
+
+function normalizeAssetRelativePath(path, fallback = 'asset.bin') {
+    const normalized = normalizeResourcePath(path);
+    const parts = normalized
+        .split('/')
+        .map(part => normalizeAssetFileName(part))
+        .filter(Boolean);
+    return parts.join('/') || normalizeAssetFileName(fallback);
+}
+
 function assetBaseName(path) {
-    return String(path || '').replace(/\\/g, '/').split('/').pop() || '';
+    return normalizeResourcePath(path).split('/').pop() || '';
 }
 
 function assetDirName(path) {
-    const normalized = String(path || '').replace(/\\/g, '/');
+    const normalized = normalizeResourcePath(path);
     const index = normalized.lastIndexOf('/');
     return index >= 0 ? normalized.slice(0, index) : '';
+}
+
+function getFileRelativePath(file) {
+    return normalizeResourcePath(file?.webkitRelativePath || file?.name || '');
+}
+
+function getPackageRootFromPmx(file) {
+    return assetDirName(getFileRelativePath(file));
+}
+
+function stripPackageRoot(path, packageRoot = '') {
+    const normalized = normalizeResourcePath(path);
+    const root = normalizeResourcePath(packageRoot);
+    if (root && normalized.toLowerCase().startsWith(`${root.toLowerCase()}/`)) {
+        return normalized.slice(root.length + 1);
+    }
+    return normalized;
+}
+
+function getUploadResourceName(file, packageRoot = '') {
+    return stripPackageRoot(getFileRelativePath(file), packageRoot) || assetBaseName(file?.name);
+}
+
+function getStoredAssetRelativeName(assetPath, modelDir = '') {
+    const normalized = normalizeResourcePath(assetPath);
+    const dir = normalizeResourcePath(modelDir);
+    if (dir && normalized.toLowerCase().startsWith(`${dir.toLowerCase()}/`)) {
+        return normalized.slice(dir.length + 1);
+    }
+    return assetBaseName(normalized);
+}
+
+function makeResourceLookupKeys(path) {
+    const normalized = normalizeResourcePath(path).toLowerCase();
+    if (!normalized) return [];
+    const parts = normalized.split('/').filter(Boolean);
+    const keys = new Set([normalized]);
+    if (parts.length > 1) {
+        keys.add(parts.slice(-2).join('/'));
+        keys.add(parts.slice(-3).join('/'));
+    }
+    keys.add(parts[parts.length - 1]);
+    return [...keys].filter(Boolean);
 }
 
 function getCardModelFileName(card) {
@@ -196,13 +269,16 @@ async function extractPmxTextureNames(file) {
             new TextDecoder('utf-8', { fatal: false })
         ];
         const textureNames = new Set();
-        const pattern = /(?:^|[^\w.\-/\\])([\w\u3000-\u9fffぁ-んァ-ン ._\-()[\]{}+@#$%&=~^]+?\.(?:png|jpe?g|bmp|tga|dds|gif|spa|sph|toon))(?:[^\w.\-/\\]|$)/ig;
+        const pattern = /(?:^|[^\w.\-/\\])([\w\u3000-\u9fffぁ-んァ-ン ._\-()[\]{}+@#$%&=~^/\\]+?\.(?:png|jpe?g|bmp|tga|dds|gif|spa|sph|toon))(?:[^\w.\-/\\]|$)/ig;
         for (const decoder of decoders) {
             const text = decoder.decode(bytes);
             let match;
             while ((match = pattern.exec(text))) {
-                const name = assetBaseName(match[1]).trim();
-                if (name) textureNames.add(name.toLowerCase());
+                const name = normalizeResourcePath(match[1]).trim();
+                if (name) {
+                    textureNames.add(name.toLowerCase());
+                    textureNames.add(assetBaseName(name).toLowerCase());
+                }
             }
         }
         return textureNames;
@@ -424,16 +500,25 @@ function disposePreviewObject(root) {
     });
 }
 
-function capturePmxPreview(file) {
+function capturePmxPreview(file, resourceFiles = [], packageRoot = '') {
     return new Promise((resolve, reject) => {
         const objectUrl = URL.createObjectURL(file);
-        const loader = new MMDLoader();
+        const resourceUrls = resourceFiles.map(item => ({
+            name: getUploadResourceName(item, packageRoot),
+            url: URL.createObjectURL(item)
+        }));
+        const manager = buildGuestResourceManager(resourceUrls);
+        const loader = manager ? new MMDLoader(manager) : new MMDLoader();
+        loader.setResourcePath?.('');
         let renderer = null;
         let meshRef = null;
         const cleanup = () => {
             if (meshRef) disposePreviewObject(meshRef);
             renderer?.dispose?.();
             URL.revokeObjectURL(objectUrl);
+            for (const item of resourceUrls) {
+                if (item.url) URL.revokeObjectURL(item.url);
+            }
         };
         loader.load(
             objectUrl,
@@ -489,6 +574,7 @@ function resetDraft() {
         name: '',
         pmxFile: null,
         resourceFiles: [],
+        packageRoot: '',
         promptFile: null,
         promptText: '',
         previewUrl: '',
@@ -509,18 +595,21 @@ async function handlePmxChanged(event) {
     const files = Array.from(event.target.files || []);
     const file = files.find(item => /\.pmx$/i.test(item.name)) || files[0] || null;
     const textureNames = await extractPmxTextureNames(file);
+    const packageRoot = getPackageRootFromPmx(file);
     const fallbackResourcePattern = /\.(?:png|jpe?g|bmp|tga|dds|gif|spa|sph|toon)$/i;
     const resourceFiles = files.filter(item => item !== file && (
         textureNames.has(item.name.toLowerCase())
         || textureNames.has(assetBaseName(item.webkitRelativePath || '').toLowerCase())
+        || textureNames.has(getUploadResourceName(item, packageRoot).toLowerCase())
         || (textureNames.size === 0 && fallbackResourcePattern.test(item.name))
     ));
     state.draft.pmxFile = file;
     state.draft.resourceFiles = resourceFiles;
+    state.draft.packageRoot = packageRoot;
     state.draft.name = els.nameInput?.value || state.draft.name;
     if (els.pmxName) els.pmxName.textContent = file ? file.name : '未选择 PMX';
     if (els.pmxName) els.pmxName.title = resourceFiles.length > 0
-        ? `${file?.name || ''}\n已自动匹配贴图：\n${resourceFiles.map(item => item.name).join('\n')}`
+        ? `${file?.name || ''}\n已自动匹配贴图：\n${resourceFiles.map(item => getUploadResourceName(item, packageRoot)).join('\n')}`
         : (file?.name || '');
     if (file) setStatus(resourceFiles.length > 0
         ? `已选择 PMX，并自动匹配 ${resourceFiles.length} 个贴图资源。`
@@ -536,7 +625,7 @@ async function handlePmxChanged(event) {
         return;
     }
     try {
-        const previewUrl = await capturePmxPreview(file);
+        const previewUrl = await capturePmxPreview(file, resourceFiles, packageRoot);
         if (state.draft.previewToken === previewToken && state.draft.pmxFile === file) {
             state.draft.previewUrl = previewUrl;
         }
@@ -580,7 +669,13 @@ async function saveDraftCard() {
     const id = makeGuestId();
     const modelPath = `${USER_ASSET_ROOT}/${id}/${normalizeAssetFileName(state.draft.pmxFile.name)}`;
     const promptPath = `${USER_ASSET_ROOT}/${id}/prompt.txt`;
-    const assetPaths = state.draft.resourceFiles.map(file => `${USER_ASSET_ROOT}/${id}/${normalizeAssetFileName(file.name)}`);
+    const assetPaths = state.draft.resourceFiles.map(file => {
+        const relativePath = normalizeAssetRelativePath(
+            getUploadResourceName(file, state.draft.packageRoot),
+            file.name
+        );
+        return `${USER_ASSET_ROOT}/${id}/${relativePath}`;
+    });
     setStatus('正在保存角色资源...', 'busy');
     try {
         await putAsset(modelPath, state.draft.pmxFile);
@@ -670,6 +765,75 @@ function isSpawnPointClear(x, z) {
     return true;
 }
 
+function getNextGuestWaypointSlot() {
+    const used = new Set();
+    for (const runtime of state.runtimes.values()) {
+        if (runtime?.card?.id === CHERNO_CARD_ID) continue;
+        if (Number.isInteger(runtime?.waypointSlot)) used.add(runtime.waypointSlot);
+    }
+    for (let slot = 0; slot < 64; slot += 1) {
+        if (!used.has(slot)) return slot;
+    }
+    return used.size;
+}
+
+function clampBarWaypointPosition(pos, radius = BAR_GUEST_SPAWN_RADIUS) {
+    const bounds = state.getBarBounds?.();
+    if (!bounds?.min || !bounds?.max) return pos;
+    pos.x = Math.max(bounds.min.x + radius, Math.min(bounds.max.x - radius, pos.x));
+    pos.z = Math.max(bounds.min.z + radius, Math.min(bounds.max.z - radius, pos.z));
+    return pos;
+}
+
+function getGuestWaypointOffset(slot = 0) {
+    const safeSlot = Math.max(0, Number.isFinite(slot) ? slot : 0);
+    const radius = BAR_GUEST_WAYPOINT_SLOT_SPACING * (1 + Math.floor(safeSlot / 8) * 0.55);
+    const angle = safeSlot * 2.399963229728653;
+    return {
+        x: Math.cos(angle) * radius,
+        z: Math.sin(angle) * radius
+    };
+}
+
+function toWaypointPosition(pos) {
+    return pos?.clone ? pos.clone() : new THREE.Vector3(Number(pos?.x) || 0, Number(pos?.y) || 0, Number(pos?.z) || 0);
+}
+
+function findGuestWaypointPosition(origin, slot = 0) {
+    const base = toWaypointPosition(origin);
+    const offset = getGuestWaypointOffset(slot);
+    base.x += offset.x;
+    base.z += offset.z;
+    return clampBarWaypointPosition(base);
+}
+
+function ensureGuestWaypointSet(runtime) {
+    const cd = runtime?.cd;
+    if (!cd || runtime?.card?.id === CHERNO_CARD_ID) return;
+    if (!Number.isInteger(runtime.waypointSlot)) runtime.waypointSlot = getNextGuestWaypointSlot();
+    const baseWaypoints = state.getBarWaypoints?.() || [];
+    if (
+        runtime.waypointSource === baseWaypoints
+        && runtime.waypoints
+        && runtime.waypointSetSlot === runtime.waypointSlot
+    ) {
+        cd.waypoints = runtime.waypoints;
+        return;
+    }
+    runtime.waypointSource = baseWaypoints;
+    runtime.waypointSetSlot = runtime.waypointSlot;
+    runtime.waypoints = baseWaypoints.map((waypoint) => {
+        const name = waypoint?.name || 'bar_waypoint';
+        return {
+            ...waypoint,
+            baseName: waypoint?.baseName || name,
+            name: `${name}__guest_slot_${runtime.waypointSlot}`,
+            position: findGuestWaypointPosition(waypoint?.position, runtime.waypointSlot)
+        };
+    });
+    cd.waypoints = runtime.waypoints;
+}
+
 function getSpawnPose(index = 0) {
     for (let attempt = 0; attempt < 24; attempt += 1) {
         const x = BAR_GUEST_SPAWN_AREA.minX + Math.random() * (BAR_GUEST_SPAWN_AREA.maxX - BAR_GUEST_SPAWN_AREA.minX);
@@ -737,12 +901,21 @@ function buildGuestResourceManager(resourceUrls = []) {
     const manager = new THREE.LoadingManager();
     const byName = new Map();
     for (const item of resourceUrls) {
-        const key = assetBaseName(item.name).toLowerCase();
-        if (key && item.url) byName.set(key, item.url);
+        if (!item.url) continue;
+        const keys = [
+            ...makeResourceLookupKeys(item.name),
+            ...makeResourceLookupKeys(item.path)
+        ];
+        for (const key of keys) {
+            if (key && !byName.has(key)) byName.set(key, item.url);
+        }
     }
     manager.setURLModifier((url) => {
-        const key = assetBaseName(url).toLowerCase();
-        return byName.get(key) || url;
+        for (const key of makeResourceLookupKeys(url)) {
+            const mapped = byName.get(key);
+            if (mapped) return mapped;
+        }
+        return url;
     });
     return manager;
 }
@@ -753,11 +926,12 @@ async function resolveModelSource(card) {
     if (!blob) throw new Error(`缺少模型资源：${card.modelPath}`);
     const modelUrl = URL.createObjectURL(blob);
     const resourceUrls = [];
+    const modelDir = assetDirName(card.modelPath);
     for (const path of card.assetPaths || []) {
         const asset = await getAsset(path);
         if (asset) {
             resourceUrls.push({
-                name: assetBaseName(path),
+                name: getStoredAssetRelativeName(path, modelDir),
                 path,
                 url: URL.createObjectURL(asset)
             });
@@ -796,7 +970,7 @@ async function inviteSelectedCard() {
         try {
             modelUrl = URL.createObjectURL(state.draft.pmxFile);
             resourceUrls = state.draft.resourceFiles.map(file => ({
-                name: file.name,
+                name: getUploadResourceName(file, state.draft.packageRoot),
                 url: URL.createObjectURL(file)
             }));
             const runtime = await loadGuestFromResolvedSource(transientCard, modelUrl, state.draft.promptText, {
@@ -838,6 +1012,7 @@ async function loadGuest(card) {
         existing.cd.root.rotation.y = pose.rotationY;
         existing.cd.faceDirection = pose.rotationY;
         existing.cd.root.visible = true;
+        ensureGuestWaypointSet(existing);
         return existing;
     }
     const source = await resolveModelSource(card);
@@ -856,6 +1031,7 @@ async function loadGuestFromResolvedSource(card, modelUrl, prompt, sourceOptions
         displayName: card.name
     };
     if (loadingManager) loadOptions.loadingManager = loadingManager;
+    if (sourceOptions.ownsModelUrl) loadOptions.resourcePath = '';
     const cd = await loadCharacterFromModel(
         state.scene,
         modelUrl,
@@ -876,13 +1052,19 @@ async function loadGuestFromResolvedSource(card, modelUrl, prompt, sourceOptions
     cd.faceDirection = pose.rotationY;
     cd.root.visible = true;
 
-    return {
+    const runtime = {
         card,
         cd,
         modelObjectUrl: sourceOptions.ownsModelUrl ? modelUrl : '',
         resourceObjectUrls: resourceUrls.map(item => item.url).filter(Boolean),
-        prompt
+        prompt,
+        waypointSlot: getNextGuestWaypointSlot(),
+        waypointSource: null,
+        waypointSetSlot: -1,
+        waypoints: null
     };
+    ensureGuestWaypointSet(runtime);
+    return runtime;
 }
 
 async function loadChernoGuest() {
@@ -1158,6 +1340,14 @@ async function sendGuestMessage() {
             recentMessages: history,
             limit: 5
         });
+        const memoryMessage = await buildLongTermMemoryMessage({
+            mode: 'bar',
+            query: msg,
+            recentMessages: history,
+            characterId: runtime.card.id,
+            characterName: runtime.card.name,
+            limit: 5
+        });
         const response = await fetch(`${settings.baseUrl}/chat/completions`, {
             method: 'POST',
             headers: {
@@ -1169,6 +1359,7 @@ async function sendGuestMessage() {
                 messages: [
                     { role: 'system', content: buildGuestSystemPrompt(runtime) },
                     ...(ragMessage ? [ragMessage] : []),
+                    ...(memoryMessage ? [memoryMessage] : []),
                     ...history
                 ],
                 stream: true,
@@ -1203,9 +1394,20 @@ async function sendGuestMessage() {
                 } catch {}
             }
         }
-        state.barHistory.push(createMessage('assistant', fullText, runtime.card.id, runtime.card.name));
+        const assistantMsg = createMessage('assistant', fullText, runtime.card.id, runtime.card.name);
+        state.barHistory.push(assistantMsg);
         saveBarHistory();
-        if (fullText.trim()) recordDialogueInteraction('bar', fullText);
+        if (fullText.trim()) {
+            recordLongTermMemoryTurn({
+                source: 'bar',
+                userText: msg,
+                assistantText: fullText,
+                characterId: runtime.card.id,
+                characterName: runtime.card.name,
+                sourceMessageIds: [`${userMsg.ts}:user:${runtime.card.id}`, `${assistantMsg.ts}:assistant:${runtime.card.id}`]
+            });
+            recordDialogueInteraction('bar', fullText);
+        }
     } catch (err) {
         thinking.remove();
         appendGuestSystemMessage(`请求失败：${err.message}`);

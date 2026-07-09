@@ -96,6 +96,14 @@ const BOSS_ATTACK_GROWTH = {
     boss: 0.08,
     cap: 2.5
 };
+const BOSS_BASE_ATTACK = {
+    miniBoss: 20,
+    boss: 25
+};
+const ADJUTANT_SKILL_LIMITS = {
+    guard: 1,
+    execute: 2
+};
 const CARD_STAGE_VALUE_SCALING = {
     standard: { perStage: 0.10, cap: 1.70 },
     hard: { perStage: 0.075, cap: 1.60 },
@@ -160,8 +168,8 @@ const state = {
     hand: [],
     deck: [],
     refreshCount: 0,
-    guardUses: 3,
-    executeUses: 3,
+    guardUses: ADJUTANT_SKILL_LIMITS.guard,
+    executeUses: ADJUTANT_SKILL_LIMITS.execute,
     playsUsed: 0,
     selectedCardId: '',
     pendingSkill: '',
@@ -296,8 +304,8 @@ function resetCombatState() {
     state.hand = [];
     state.deck = [];
     state.refreshCount = 0;
-    state.guardUses = 3;
-    state.executeUses = 3;
+    state.guardUses = ADJUTANT_SKILL_LIMITS.guard;
+    state.executeUses = ADJUTANT_SKILL_LIMITS.execute;
     state.playsUsed = 0;
     state.selectedCardId = '';
     state.pendingSkill = '';
@@ -379,11 +387,11 @@ function ensureDom() {
             <div class="side-combat-skills">
                 <button id="side-combat-skill-guard" class="side-combat-skill side-combat-skill--guard" type="button" aria-label="神之守护">
                     <img src="${ADJUTANT_SKILL_GUARD_SRC}" alt="" aria-hidden="true">
-                    <span id="side-combat-skill-guard-count">3</span>
+                    <span id="side-combat-skill-guard-count">${ADJUTANT_SKILL_LIMITS.guard}</span>
                 </button>
                 <button id="side-combat-skill-execute" class="side-combat-skill side-combat-skill--execute" type="button" aria-label="御驾亲征">
                     <img src="${ADJUTANT_SKILL_EXECUTE_SRC}" alt="" aria-hidden="true">
-                    <span id="side-combat-skill-execute-count">3</span>
+                    <span id="side-combat-skill-execute-count">${ADJUTANT_SKILL_LIMITS.execute}</span>
                 </button>
             </div>
         </div>
@@ -854,7 +862,7 @@ function createEnemies(event) {
             miniBoss: true,
             maxHp: hp,
             hp,
-            attack: 15,
+            attack: BOSS_BASE_ATTACK.miniBoss,
             statuses: []
         })];
     }
@@ -866,7 +874,7 @@ function createEnemies(event) {
             boss: true,
             maxHp: hp,
             hp,
-            attack: 18,
+            attack: BOSS_BASE_ATTACK.boss,
             statuses: []
         })];
     }
@@ -2048,14 +2056,14 @@ function renderApproval() {
 function renderSkills() {
     if (state.els.guard) {
         state.els.guard.disabled = state.phase !== 'battle' || state.guardUses <= 0 || state.busy;
-        state.els.guard.title = `神之守护（剩余 ${state.guardUses} 次）：播放绿色治疗屏障，芙提雅生命回满，获得减伤并让敌方下回合沉默；代价是 2 回合内攻击牌伤害降低 20%。`;
+        state.els.guard.title = `神之守护（剩余 ${state.guardUses} 次）：分析员守护芙提雅，芙提雅 HP 回满并增益，代价是 2 回合内攻击力降低 20%。`;
         state.els.guard.setAttribute('aria-label', `神之守护，剩余 ${state.guardUses} 次`);
         if (state.els.guardCount) state.els.guardCount.textContent = String(state.guardUses);
     }
     if (state.els.execute) {
         state.els.execute.disabled = state.phase !== 'battle' || state.executeUses <= 0 || state.busy;
         state.els.execute.classList.toggle('is-armed', state.pendingSkill === 'execute');
-        state.els.execute.title = `御驾亲征（剩余 ${state.executeUses} 次）：播放全图蓝色闪电后选择目标，非 Boss 直接清除；Boss 生命不高于 50% 时可用。`;
+        state.els.execute.title = `御驾亲征（剩余 ${state.executeUses} 次）：分析员对 1 个指定目标出手，造成 99999999 点伤害。不可用于血量超过 50% 的 BOSS。`;
         state.els.execute.setAttribute('aria-label', `御驾亲征，剩余 ${state.executeUses} 次`);
         if (state.els.executeCount) state.els.executeCount.textContent = String(state.executeUses);
     }
@@ -3638,7 +3646,7 @@ function statusDescription(status) {
         focus: `造成伤害提高 ${pct}，剩余 ${turns}。`,
         focus_chain: `本场战斗中攻击、召唤、流血伤害提高 ${pct}。`,
         guard_defense: `神之守护减伤 ${pct}，剩余 ${turns}。`,
-        guard_attack_down: `神之守护代价：攻击牌伤害降低 ${pct}，剩余 ${turns}。`
+        guard_attack_down: `神之守护代价：攻击力降低 ${pct}，剩余 ${turns}。`
     }[status.id] || `状态剩余 ${turns}。`;
 }
 

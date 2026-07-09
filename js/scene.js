@@ -1,15 +1,26 @@
 import * as THREE from 'three';
 
+function getViewportSize() {
+    const fixed = window.FritiaMobileViewportSize;
+    const width = Math.floor(Number(fixed?.width) || window.innerWidth || document.documentElement.clientWidth || 1);
+    const height = Math.floor(Number(fixed?.height) || window.innerHeight || document.documentElement.clientHeight || 1);
+    return {
+        width: Math.max(1, width),
+        height: Math.max(1, height)
+    };
+}
+
 export function initScene(canvas) {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x1a1a2e);
     scene.fog = new THREE.Fog(0x1a1a2e, 8, 15);
 
-    const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 50);
+    const initialViewport = getViewportSize();
+    const camera = new THREE.PerspectiveCamera(65, initialViewport.width / initialViewport.height, 0.1, 50);
     camera.position.set(0, 1.6, 1.5);
 
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setSize(initialViewport.width, initialViewport.height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -74,11 +85,15 @@ export function initScene(canvas) {
     dreamWindowShadowLight.shadow.bias = -0.0003;
     scene.add(dreamWindowShadowLight);
 
-    window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
+    function resizeRenderer() {
+        const viewport = getViewportSize();
+        camera.aspect = viewport.width / viewport.height;
         camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-    });
+        renderer.setSize(viewport.width, viewport.height);
+    }
+
+    window.addEventListener('resize', resizeRenderer);
+    window.addEventListener('fritia-mobile-viewport-fixed', resizeRenderer);
 
     return { scene, camera, renderer, windowShadowLight, dreamWindowShadowLight };
 }

@@ -127,6 +127,14 @@ import {
 } from './roundtable_whispers.js';
 import { createZip, readZip, readZipText } from './zip_store.js';
 import { ensurePreloadedKnowledgeBases, exportKnowledgeBaseArchive, importKnowledgeBaseArchive } from './knowledge_base.js';
+import {
+    closeMemoryNodePanel,
+    exportLongTermMemory,
+    importLongTermMemory,
+    initLongTermMemoryPanel,
+    isMemoryNodePanelVisible,
+    openMemoryNodePanel
+} from './long_term_memory.js';
 
 let scene, camera, renderer;
 let controlsModule, charData;
@@ -147,6 +155,28 @@ let dreamTerminalMesh;
 let dreamDoorMesh;
 let dreamDoorInteractionMesh;
 let dreamDoorCollider;
+
+function requestPaintingUploadFileSelection() {
+    const fileInput = document.getElementById('painting-upload');
+    if (!fileInput) return;
+    if (controlsModule?.state?.isLocked) {
+        fileInput.dataset.resumeControlAfterPaintingUpload = '1';
+    } else {
+        delete fileInput.dataset.resumeControlAfterPaintingUpload;
+    }
+    controlsModule?.releaseControlMode?.({ resumeOnClose: false });
+    const openPicker = () => requestAnimationFrame(() => fileInput.click());
+    if (!document.pointerLockElement) {
+        openPicker();
+        return;
+    }
+    const onPointerUnlock = () => {
+        if (document.pointerLockElement) return;
+        document.removeEventListener('pointerlockchange', onPointerUnlock);
+        openPicker();
+    };
+    document.addEventListener('pointerlockchange', onPointerUnlock);
+}
 
 function setKeyPromptHTML(el, html, promptKey) {
     if (!el) return;
@@ -638,6 +668,7 @@ async function init() {
         getGuestParticipants: getActiveBarGuestParticipants,
         getGameTimeInfo
     });
+    initLongTermMemoryPanel({ controlsModule });
     initPainting();
     refreshCharacterRoomScope(true);
     updateGameHud(true);
@@ -698,12 +729,11 @@ async function init() {
         loadingScreen.style.display = 'none';
     }, 800);
 
-    document.getElementById('click-to-play').classList.remove('hidden');
-
     animate();
 
     const clickToPlay = document.getElementById('click-to-play');
-    const onFirstClick = () => {
+    const startInitialGameplay = () => {
+        if (startupInteractionStarted) return;
         clickToPlay.removeEventListener('click', onFirstClick);
         startupInteractionStarted = true;
         flushStartupAchievementToasts();
@@ -717,7 +747,14 @@ async function init() {
             }
         }, 300);
     };
+    const onFirstClick = () => startInitialGameplay();
     clickToPlay.addEventListener('click', onFirstClick);
+    if (controlsModule?.state?.isLocked || document.pointerLockElement === renderer.domElement) {
+        clickToPlay.classList.add('hidden');
+        startInitialGameplay();
+    } else {
+        clickToPlay.classList.remove('hidden');
+    }
 }
 
 function onKeyDown(e) {
@@ -769,6 +806,10 @@ function onKeyDown(e) {
 
     if ((e.code === 'Digit1' || e.code === 'Numpad1') && !isTypingInEditableElement()) {
         const lookedDreamFurniture = isBarSceneActive ? null : getLookingDreamFurniture(camera);
+        if (!isBarSceneActive && controlsModule?.state?.isLocked && isLookingAtDesk()) {
+            openMemoryNodePanel();
+            return;
+        }
         if (isBarSceneActive && controlsModule?.state?.isLocked && getBarInteractionLookState(true)?.exit && !isDanceFlowActive()) {
             openTacticalExamFromMain();
             return;
@@ -874,7 +915,7 @@ function onKeyDown(e) {
             } else if (isLookingAtDoor()) {
                 tryEnterBarSceneWithAdmission();
             } else if (isLookingAtPainting()) {
-                document.getElementById('painting-upload').click();
+                requestPaintingUploadFileSelection();
             } else if (isLookingAtWardrobe()) {
                 openModelSelector();
             }
@@ -908,6 +949,10 @@ function onKeyDown(e) {
             closeBartendingChallenge();
             return;
         }
+        if (isMemoryNodePanelVisible()) {
+            closeMemoryNodePanel();
+            return;
+        }
         if (isRoundtableWhispersVisible()) {
             closeRoundtableWhispers();
             return;
@@ -935,7 +980,8 @@ function isUtilityOverlayVisible() {
     return isPanelVisible('settings-panel')
         || isPanelVisible('history-panel')
         || isPanelVisible('achievements-panel')
-        || isPanelVisible('model-selector');
+        || isPanelVisible('model-selector')
+        || isMemoryNodePanelVisible();
 }
 
 function playTalkSound() {
@@ -1696,6 +1742,7 @@ function updateInteractionPrompt() {
     const prompt = document.getElementById('interaction-prompt');
     const paintingPrompt = document.getElementById('painting-prompt');
     const dreamPaintingPrompt = document.getElementById('dream-painting-prompt');
+    const memoryNodePrompt = document.getElementById('memory-node-prompt');
     const hideActionPrompts = () => {
         prompt.classList.add('hidden');
         if (paintingPrompt) {
@@ -1703,6 +1750,7 @@ function updateInteractionPrompt() {
             paintingPrompt.classList.remove('is-disabled');
         }
         if (dreamPaintingPrompt) dreamPaintingPrompt.classList.add('hidden');
+        if (memoryNodePrompt) memoryNodePrompt.classList.add('hidden');
     };
     if (isDreamRevisionPending()) {
         hideActionPrompts();
@@ -1715,12 +1763,13 @@ function updateInteractionPrompt() {
     if (barAdmissionPanelVisible) {
         prompt.classList.add('hidden');
         dreamPaintingPrompt?.classList.add('hidden');
+        memoryNodePrompt?.classList.add('hidden');
         if (paintingPrompt) {
             paintingPrompt.classList.remove('is-disabled');
             setKeyPromptHTML(paintingPrompt, '按 <kbd>E</kbd> 关闭', 'KeyE');
             paintingPrompt.classList.remove('hidden');
         }
-        stackPromptButtons(prompt, paintingPrompt, dreamPaintingPrompt);
+        stackPromptButtons(prompt, paintingPrompt, dreamPaintingPrompt, memoryNodePrompt);
         return;
     }
     if (isSleeping || isInteracting || isDialogueVisible() || isDatePanelVisible() || isGiftOverlayVisible() || isDreamOverlayVisible() || isDanceOverlayVisible() || isInvitePanelVisible() || isBartendingChallengeVisible() || isRoundtableWhispersVisible() || isGuestInteracting() || isUtilityOverlayVisible() || isSideScrollerAdventureVisible()) {
@@ -1737,7 +1786,8 @@ function updateInteractionPrompt() {
     const nearChar = controlsModule.isNearCharacter(charPos);
     if (isBarSceneActive) {
         updateBarInteractionPromptV2(prompt, paintingPrompt, dreamPaintingPrompt, nearChar);
-        stackPromptButtons(prompt, paintingPrompt, dreamPaintingPrompt);
+        memoryNodePrompt?.classList.add('hidden');
+        stackPromptButtons(prompt, paintingPrompt, dreamPaintingPrompt, memoryNodePrompt);
         return;
     }
     const lookPaint = isLookingAtPainting();
@@ -1812,6 +1862,10 @@ function updateInteractionPrompt() {
         } else if (lookDesk) {
             setKeyPromptHTML(paintingPrompt, '按 <kbd>E</kbd> 开始今日约会行程', 'KeyE');
             paintingPrompt.classList.remove('hidden');
+            if (memoryNodePrompt) {
+                setKeyPromptHTML(memoryNodePrompt, '按 <kbd>1</kbd> 查看记忆节点', 'Digit1');
+                memoryNodePrompt.classList.remove('hidden');
+            }
         } else if (lookDoor) {
             setKeyPromptHTML(paintingPrompt, '按 <kbd>E</kbd> 进入暖调闲聚', 'KeyE');
             paintingPrompt.classList.remove('hidden');
@@ -1821,6 +1875,7 @@ function updateInteractionPrompt() {
             }
         } else {
             paintingPrompt.classList.add('hidden');
+            memoryNodePrompt?.classList.add('hidden');
         }
         if (lookBarExit && isDanceFlowActive() && !paintingPrompt.classList.contains('hidden')) {
             setKeyPromptHTML(paintingPrompt, '按 <kbd>E</kbd> 返回宿舍');
@@ -1829,7 +1884,7 @@ function updateInteractionPrompt() {
         }
     }
 
-    stackPromptButtons(prompt, paintingPrompt, dreamPaintingPrompt);
+    stackPromptButtons(prompt, paintingPrompt, dreamPaintingPrompt, memoryNodePrompt);
 }
 
 function updateBarInteractionPrompt(prompt, paintingPrompt, dreamPaintingPrompt, nearChar) {
@@ -1920,6 +1975,7 @@ function initPromptButtons() {
     const prompt = document.getElementById('interaction-prompt');
     const paintingPrompt = document.getElementById('painting-prompt');
     const dreamPaintingPrompt = document.getElementById('dream-painting-prompt');
+    const memoryNodePrompt = document.getElementById('memory-node-prompt');
 
     function handlePromptTap(e, promptEl, fallbackCode) {
         e.preventDefault();
@@ -1954,6 +2010,15 @@ function initPromptButtons() {
     dreamPaintingPrompt?.addEventListener('touchend', (e) => {
         if (dreamPaintingPrompt.classList.contains('hidden')) return;
         handlePromptTap(e, dreamPaintingPrompt, 'Digit1');
+    }, { passive: false });
+
+    memoryNodePrompt?.addEventListener('click', (e) => {
+        if (memoryNodePrompt.classList.contains('hidden')) return;
+        handlePromptTap(e, memoryNodePrompt, 'Digit1');
+    });
+    memoryNodePrompt?.addEventListener('touchend', (e) => {
+        if (memoryNodePrompt.classList.contains('hidden')) return;
+        handlePromptTap(e, memoryNodePrompt, 'Digit1');
     }, { passive: false });
 }
 
@@ -1998,7 +2063,7 @@ function igniteForKey(code) {
         el = firstVisiblePromptForKey(['painting-prompt', 'interaction-prompt', 'btn-wake', 'room-panorama-close'], code);
     } else if (code === 'Digit1' || code === 'Numpad1') {
         if (!isRoomPanoramaActive()) {
-            el = firstVisiblePromptForKey(['dance-replay', 'dream-revision-confirm', 'dream-painting-prompt'], code);
+            el = firstVisiblePromptForKey(['dance-replay', 'dream-revision-confirm', 'memory-node-prompt', 'dream-painting-prompt'], code);
         }
     } else if (code === 'Digit2' || code === 'Numpad2') {
         el = firstVisiblePromptForKey(['dance-curtain', 'dream-revision-rollback'], code);
@@ -2016,6 +2081,9 @@ function initPainting() {
     fileInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
+        const shouldResumeControl = fileInput.dataset.resumeControlAfterPaintingUpload === '1';
+        delete fileInput.dataset.resumeControlAfterPaintingUpload;
+        if (shouldResumeControl) requestAnimationFrame(() => controlsModule?.forceEnterControlMode?.());
         if (consumeDreamPaintingTextureFile(file)) {
             fileInput.value = '';
             return;
@@ -3273,6 +3341,7 @@ async function buildExportPayloadV3(options = {}) {
         barConversations: getBarConversationHistory(),
         roundtableWhispers: exportRoundtableWhispers(),
         knowledgeBase: await exportKnowledgeBaseArchive(),
+        longTermMemory: exportLongTermMemory(),
         barGuestBuiltinState: exportBarGuestBuiltinState(),
         barGuestCards: options.barGuestCards || exportBarGuestCards(),
         sideScrollerCardArchive: exportSideScrollerArchive(),
@@ -3338,6 +3407,7 @@ async function applyImportedDataV3(data, assetFiles = new Map()) {
     const sideScrollerArchiveImport = importSideScrollerArchive(data.sideScrollerCardArchive || data.sideScrollerArchive || {});
     const sideScrollerScoresImport = importSideScrollerScores(data.sideScrollerScores || data.sideScrollerScoreRecords || {});
     const knowledgeImport = await importKnowledgeBaseArchive(data.knowledgeBase || data.knowledgeBasesArchive || {}, { replacePreloaded: true });
+    const longTermMemoryImport = importLongTermMemory(data.longTermMemory || data.longTermMemories || {});
 
     const guestAssets = [];
     for (const card of data.barGuestCards || []) {
@@ -3359,7 +3429,7 @@ async function applyImportedDataV3(data, assetFiles = new Map()) {
     refreshDreamFurnitureAfterImport();
     updateGameHud(true);
     renderGiftCollection();
-    return { importResult, dreamImport, guestImport, roundtableImport, knowledgeImport, sideScrollerArchiveImport, sideScrollerScoresImport };
+    return { importResult, dreamImport, guestImport, roundtableImport, knowledgeImport, longTermMemoryImport, sideScrollerArchiveImport, sideScrollerScoresImport };
 }
 
 async function handleImportFileV2(e) {
@@ -3375,8 +3445,8 @@ async function handleImportFileV2(e) {
         } else {
             data = JSON.parse(await file.text());
         }
-        const { importResult, dreamImport, guestImport, roundtableImport, knowledgeImport, sideScrollerArchiveImport, sideScrollerScoresImport } = await applyImportedDataV3(data, assetFiles);
-        alert(`导入成功！礼物新增 ${importResult.giftsAdded || 0} 条，造梦家具新增 ${dreamImport.added || 0} 件，访客角色导入 ${guestImport.imported || 0} 个，圆桌消息新增 ${roundtableImport.imported || 0} 条，典藏卡牌新增 ${sideScrollerArchiveImport.imported || 0} 张，分数记录新增 ${sideScrollerScoresImport.imported || 0} 条，知识库新增 ${knowledgeImport.knowledgeBases || 0} 个 / ${knowledgeImport.files || 0} 个文件。刷新页面以应用设置。`);
+        const { importResult, dreamImport, guestImport, roundtableImport, knowledgeImport, longTermMemoryImport, sideScrollerArchiveImport, sideScrollerScoresImport } = await applyImportedDataV3(data, assetFiles);
+        alert(`导入成功！礼物新增 ${importResult.giftsAdded || 0} 条，造梦家具新增 ${dreamImport.added || 0} 件，访客角色导入 ${guestImport.imported || 0} 个，圆桌消息新增 ${roundtableImport.imported || 0} 条，长期记忆新增 ${longTermMemoryImport.imported || 0} 条 / 关系 ${longTermMemoryImport.edges || 0} 条，典藏卡牌新增 ${sideScrollerArchiveImport.imported || 0} 张，分数记录新增 ${sideScrollerScoresImport.imported || 0} 条，知识库新增 ${knowledgeImport.knowledgeBases || 0} 个 / ${knowledgeImport.files || 0} 个文件。刷新页面以应用设置。`);
     } catch (err) {
         alert('导入失败：文件格式不正确或资源缺失');
         console.error('Import error:', err);
@@ -3408,6 +3478,7 @@ function handleImportFile(e) {
             const sideScrollerArchiveImport = importSideScrollerArchive(data.sideScrollerCardArchive || data.sideScrollerArchive || {});
             const sideScrollerScoresImport = importSideScrollerScores(data.sideScrollerScores || data.sideScrollerScoreRecords || {});
             const knowledgeImport = await importKnowledgeBaseArchive(data.knowledgeBase || data.knowledgeBasesArchive || {}, { replacePreloaded: true });
+            const longTermMemoryImport = importLongTermMemory(data.longTermMemory || data.longTermMemories || {});
             const importResult = importGameState(data, { suppressEvent: true });
             const dreamImport = importDreamFurniture(data.dreamFurniture || data.gameState?.dreamFurniture || []);
             importAchievements(data.achievements);
@@ -3415,7 +3486,7 @@ function handleImportFile(e) {
             refreshDreamFurnitureAfterImport();
             updateGameHud(true);
             renderGiftCollection();
-            alert(`导入成功！礼物同步新增 ${importResult.giftsAdded || 0} 条，造梦家具新增 ${dreamImport.added || 0} 件，跳过 ${dreamImport.skipped || 0} 件，典藏卡牌新增 ${sideScrollerArchiveImport.imported || 0} 张，分数记录新增 ${sideScrollerScoresImport.imported || 0} 条，知识库新增 ${knowledgeImport.knowledgeBases || 0} 个 / ${knowledgeImport.files || 0} 个文件。刷新页面以应用设置。`);
+            alert(`导入成功！礼物同步新增 ${importResult.giftsAdded || 0} 条，造梦家具新增 ${dreamImport.added || 0} 件，跳过 ${dreamImport.skipped || 0} 件，长期记忆新增 ${longTermMemoryImport.imported || 0} 条 / 关系 ${longTermMemoryImport.edges || 0} 条，典藏卡牌新增 ${sideScrollerArchiveImport.imported || 0} 张，分数记录新增 ${sideScrollerScoresImport.imported || 0} 条，知识库新增 ${knowledgeImport.knowledgeBases || 0} 个 / ${knowledgeImport.files || 0} 个文件。刷新页面以应用设置。`);
         } catch (err) {
             alert('导入失败：文件格式不正确');
             console.error('Import error:', err);

@@ -132,7 +132,11 @@ export function initSettings(options = {}) {
     function formatAdvancedValue(key, value) {
         if (key === 'timeSpeed') return `${Math.round(Number(value) || ADVANCED_SETTING_DEFAULTS.timeSpeed)} 分钟/秒`;
         if (key === 'dreamDialogueCooldownMs') return `${Math.round((Number(value) || 0) / 1000)} 秒`;
-        if (key === 'roundtableFollowUpRate') return `${Math.round((Number(value) || 0) * 100)}%`;
+        if (key === 'roundtableFollowUpRate' || key === 'ltmDuplicateSimilarityThreshold') return `${Math.round((Number(value) || 0) * 100)}%`;
+        if (key === 'ltmAccessReinforcementEnabled' || key === 'ltmDuplicateReinforcementEnabled') return Number(value) ? 'ON' : 'OFF';
+        if (key === 'ltmAccessImportanceBoost' || key === 'ltmDuplicateImportanceBoost') return `+${Number(value || 0).toFixed(2)}`;
+        if (key === 'ltmAccessMaxImportance') return Number(value || 0).toFixed(1);
+        if (key === 'ltmMaintenanceIntervalHours') return `${Math.round(Number(value) || ADVANCED_SETTING_DEFAULTS.ltmMaintenanceIntervalHours)} h`;
         return String(value);
     }
 
@@ -148,7 +152,12 @@ export function initSettings(options = {}) {
         advancedInputs.forEach(input => {
             const key = input.dataset.advancedSetting;
             if (!key || normalized[key] === undefined) return;
-            input.value = String(normalized[key]);
+            if (input.type === 'checkbox') {
+                input.checked = Number(normalized[key]) !== 0;
+                input.value = input.checked ? '1' : '0';
+            } else {
+                input.value = String(normalized[key]);
+            }
             updateAdvancedValueLabel(input, normalized);
         });
     }
@@ -191,7 +200,7 @@ export function initSettings(options = {}) {
         advancedInputs.forEach(input => {
             const key = input.dataset.advancedSetting;
             if (!key) return;
-            draft[key] = input.value;
+            draft[key] = input.type === 'checkbox' ? (input.checked ? 1 : 0) : input.value;
         });
         return normalizeAdvancedSettings(draft);
     }
@@ -301,6 +310,13 @@ export function initSettings(options = {}) {
         input.addEventListener('input', () => {
             const normalized = getDraftAdvancedSettings();
             advancedInputs.forEach(item => updateAdvancedValueLabel(item, normalized));
+        });
+        input.addEventListener('change', () => {
+            if (input.type === 'checkbox') {
+                input.value = input.checked ? '1' : '0';
+                const normalized = getDraftAdvancedSettings();
+                advancedInputs.forEach(item => updateAdvancedValueLabel(item, normalized));
+            }
         });
         if (input.type === 'number') {
             input.addEventListener('blur', scheduleAdvancedInputViewportReset);

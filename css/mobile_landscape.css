@@ -1,0 +1,932 @@
+/* =============================================================
+   芙提雅 ONLINE NEXT — 移动端横屏专用布局（独立样式层）
+   -------------------------------------------------------------
+   触发：js/mobile_landscape.js 在「触屏设备 + 横屏」时给 <html> 挂
+         `ml-active`（矮屏再加 `ml-short`、超宽再加 `ml-ultrawide`），
+         并写入真实视口变量 --ml-h / --ml-w / --ml-vh / --ml-vw。
+
+   本文件全部规则都以 `html.ml-active` 开头：
+   - 桌面端、移动端竖屏永远不会命中（class 不存在）→ 零影响、可一键移除。
+   - 本文件最后 link，配合 `html.ml-active` 前缀稳定覆盖既有规则。
+
+   结构：§0 令牌 · §1 浮层骨架通用压缩 · §2 逐窗口专属重排 · §3 战术考核。
+   详细设计说明见仓库根 UI_MOBILE.md。
+   ============================================================= */
+
+/* ============================================================= */
+/* §0 令牌（仅 ml-active 作用域）                                  */
+/* ============================================================= */
+html.ml-active {
+    --ml-safe-l: env(safe-area-inset-left, 0px);
+    --ml-safe-r: env(safe-area-inset-right, 0px);
+    --ml-safe-t: env(safe-area-inset-top, 0px);
+    --ml-safe-b: env(safe-area-inset-bottom, 0px);
+    --ml-panel-h: calc(var(--ml-h, 100vh) - 10px);
+    --ml-dream-wish-height: clamp(110px, calc(var(--ml-h, 100vh) - 320px), 290px);
+
+    /* 战术考核【手牌】卡牌字号（手牌区静置卡牌用）。 */
+    --ml-card-title-fs: 0.70rem;   /* 手牌标题（牌名） */
+    --ml-card-desc-fs:  0.62rem;   /* 手牌描述（内容） */
+    --ml-card-top-fs:   0.56rem;   /* 手牌分类小标（紫·强化 等） */
+    --ml-card-value-fs: 0.63rem;   /* 手牌底部数值（费用/效果数字） */
+
+    /* 战术考核【拖动幽灵】卡牌字号（拖动中那张克隆卡片用，独立于手牌、可单独调）。
+       默认与手牌一致，所以现在看不出区别；要让拖动卡片字号不同，单独改下面这组即可。 */
+    --ml-ghost-title-fs: 0.70rem;  /* 拖动卡片标题 */
+    --ml-ghost-desc-fs:  0.62rem;  /* 拖动卡片描述 */
+    --ml-ghost-top-fs:   0.56rem;  /* 拖动卡片分类小标 */
+    --ml-ghost-value-fs: 0.63rem;  /* 拖动卡片底部数值 */
+}
+
+/* ============================================================= */
+/* §1 浮层骨架通用压缩（所有 .otome-panel 共用，降低标题/底栏高度）   */
+/* ============================================================= */
+
+/* overlay 背景内边距收紧，让浮层尽量占满高度 */
+html.ml-active .ui-overlay { padding: 6px; }
+
+/* 浮层本体：限高 + 略减圆角，角标花纹缩小 */
+html.ml-active .otome-panel {
+    max-height: var(--ml-panel-h);
+    border-radius: var(--r-md);
+}
+html.ml-active .otome-panel::before,
+html.ml-active .otome-panel::after { width: 32px; height: 32px; }
+
+/* 标题栏：从 ~96px 压到 ~52px */
+html.ml-active .otome-panel__head {
+    gap: var(--sp-3);
+    padding: 8px 16px;
+}
+html.ml-active .otome-panel__icon {
+    width: 38px; height: 38px;
+    border-radius: var(--r-sm);
+}
+html.ml-active .otome-panel__icon img { width: 22px; height: 22px; }
+/* 装饰性英文 kicker 在横屏隐藏，给标题栏再省一行高度（保留更有信息量的副标题） */
+html.ml-active .otome-panel__kicker { display: none; }
+html.ml-active .otome-panel__title { margin-top: 0; font-size: 1.12rem; }
+html.ml-active .otome-panel__sub {
+    margin-top: 2px;
+    font-size: 0.72rem;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+html.ml-active .otome-panel__close { width: 34px; height: 34px; }
+
+/* 主体：非 flush 的统一压缩内边距；flush 体自管滚动，不动 */
+html.ml-active .otome-panel__body:not(.otome-panel__body--flush) { padding: 12px 16px; }
+html.ml-active .otome-card { padding: var(--sp-4); }
+
+/* 底栏：压缩高度，按钮变矮但仍可点 */
+html.ml-active .otome-panel__foot { padding: 8px 16px; }
+html.ml-active .btn { min-height: 40px; }
+
+/* 矮屏（≤400px 高）进一步压缩 */
+html.ml-active.ml-short .otome-panel__head { padding: 6px 14px; }
+html.ml-active.ml-short .otome-panel__sub { display: none; }
+html.ml-active.ml-short .otome-panel__icon { width: 32px; height: 32px; }
+html.ml-active.ml-short .otome-panel__icon img { width: 19px; height: 19px; }
+html.ml-active.ml-short .otome-panel__title { font-size: 1rem; }
+html.ml-active.ml-short .btn { min-height: 36px; }
+
+/* 输入框字号保持 ≥16px（防 iOS 自动放大）；只压高度/内边距 */
+html.ml-active .otome-panel textarea { line-height: 1.4; }
+
+/* ============================================================= */
+/* §2 逐窗口专属重排（具体问题具体分析）                            */
+/* ============================================================= */
+
+/* ---- #model-selector 换装 ---- */
+html.ml-active #model-selector .otome-panel { width: min(560px, 92vw); }
+html.ml-active #model-selector #model-list { gap: 7px; }
+
+/* ---- #settings-panel 系统设置 ---- */
+html.ml-active #settings-panel .otome-panel { width: min(1120px, 95vw); }
+html.ml-active #settings-panel .settings-body { grid-template-columns: 112px minmax(0, 1fr); }
+html.ml-active #settings-panel .settings-nav { padding: 9px 7px; gap: 6px; }
+html.ml-active #settings-panel .settings-nav-item { min-height: 46px; padding: 6px 5px; }
+html.ml-active #settings-panel .settings-view-head { padding: 10px 16px 7px; }
+/* 底栏高度压到 ~70%，右下角按钮相应缩小 */
+html.ml-active #settings-panel .settings-foot { padding: 5px 16px; }
+html.ml-active #settings-panel .settings-foot .btn { min-height: 30px; padding-top: 4px; padding-bottom: 4px; }
+
+/* 大模型设置 / 操作设置：横屏下改成类似「高级设置」的紧凑行式表单 */
+html.ml-active #settings-panel .settings-view[data-settings-view="model"] {
+    --ml-model-field-row-h: 52px;
+    --ml-model-form-h: calc(var(--ml-model-field-row-h) * 3 + 2px);
+    align-items: stretch;
+    gap: 0;
+    overflow-anchor: none;
+}
+html.ml-active #settings-panel .settings-view[data-settings-view="controls"] .settings-view-head,
+html.ml-active #settings-panel .settings-view[data-settings-view="model"] .settings-view-head {
+    padding: 8px 16px 6px;
+}
+html.ml-active #settings-panel .settings-view[data-settings-view="controls"] .settings-view-head p,
+html.ml-active #settings-panel .settings-view[data-settings-view="model"] .settings-view-head p {
+    font-size: 0.74rem;
+    line-height: 1.35;
+}
+html.ml-active #settings-panel .settings-view[data-settings-view="model"] .settings-form-grid {
+    flex: 0 0 var(--ml-model-form-h);
+    max-width: none;
+    width: auto;
+    height: var(--ml-model-form-h);
+    min-height: var(--ml-model-form-h);
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: repeat(3, var(--ml-model-field-row-h));
+    gap: 0;
+    margin: 10px 16px 8px;
+    padding: 0;
+    border: 1px solid var(--panel-line);
+    border-radius: var(--r-sm);
+    background:
+        linear-gradient(135deg, rgba(255,255,255,0.62), rgba(251,233,236,0.28)),
+        rgba(255,250,247,0.56);
+    overflow: hidden;
+}
+html.ml-active #settings-panel .settings-view[data-settings-view="model"] .otome-field {
+    min-height: var(--ml-model-field-row-h);
+    height: var(--ml-model-field-row-h);
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 0;
+    padding: 8px 11px;
+}
+html.ml-active #settings-panel .settings-view[data-settings-view="model"] .otome-field + .otome-field {
+    border-top: 1px solid rgba(229,138,166,0.15);
+}
+html.ml-active #settings-panel .settings-view[data-settings-view="model"] .otome-field-label {
+    margin: 0;
+    color: var(--c-ink);
+    font-size: 0.8rem;
+    font-weight: 800;
+    line-height: 1.25;
+    white-space: nowrap;
+}
+html.ml-active #settings-panel .settings-view[data-settings-view="model"] .settings-form-grid input {
+    min-height: 34px;
+    height: 34px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    font-size: 16px;
+    line-height: 1.2;
+}
+html.ml-active #settings-panel .settings-view[data-settings-view="model"] .settings-api-card,
+html.ml-active #settings-panel .settings-view[data-settings-view="model"] .settings-intimate-card {
+    position: static;
+    inset: auto;
+    flex: 0 0 auto;
+    align-self: stretch;
+    max-width: none;
+    width: auto;
+    margin: 0 16px 8px;
+    padding: 9px 11px;
+}
+html.ml-active #settings-panel .settings-view[data-settings-view="model"] .settings-api-card {
+    grid-template-columns: minmax(170px, 0.9fr) minmax(0, 1.4fr);
+    align-items: center;
+    gap: 8px 10px;
+}
+html.ml-active #settings-panel .settings-view[data-settings-view="model"] .settings-api-card strong {
+    font-size: 0.82rem;
+}
+html.ml-active #settings-panel .settings-view[data-settings-view="model"] .settings-api-card span {
+    font-size: 0.7rem;
+    line-height: 1.32;
+}
+html.ml-active #settings-panel .settings-view[data-settings-view="model"] .settings-api-links {
+    justify-content: flex-start;
+    gap: 6px;
+}
+html.ml-active #settings-panel .settings-view[data-settings-view="model"] .settings-api-link {
+    min-height: 28px;
+    padding: 4px 9px;
+    font-size: 0.7rem;
+}
+html.ml-active #settings-panel .settings-view[data-settings-view="model"] .settings-intimate-card {
+    position: relative;
+    min-height: 64px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    align-items: center;
+    gap: 2px 12px;
+    overflow: hidden;
+    overflow-anchor: none;
+}
+html.ml-active #settings-panel .settings-view[data-settings-view="model"] .settings-intimate-card input {
+    top: 50%;
+    right: 24px;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    transform: translateY(-50%);
+}
+html.ml-active #settings-panel .settings-view[data-settings-view="model"] .settings-intimate-card .settings-intimate-switch {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    justify-self: end;
+}
+html.ml-active #settings-panel .settings-view[data-settings-view="model"] .settings-intimate-card span:last-child {
+    grid-column: 1;
+    grid-row: 1 / 3;
+    align-self: center;
+    gap: 4px;
+}
+html.ml-active #settings-panel .settings-view[data-settings-view="model"] .settings-intimate-card strong {
+    grid-column: 1;
+    grid-row: 1;
+    font-size: 0.8rem;
+}
+html.ml-active #settings-panel .settings-view[data-settings-view="model"] .settings-intimate-card small {
+    display: block;
+    grid-column: 1;
+    grid-row: 2;
+    font-size: 0.68rem;
+    line-height: 1.3;
+}
+html.ml-active #settings-panel .settings-view[data-settings-view="controls"] .settings-control-panel {
+    max-width: none;
+    margin: 10px 16px;
+    padding: 0;
+    gap: 0;
+    border: 1px solid var(--panel-line);
+    border-radius: var(--r-sm);
+    background:
+        linear-gradient(135deg, rgba(255,255,255,0.62), rgba(251,233,236,0.28)),
+        rgba(255,250,247,0.56);
+    overflow: hidden;
+}
+html.ml-active #settings-panel .settings-view[data-settings-view="controls"] .settings-slider-row {
+    grid-template-columns: minmax(150px, 0.85fr) minmax(230px, 0.95fr);
+    grid-template-rows: auto auto;
+    gap: 4px 10px;
+    padding: 9px 11px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+}
+html.ml-active #settings-panel .settings-view[data-settings-view="controls"] .settings-slider-row + .settings-slider-row {
+    margin-top: 0;
+    border-top: 1px solid rgba(229,138,166,0.15);
+}
+html.ml-active #settings-panel .settings-view[data-settings-view="controls"] .settings-slider-row span {
+    grid-column: 1;
+    grid-row: 1 / 3;
+    gap: 2px;
+}
+html.ml-active #settings-panel .settings-view[data-settings-view="controls"] .settings-slider-row strong {
+    font-size: 0.8rem;
+    line-height: 1.25;
+}
+html.ml-active #settings-panel .settings-view[data-settings-view="controls"] .settings-slider-row small {
+    font-size: 0.67rem;
+    line-height: 1.25;
+}
+html.ml-active #settings-panel .settings-view[data-settings-view="controls"] .settings-slider-row input[type="range"] {
+    grid-column: 2;
+    grid-row: 2;
+    width: 100%;
+    min-width: 0;
+    align-self: end;
+}
+html.ml-active #settings-panel .settings-view[data-settings-view="controls"] .settings-slider-row em {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: start;
+    min-width: 58px;
+    padding: 4px 7px;
+    font-size: 0.7rem;
+}
+/* 知识库工作台：列表(左) 与 详情(右) 各自独立滚动 + 自绘滚动条
+   —— 既有桌面是 flex:1 + overflow:hidden 的层层裁剪链，短横屏会把 FILES/CHUNKS 内容裁成 0 只剩标题。
+      这里固定工作台高度，并把详情链改成"自然高度 + kb-main 整体滚动"，让具体文件/分块可见。 */
+html.ml-active #settings-panel .knowledge-workbench { height: calc(var(--ml-h, 100vh) - 150px); min-height: 220px; }
+html.ml-active #settings-panel .kb-sidebar { min-height: 0; display: flex; flex-direction: column; }
+/* 右栏详情整体可滚（block + 自然高度，打破 flex:1/overflow:hidden 裁剪链） */
+html.ml-active #settings-panel .kb-main { display: block; }
+html.ml-active #settings-panel .kb-detail { display: block; flex: none; overflow: visible; }
+html.ml-active #settings-panel .kb-management-grid {
+    flex: none;
+    overflow: visible;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    padding: 0 0 10px;
+}
+html.ml-active #settings-panel .kb-files-panel,
+html.ml-active #settings-panel .kb-chunks-panel { overflow: visible; }
+html.ml-active #settings-panel .kb-list,
+html.ml-active #settings-panel .kb-main {
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(244,184,200,0.6) transparent;
+}
+html.ml-active #settings-panel .kb-list { flex: 1; }
+html.ml-active #settings-panel .kb-list::-webkit-scrollbar,
+html.ml-active #settings-panel .kb-main::-webkit-scrollbar { width: 6px; }
+html.ml-active #settings-panel .kb-list::-webkit-scrollbar-thumb,
+html.ml-active #settings-panel .kb-main::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(244,184,200,0.7), rgba(230,193,120,0.7));
+}
+html.ml-active #settings-panel .kb-list::-webkit-scrollbar-track,
+html.ml-active #settings-panel .kb-main::-webkit-scrollbar-track { background: transparent; }
+/* FILES / CHUNKS 在详情内仍各自限高滚动，避免一侧过长 */
+html.ml-active #settings-panel #kb-file-list,
+html.ml-active #settings-panel #kb-chunk-list {
+    max-height: calc(var(--ml-h, 100vh) - 300px);
+    min-height: 144px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(244,184,200,0.6) transparent;
+}
+html.ml-active #settings-panel #kb-file-list::-webkit-scrollbar,
+html.ml-active #settings-panel #kb-chunk-list::-webkit-scrollbar { width: 5px; }
+html.ml-active #settings-panel #kb-file-list::-webkit-scrollbar-thumb,
+html.ml-active #settings-panel #kb-chunk-list::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(244,184,200,0.7), rgba(230,193,120,0.7));
+}
+html.ml-active #settings-panel #kb-file-list::-webkit-scrollbar-track,
+html.ml-active #settings-panel #kb-chunk-list::-webkit-scrollbar-track { background: transparent; }
+
+/* 「更多资源」(INFO 视图)：横屏改为左右两栏
+   —— 左栏 = LOGO + 标题整体居中；右栏 = 副标题 + 制作信息 + 4 个资源按钮(2×2)。 */
+html.ml-active #settings-panel .settings-resources-page {
+    --ml-resources-logo-size: clamp(66px, calc(var(--ml-h, 100vh) * 0.20), 118px);
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 14px 20px 16px;
+    grid-template-columns: minmax(220px, 0.56fr) minmax(0, 1.44fr);
+    grid-template-rows: auto auto minmax(0, auto);
+    column-gap: 18px;
+    row-gap: 8px;
+    justify-items: stretch;
+    align-content: start;   /* 顶对齐：短横屏下不会因居中把首行顶出裁剪区 */
+    text-align: left;
+}
+/* 左栏：LOGO + 标题作为一个视觉组，跨右栏三行居中。 */
+html.ml-active #settings-panel .settings-resources-logo-wrap {
+    grid-column: 1; grid-row: 1 / 4;
+    align-self: center; justify-self: center;
+    width: var(--ml-resources-logo-size);
+    margin-bottom: 0;
+    transform: translateY(-30px);
+}
+html.ml-active #settings-panel .settings-resources-title {
+    grid-column: 1; grid-row: 1 / 4;
+    align-self: center; justify-self: center;
+    margin: 0;
+    width: 100%;
+    text-align: center;
+    font-size: clamp(1.15rem, 2.3vw, 1.6rem);
+    transform: translateY(58px);
+}
+/* 右栏：副标题 + 制作信息 + 资源按钮 */
+html.ml-active #settings-panel .settings-resources-subtitle {
+    grid-column: 2; grid-row: 1;
+    align-self: end;
+    margin: 0;
+    text-align: left;
+}
+html.ml-active #settings-panel #settings-about-text {
+    grid-column: 2; grid-row: 2;
+    width: 100%;
+    text-align: left;
+    font-size: 0.73rem;
+    line-height: 1.56;
+}
+html.ml-active #settings-panel .settings-resource-links {
+    grid-column: 2; grid-row: 3;
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;   /* 4 个按钮 → 2×2 */
+    gap: 8px;
+    margin-top: 2px;
+}
+html.ml-active #settings-panel .settings-resource-link {
+    flex: none;
+    min-height: 34px;
+}
+
+/* ---- #roundtable-whispers-panel 圆桌密语（两步） ---- */
+html.ml-active #roundtable-whispers-panel .otome-panel { width: min(1080px, 96vw); height: var(--ml-panel-h); }
+
+/* 设置步：保留邀请/规则双栏 + 副标题 + 底栏；中间内容可滚 + 自绘滚动条 */
+html.ml-active #roundtable-whispers-panel .roundtable-setup { padding: 12px; gap: 12px; }
+html.ml-active #roundtable-whispers-panel .roundtable-setup-grid { min-height: 0; }
+html.ml-active #roundtable-whispers-panel #roundtable-participant-list {
+    max-height: calc(var(--ml-h, 100vh) - 196px);
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(244,184,200,0.6) transparent;
+}
+html.ml-active #roundtable-whispers-panel #roundtable-participant-list::-webkit-scrollbar { width: 7px; }
+html.ml-active #roundtable-whispers-panel #roundtable-participant-list::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(244,184,200,0.7), rgba(230,193,120,0.7));
+}
+html.ml-active #roundtable-whispers-panel #roundtable-participant-list::-webkit-scrollbar-track { background: transparent; }
+html.ml-active #roundtable-whispers-panel .roundtable-rule-board { overflow-y: auto; }
+html.ml-active #roundtable-whispers-panel .roundtable-toggle { margin: 7px 0; padding: 9px 11px; }
+html.ml-active #roundtable-whispers-panel .roundtable-slider { margin: 7px 0; padding: 9px 11px; }
+
+/* 群聊步：双栏；输入栏+发送压成一行；底栏取消（状态/时间由 JS 搬移） */
+html.ml-active #roundtable-whispers-panel .roundtable-chat-layout { padding: 10px; gap: 10px; grid-template-columns: 188px minmax(0, 1fr); }
+html.ml-active #roundtable-whispers-panel #roundtable-message-list { padding: 12px; gap: 9px; }
+html.ml-active #roundtable-whispers-panel .roundtable-input-console { padding: 8px; gap: 8px; align-items: stretch; }
+html.ml-active #roundtable-whispers-panel #roundtable-input {
+    min-height: 40px; height: 40px; max-height: 40px;
+    padding-top: 9px; padding-bottom: 9px; resize: none;
+}
+html.ml-active #roundtable-whispers-panel #roundtable-send { min-width: 84px; align-self: stretch; }
+
+/* 进入群聊（JS 加 ml-rt-chat）：取消底栏；副标题让位给搬来的「进行中」状态 */
+html.ml-active #roundtable-whispers-panel.ml-rt-chat .roundtable-foot { display: none; }
+html.ml-active #roundtable-whispers-panel.ml-rt-chat .otome-panel__head .otome-panel__sub { display: none; }
+/* 搬入标题区的状态文字，按副标题样式呈现 */
+html.ml-active #roundtable-whispers-panel.ml-rt-chat .otome-panel__titles #roundtable-chat-status {
+    margin-top: 2px;
+    padding: 0;
+    background: none;
+    border: 0;
+    color: var(--c-ink-soft);
+    font-size: 0.72rem;
+    line-height: 1.3;
+}
+/* 搬入左栏（+/-/返回 按钮组下方）的时间/警告条 */
+html.ml-active #roundtable-whispers-panel.ml-rt-chat .roundtable-roster .roundtable-foot-timebar {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 10px;
+    padding-top: 9px;
+    border-top: 1px solid rgba(244,184,200,0.18);
+}
+
+/* ---- #bartending-challenge-panel 调酒挑战（左右双栏，收紧字体/间距，藏材料类型标签） ---- */
+html.ml-active #bartending-challenge-panel .otome-panel { width: min(1120px, 96vw); }
+html.ml-active #bartending-challenge-panel .bartending-body { overflow-y: auto; overscroll-behavior: contain; }
+/* 状态台压矮 */
+/* HP 与 ROUND 同一行（覆盖 ≤980 的单列堆叠） */
+html.ml-active #bartending-challenge-panel .bartending-status-deck { grid-template-columns: minmax(0, 1fr) auto; padding: 8px 14px 0; gap: 10px; }
+html.ml-active #bartending-challenge-panel .bartending-hp-console,
+html.ml-active #bartending-challenge-panel .bartending-round-console { padding: 8px 13px; }
+/* 调酒区(左) + 结果区(右) 维持左右双栏（覆盖 ≤980 时的 flex 单列），去掉过宽最小列宽以适配窄屏 */
+html.ml-active #bartending-challenge-panel .bartending-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.32fr) minmax(0, 1fr);
+    gap: 10px;
+    padding: 10px 14px 12px;
+}
+html.ml-active #bartending-challenge-panel .bartending-mixer-panel {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    padding: 10px;
+}
+html.ml-active #bartending-challenge-panel .bartending-note-field { grid-column: 1 / -1; }
+html.ml-active #bartending-challenge-panel .bartending-lane { gap: 6px; }
+html.ml-active #bartending-challenge-panel .otome-section-label { margin-bottom: 4px; }
+/* 材料卡：隐藏「标准材料/异常材料」类型标签；按钮高度 ≈ 文字行高的 1.3 倍
+   （原 min-height:56px 含两行，去掉类型标签后只剩单行名称，按 1.3× 行高给舒适单行） */
+/* flex:0 0 auto 防止列表过长时按钮被 flex 压扁（否则 padding 失效、行高塌成 ~17px） */
+html.ml-active #bartending-challenge-panel .bartending-ingredient { min-height: 0; flex: 0 0 auto; padding: 2px 11px; line-height: 1.5; }
+html.ml-active #bartending-challenge-panel .bartending-ingredient span { font-size: 0.82rem; line-height: 1.5; }
+html.ml-active #bartending-challenge-panel .bartending-ingredient small { display: none; }
+/* 材料列表随高滚动 + 自绘滚动条（覆盖 ≤980 时的 2 列网格，保持单列竖向列表） */
+html.ml-active #bartending-challenge-panel .bartending-ingredient-list {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(var(--ml-h, 100vh) - 280px);
+    gap: 6px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(244,184,200,0.6) transparent;
+}
+html.ml-active #bartending-challenge-panel .bartending-ingredient-list::-webkit-scrollbar { width: 6px; }
+html.ml-active #bartending-challenge-panel .bartending-ingredient-list::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(244,184,200,0.7), rgba(230,193,120,0.7));
+}
+html.ml-active #bartending-challenge-panel .bartending-ingredient-list::-webkit-scrollbar-track { background: transparent; }
+html.ml-active #bartending-challenge-panel .bartending-ingredient-custom,
+html.ml-active #bartending-challenge-panel .bartending-lane input { min-height: 34px; padding-top: 6px; padding-bottom: 6px; }
+html.ml-active #bartending-challenge-panel .bartending-note-field textarea { min-height: 48px; }
+html.ml-active #bartending-challenge-panel .bartending-result-panel { padding: 10px; gap: 10px; }
+html.ml-active #bartending-challenge-panel .bartending-slot-board { min-height: 130px; }
+html.ml-active #bartending-challenge-panel .bartending-foot { padding: 8px 16px; }
+html.ml-active #bartending-challenge-panel #bartending-status { font-size: 0.74rem; line-height: 1.35; }
+
+/* ---- #bar-guest-panel 发起邀请（右栏去 PMX 方框、说明压一行、整体更紧凑） ---- */
+html.ml-active #bar-guest-panel .otome-panel { width: min(980px, 96vw); max-height: var(--ml-panel-h); }
+html.ml-active #bar-guest-panel .bar-guest-body { gap: 12px; }
+html.ml-active #bar-guest-panel .bar-guest-roster { padding: 12px; }
+/* 候选角色可能很多：缩矮卡片 + 左栏自绘滚动条 */
+html.ml-active #bar-guest-panel .bar-guest-card-list {
+    max-height: calc(var(--ml-h, 100vh) - 150px);
+    gap: 7px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(244,184,200,0.6) transparent;
+}
+html.ml-active #bar-guest-panel .bar-guest-card-list::-webkit-scrollbar { width: 6px; }
+html.ml-active #bar-guest-panel .bar-guest-card-list::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(244,184,200,0.7), rgba(230,193,120,0.7));
+}
+html.ml-active #bar-guest-panel .bar-guest-card-list::-webkit-scrollbar-track { background: transparent; }
+html.ml-active #bar-guest-panel .bar-guest-card { padding: 8px 11px; gap: 8px; min-height: 0; }
+html.ml-active #bar-guest-panel .bar-guest-forge { padding: 12px; }
+/* 删除右栏顶部 PMX 预览方框，只留「新角色配置」标题 */
+html.ml-active #bar-guest-panel .bar-guest-preview { display: none; }
+html.ml-active #bar-guest-panel .bar-guest-preview-wrap { display: block; }
+/* 说明文字压到一行 */
+html.ml-active #bar-guest-panel .bar-guest-copy {
+    margin: 3px 0 0;
+    font-size: 0.72rem;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+/* 更紧凑：更小行距、更矮按钮/输入 */
+html.ml-active #bar-guest-panel .otome-section-label { margin-bottom: 4px; }
+html.ml-active #bar-guest-panel .otome-field-label { margin: 7px 0 3px; }
+html.ml-active #bar-guest-panel #bar-guest-name { min-height: 38px; padding-top: 7px; padding-bottom: 7px; }
+html.ml-active #bar-guest-panel .bar-guest-file-grid { gap: 8px; margin-top: 8px; }
+html.ml-active #bar-guest-panel .bar-guest-file-card { padding: 9px 11px; }
+/* 取消显示「已选中，可直接邀请入场」说明条 */
+html.ml-active #bar-guest-panel #bar-guest-status { display: none; }
+html.ml-active #bar-guest-panel .bar-guest-foot .btn { min-height: 38px; }
+
+/* ---- #dream-terminal-panel 造梦终端（左右双栏整体压缩，保证全部内容可见 + 保留滚动条） ---- */
+html.ml-active #dream-terminal-panel .otome-panel { width: min(960px, 96vw); }
+html.ml-active #dream-terminal-panel .dream-grid { gap: var(--sp-3); }
+html.ml-active #dream-terminal-panel .dream-wish-console,
+html.ml-active #dream-terminal-panel .dream-forge-console { padding: var(--sp-3) var(--sp-4); }
+/* 左栏：家具愿望文本框用独立变量定高，覆盖既有 flex:1 撑满整列 */
+html.ml-active #dream-terminal-panel #dream-furniture-description { flex: none; min-height: 0; height: var(--ml-dream-wish-height); }
+html.ml-active #dream-terminal-panel #dream-template-strip { margin-top: var(--sp-2); gap: 6px; }
+html.ml-active #dream-terminal-panel .dream-hint-strip { margin-top: var(--sp-2); font-size: 0.7rem; line-height: 1.35; }
+/* 右栏：打造参数各控件压矮 */
+html.ml-active #dream-terminal-panel .dream-compose { margin-bottom: var(--sp-3); }
+html.ml-active #dream-terminal-panel .otome-field-label { margin: 4px 0 3px; }
+html.ml-active #dream-terminal-panel #dream-placement-input { min-height: 38px; padding-top: 7px; padding-bottom: 7px; }
+html.ml-active #dream-terminal-panel .dream-forge-card { padding: var(--sp-3); gap: var(--sp-2); }
+html.ml-active #dream-terminal-panel .dream-forge-card .btn { min-height: 40px; }
+html.ml-active #dream-terminal-panel .dream-progress-wrap { margin-top: var(--sp-2); }
+
+/* ---- 造梦：家具编辑 / 位置调整 ---- */
+html.ml-active #dream-furniture-editor-panel #dream-editor-style-instruction,
+html.ml-active #dream-placement-editor-panel textarea { min-height: clamp(70px, calc(var(--ml-h, 100vh) - 300px), 120px); }
+
+/* ---- #history-panel 历史对话 ---- */
+html.ml-active #history-panel .history-toolbar { padding: 7px 16px; }
+html.ml-active #history-panel .history-tab { padding: 5px 13px; }
+
+/* ---- #date-panel 约会行程 ---- */
+html.ml-active #date-panel #date-locations { padding: var(--sp-3); gap: 9px; }
+html.ml-active #date-panel .date-location-card { padding: 12px 11px; }
+html.ml-active #date-panel #date-chat-area { padding: var(--sp-3) var(--sp-4); }
+html.ml-active #date-panel .date-chat-input { padding: 9px var(--sp-4); }
+
+/* ---- #gift-terminal-panel / #gift-collection-panel ---- */
+html.ml-active #gift-terminal-panel #gift-description { min-height: clamp(80px, calc(var(--ml-h, 100vh) - 260px), 120px); }
+html.ml-active #gift-collection-panel #gift-collection-list { gap: 9px; }
+
+/* ---- #achievements-panel 成就 ---- */
+html.ml-active #achievements-panel #achievement-list { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 11px; }
+html.ml-active #achievements-panel .achievement-card { min-height: 112px; padding: 12px; gap: 11px; }
+html.ml-active #achievements-panel .achievements-summary #achievement-summary { font-size: 1.2rem; }
+
+/* ---- #dance-panel 舞曲选择（左栏底部说明文字移到顶部） ---- */
+html.ml-active #dance-panel .otome-panel { width: min(880px, 96vw); }
+html.ml-active #dance-panel .dance-panel-body { gap: 12px; }
+html.ml-active #dance-panel .dance-stage-card { min-height: 0; grid-row: auto; }
+/* 把底部的状态/说明文字提到顶部整行显示 */
+html.ml-active #dance-panel #dance-status { order: -1; grid-column: 1 / -1; min-height: 0; margin-bottom: 2px; padding: 8px 14px; }
+
+/* ---- #dialogue-box 场景层对话（高频） ---- */
+html.ml-active #dialogue-box { padding: 14px 28px 16px; }
+html.ml-active #dialogue-text-area { min-height: 44px; max-height: 30vh; }
+html.ml-active #dialogue-input-area { padding-top: 9px; margin-top: 6px; }
+html.ml-active #dialogue-input { padding: 9px 16px; }
+html.ml-active #dialogue-send { padding: 9px 24px; }
+html.ml-active.ml-short #dialogue-box { padding: 10px 22px 12px; }
+html.ml-active.ml-short #dialogue-text-area { max-height: 26vh; }
+
+/* ============================================================= */
+/* §3 战术考核（#side-scroller-adventure）                         */
+/*    沿用既有分层方案的整体骨架（顶栏/路线/生命/敌方/侧边钮/弹窗），   */
+/*    本系统专门做两件事：                                          */
+/*    (a) 把"手牌两侧 4 个控件"（牌库/刷新/弃牌/出牌数）从中心偏移定位   */
+/*        改为"贴着手牌左右两侧"——夹在卡牌与左右角按钮之间；          */
+/*    (b) 卡牌整体放大、标题/描述缩小、底部数值不缩小，字体/按钮略增。 */
+/* ============================================================= */
+
+html.ml-active #side-scroller-adventure {
+    /* 手牌宽度自管：两侧各留 ~150px 给"夹层控件 + 角落按钮" */
+    --ml-hand-w: min(470px, calc(100vw - 300px));
+    /* 夹层圆钮离手牌边缘的水平间距；调大更远，调小更近 */
+    --ml-fbtn-gap: 14px;
+    --ml-deck-popover-w: min(240px, calc(100vw - 32px));
+    /* 夹层圆钮尺寸（窄屏再缩小，见 ml-short/ml-ultrawide） */
+    --ml-fbtn: 46px;
+    /* 夹层控件竖向锚点：抬到底部角按钮(信息/结束回合)之上，避免水平相撞 */
+    --ml-fbtn-b1: 74px;
+    --ml-fbtn-b2: calc(74px + var(--ml-fbtn) + 8px);
+}
+
+/* 移动横屏卡牌模式：左上角标题卡片占用视野，隐藏；右上角返回按钮保留。 */
+html.ml-active #side-scroller-adventure.is-side-combat-active .side-scroller-title {
+    display: none;
+}
+
+html.ml-active #side-scroller-adventure.is-side-combat-active .side-scroller-topbar {
+    justify-content: flex-end;
+}
+
+html.ml-active #side-scroller-adventure.is-side-combat-active .side-scroller-close {
+    margin-left: auto;
+}
+
+/* ---- 手牌：本系统接管宽度，便于精确把控件贴到卡牌两侧 ---- */
+html.ml-active #side-scroller-adventure .side-combat-hand {
+    width: var(--ml-hand-w);
+    min-width: 0;
+    bottom: 16px;
+    gap: 8px;
+}
+/* ---- 卡牌：整体放大（随手牌宽度自适应，4 张始终塞得下） ---- */
+html.ml-active #side-scroller-adventure .side-combat-card {
+    width: clamp(80px, calc((var(--ml-hand-w) - 30px) / 4), 124px);
+    height: clamp(104px, calc((var(--ml-hand-w) - 30px) / 4 * 1.26), 158px);
+    padding: 9px 9px 11px;
+}
+/* 【手牌】卡牌字号走 --ml-card-*-fs（见 §0）。 */
+html.ml-active #side-scroller-adventure .side-combat-card strong { margin-top: 7px; font-size: var(--ml-card-title-fs); }
+html.ml-active #side-scroller-adventure .side-combat-card small { font-size: var(--ml-card-desc-fs); line-height: 1.32; }
+html.ml-active #side-scroller-adventure .side-combat-card__top { font-size: var(--ml-card-top-fs); }
+html.ml-active #side-scroller-adventure .side-combat-card__value { font-size: var(--ml-card-value-fs); }
+
+/* 【拖动幽灵】.is-drag-ghost 被克隆到 <body>（不在 #side-scroller-adventure 内），
+   作用域选择器够不到它、会回落到桌面大字号 → 拖动瞬间字突然变大。
+   这里用【独立的】 --ml-ghost-*-fs 变量给幽灵单独指定字号，可与手牌分开调。 */
+html.ml-active .side-combat-card.is-drag-ghost { padding: 9px 9px 11px; }
+html.ml-active .side-combat-card.is-drag-ghost strong { margin-top: 7px; font-size: var(--ml-ghost-title-fs); }
+html.ml-active .side-combat-card.is-drag-ghost small { font-size: var(--ml-ghost-desc-fs); line-height: 1.32; }
+html.ml-active .side-combat-card.is-drag-ghost .side-combat-card__top { font-size: var(--ml-ghost-top-fs); }
+html.ml-active .side-combat-card.is-drag-ghost .side-combat-card__value { font-size: var(--ml-ghost-value-fs); }
+
+/* ---- Deck popover: only shrink the window/list viewport; keep item rows unchanged. ---- */
+html.ml-active #side-scroller-adventure .side-combat-tooltip--deck {
+    width: var(--ml-deck-popover-w);
+}
+html.ml-active #side-scroller-adventure .side-combat-deck-list {
+    max-height: var(--ml-deck-list-h, none);
+}
+
+/* ---- 手牌两侧 4 控件：贴着卡牌左右排成两组竖直小簇 ---- */
+/* 通用：统一尺寸、清掉旧的中心偏移/底部定位 */
+html.ml-active #side-scroller-adventure .side-combat-deck-toggle,
+html.ml-active #side-scroller-adventure .side-combat-refresh-round,
+html.ml-active #side-scroller-adventure .side-combat-discard,
+html.ml-active #side-scroller-adventure .side-combat-play-count {
+    left: auto; right: auto; top: auto;
+    width: var(--ml-fbtn); height: var(--ml-fbtn);
+    min-width: var(--ml-fbtn);
+    transform: none;
+}
+/* 左簇（贴手牌左侧）：刷新(下) + 牌库(上) */
+html.ml-active #side-scroller-adventure .side-combat-refresh-round {
+    right: calc(50% + var(--ml-hand-w) / 2 + var(--ml-fbtn-gap));
+    bottom: var(--ml-fbtn-b1);
+}
+html.ml-active #side-scroller-adventure .side-combat-deck-toggle {
+    right: calc(50% + var(--ml-hand-w) / 2 + var(--ml-fbtn-gap));
+    bottom: var(--ml-fbtn-b2);
+}
+/* 右簇（贴手牌右侧）：弃牌(下) + 出牌数(上) */
+html.ml-active #side-scroller-adventure .side-combat-discard {
+    left: calc(50% + var(--ml-hand-w) / 2 + var(--ml-fbtn-gap));
+    bottom: var(--ml-fbtn-b1);
+}
+html.ml-active #side-scroller-adventure .side-combat-play-count {
+    left: calc(50% + var(--ml-hand-w) / 2 + var(--ml-fbtn-gap));
+    bottom: var(--ml-fbtn-b2);
+    padding: 0 6px;
+    font-size: 0.9rem;
+}
+html.ml-active #side-scroller-adventure .side-combat-deck-toggle,
+html.ml-active #side-scroller-adventure .side-combat-refresh-round,
+html.ml-active #side-scroller-adventure .side-combat-discard { font-size: 1.08rem; }
+/* 刷新提示小标在此布局下省略，避免叠字 */
+html.ml-active #side-scroller-adventure .side-combat-refresh-tag { display: none; }
+
+/* ---- 角落与侧边按钮：维持既有定位，仅尺寸略增 ---- */
+/* 信息钮（左下角）保持原位，作为左侧参照 */
+html.ml-active #side-scroller-adventure .side-combat-info-toggle { width: 48px; height: 48px; font-size: 1.08rem; }
+/* 结束回合（右下角）主操作略增 */
+html.ml-active #side-scroller-adventure .side-combat-actions button {
+    min-height: 50px;
+    padding: 0 18px;
+    font-size: 0.85rem;
+}
+/* 侧边圆钮（典藏/收纳·文档·排行榜） */
+html.ml-active #side-scroller-adventure .side-combat-archive-toggle,
+html.ml-active #side-scroller-adventure .side-combat-rule-toggle,
+html.ml-active #side-scroller-adventure .side-combat-scoreboard-toggle {
+    width: 50px; height: 50px;
+    font-size: 1.14rem;
+}
+/* 分析员技能钮 */
+html.ml-active #side-scroller-adventure .side-combat-skill { width: 50px; height: 50px; min-height: 50px; }
+html.ml-active #side-scroller-adventure .side-combat-skill img { width: 42px; height: 42px; }
+
+/* ---- 路线 / 生命数字略增 ---- */
+html.ml-active #side-scroller-adventure .side-combat-route > strong { font-size: 1.1rem; }
+html.ml-active #side-scroller-adventure .side-combat-player strong { font-size: 0.92rem; }
+
+/* ---- 开局设定弹窗：字体/按钮略增 ---- */
+html.ml-active #side-scroller-adventure .side-combat-modal h2 { font-size: 1.26rem; }
+html.ml-active #side-scroller-adventure .side-combat-modal p { font-size: 0.84rem; }
+html.ml-active #side-scroller-adventure .side-combat-modal button { min-height: 42px; font-size: 0.86rem; }
+
+/* ---- 窄屏/超宽：手牌让出更多两侧空间、夹层钮缩小，杜绝与角按钮相撞 ---- */
+html.ml-active.ml-ultrawide #side-scroller-adventure,
+html.ml-active.ml-short #side-scroller-adventure {
+    --ml-hand-w: min(430px, calc(100vw - 280px));
+    --ml-fbtn: 42px;
+    --ml-fbtn-b1: 66px;
+}
+
+/* -------------------------------------------------------------------------
+   记忆节点：移动端横屏专属工作台
+   ------------------------------------------------------------------------- */
+html.ml-active #memory-node-panel .otome-panel {
+    width: min(1100px, 96vw);
+    height: var(--ml-panel-h);
+}
+
+html.ml-active #memory-node-panel .memory-node-head .otome-panel__actions {
+    gap: 7px;
+}
+
+html.ml-active #memory-node-panel #memory-node-stats {
+    display: none;
+}
+
+html.ml-active #memory-node-panel .memory-node-body {
+    grid-template-columns: minmax(210px, 0.36fr) minmax(0, 1fr);
+}
+
+html.ml-active #memory-node-panel .memory-command-panel {
+    padding: 10px;
+    gap: 8px;
+}
+
+html.ml-active #memory-node-panel .memory-search-console,
+html.ml-active #memory-node-panel .memory-node-card {
+    padding: 10px;
+}
+
+html.ml-active #memory-node-panel .memory-search-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+}
+
+html.ml-active #memory-node-panel .memory-search-row .btn {
+    min-height: 34px;
+}
+
+html.ml-active #memory-node-panel .memory-node-detail {
+    max-height: calc(var(--ml-h) - 238px);
+}
+
+html.ml-active #memory-node-panel .memory-edge-pill {
+    padding: 6px 8px;
+    font-size: 0.7rem;
+}
+
+html.ml-active #memory-node-panel .memory-result-panel,
+html.ml-active #memory-node-panel .memory-settings-popover,
+html.ml-active #memory-node-panel .memory-archive-popover {
+    top: 10px;
+    right: 10px;
+    left: auto;
+    width: min(320px, 42vw);
+    max-height: calc(var(--ml-h) - 24px);
+    padding: 10px;
+}
+
+html.ml-active #memory-node-panel .memory-archive-popover {
+    width: min(520px, calc(100vw - 250px));
+    display: grid;
+    grid-template-columns: minmax(138px, 0.38fr) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 9px;
+}
+
+html.ml-active #memory-node-panel .memory-archive-popover.hidden {
+    display: none;
+}
+
+html.ml-active #memory-node-panel .memory-archive-popover .memory-result-head {
+    grid-column: 1 / -1;
+}
+
+html.ml-active #memory-node-panel .memory-archive-toolbar {
+    min-width: 0;
+    gap: 8px;
+}
+
+html.ml-active #memory-node-panel .memory-archive-search-field {
+    gap: 4px;
+    font-size: 0.64rem;
+}
+
+html.ml-active #memory-node-panel .memory-archive-search-field input {
+    min-height: 36px;
+    padding: 7px 9px;
+    font-size: 16px;
+}
+
+html.ml-active #memory-node-panel .memory-archive-filter {
+    grid-template-columns: 1fr;
+    gap: 5px;
+}
+
+html.ml-active #memory-node-panel .memory-archive-filter button {
+    min-height: 30px;
+    padding: 4px 6px;
+    font-size: 0.66rem;
+}
+
+html.ml-active #memory-node-panel .memory-archive-list {
+    min-height: 0;
+    max-height: calc(var(--ml-h) - 92px);
+}
+
+html.ml-active #memory-node-panel .memory-archive-item {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 8px;
+}
+
+html.ml-active #memory-node-panel .memory-archive-text {
+    font-size: 0.72rem;
+    line-height: 1.45;
+}
+
+html.ml-active #memory-node-panel .memory-archive-meta {
+    gap: 4px;
+    margin-top: 5px;
+}
+
+html.ml-active #memory-node-panel .memory-archive-meta span {
+    font-size: 0.58rem;
+    padding: 2px 5px;
+}
+
+html.ml-active #memory-node-panel .memory-archive-delete {
+    min-height: 32px;
+    padding: 5px 8px;
+    font-size: 0.66rem;
+}
+
+html.ml-active #memory-node-panel .memory-result-item {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 8px;
+}
+
+html.ml-active #memory-node-panel .memory-result-item strong {
+    font-size: 0.72rem;
+}
+
+html.ml-active #memory-node-panel .memory-result-item .btn {
+    min-height: 30px;
+}
+
+html.ml-active #memory-node-panel #memory-setting-keywords {
+    min-height: 72px;
+    max-height: calc(var(--ml-h) - 254px);
+}
+
+html.ml-active.ml-short #memory-node-panel .memory-node-body {
+    grid-template-columns: minmax(190px, 0.32fr) minmax(0, 1fr);
+}
+
+html.ml-active.ml-short #memory-node-panel .memory-graph-hint {
+    display: none;
+}

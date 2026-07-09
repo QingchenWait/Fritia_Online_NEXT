@@ -1481,6 +1481,10 @@
         padding-block: 4px;
         font-size: 16px;
     }
+    .advanced-ios-switch {
+        --switch-h: 28px;
+        --switch-w: 48px;
+    }
     .settings-foot-actions {
         display: grid;
         grid-template-columns: 1fr;
@@ -1842,6 +1846,198 @@
     .roundtable-participant-list { grid-template-columns: 1fr; }
 }
 
+@media (max-width: 600px) and (orientation: portrait) {
+    #gift-terminal-panel .otome-panel__head,
+    #dream-terminal-panel .otome-panel__head {
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: 8px 12px;
+        padding-bottom: 12px;
+    }
+
+    #gift-terminal-panel .otome-panel__titles,
+    #dream-terminal-panel .otome-panel__titles {
+        flex: 1 1 0;
+        min-width: 0;
+    }
+
+    #gift-terminal-panel .otome-panel__actions,
+    #dream-terminal-panel .otome-panel__actions {
+        box-sizing: border-box;
+        flex: 0 0 calc(100% - 56px);
+        order: 3;
+        width: calc(100% - 56px);
+        min-width: 0;
+        margin-left: 56px;
+        padding-right: 44px;
+        gap: 8px;
+    }
+
+    #gift-terminal-panel #gift-balance,
+    #dream-terminal-panel #dream-balance {
+        min-height: 28px;
+        max-width: 100%;
+        padding: 4px 12px;
+        font-size: 0.78rem;
+        line-height: 1.2;
+        white-space: normal;
+    }
+
+    :root {
+        --roundtable-portrait-chat-edge: 0px;
+        --roundtable-portrait-send-size: 44px;
+    }
+
+    .roundtable-head.otome-panel__head,
+    .roundtable-head {
+        gap: 8px;
+        padding-right: 54px;
+    }
+
+    .roundtable-head .otome-panel__titles {
+        min-width: 0;
+    }
+
+    .roundtable-head .otome-panel__title {
+        white-space: nowrap;
+        font-size: clamp(1.02rem, 6vw, 1.22rem);
+        line-height: 1.08;
+        letter-spacing: 0;
+    }
+
+    .roundtable-head .otome-panel__kicker {
+        max-width: 132px;
+        font-size: 0.62rem;
+    }
+
+    .roundtable-head .otome-panel__actions {
+        flex: 0 0 auto;
+        flex-wrap: nowrap;
+        gap: 7px;
+        min-width: 0;
+        width: auto;
+    }
+
+    .roundtable-head .otome-chip {
+        padding: 6px 9px;
+        font-size: 0.72rem;
+        white-space: nowrap;
+    }
+
+    #roundtable-whispers-panel .roundtable-chat-layout {
+        padding:
+            var(--roundtable-portrait-chat-edge)
+            max(var(--roundtable-portrait-chat-edge), env(safe-area-inset-right))
+            var(--roundtable-portrait-chat-edge)
+            max(var(--roundtable-portrait-chat-edge), env(safe-area-inset-left));
+        gap: 6px;
+    }
+
+    .roundtable-chat-main,
+    .roundtable-roster {
+        border-radius: var(--r-sm);
+    }
+
+    .roundtable-input-console {
+        grid-template-columns: minmax(0, 1fr) var(--roundtable-portrait-send-size);
+        align-items: center;
+        gap: 8px;
+        padding: 8px;
+    }
+
+    #roundtable-input {
+        min-height: 40px;
+        height: 40px;
+        max-height: 40px;
+        resize: none;
+        overflow-y: auto;
+        padding: 8px 12px;
+        line-height: 22px;
+    }
+
+    #roundtable-send {
+        width: var(--roundtable-portrait-send-size);
+        min-width: var(--roundtable-portrait-send-size);
+        height: var(--roundtable-portrait-send-size);
+        min-height: var(--roundtable-portrait-send-size);
+        align-self: center;
+        overflow: hidden;
+        padding: 0;
+        border-radius: 50%;
+        color: transparent;
+        font-size: 0;
+        background:
+            url("../src/_logos/icon_paper_plane.svg") center / 25px 25px no-repeat,
+            linear-gradient(180deg, #ef9fbc, #d86291);
+    }
+
+    .roundtable-roster.is-expanded {
+        min-width: 0;
+        width: 100%;
+    }
+
+    .roundtable-roster.is-expanded .roundtable-participant-strip {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        overflow-x: hidden;
+        overflow-y: auto;
+        padding: 0 8px 10px;
+        width: 100%;
+    }
+
+    .roundtable-roster.is-expanded .roundtable-strip-member {
+        display: grid;
+        grid-template-columns: 28px minmax(0, 1fr);
+        gap: 6px;
+        max-width: none;
+        min-width: 0;
+        padding: 7px 6px;
+        width: auto;
+    }
+
+    .roundtable-roster.is-expanded .roundtable-avatar--sm {
+        width: 28px;
+        height: 28px;
+    }
+
+    .roundtable-roster.is-expanded .roundtable-strip-member span:last-child {
+        min-width: 0;
+        font-size: 0.78rem;
+    }
+}
+
+@media (max-width: 420px) and (orientation: portrait) {
+    .roundtable-head .otome-panel__icon {
+        width: 38px;
+        height: 38px;
+    }
+
+    .roundtable-head .otome-panel__icon img {
+        width: 23px;
+        height: 23px;
+    }
+
+    .roundtable-head .otome-panel__title {
+        font-size: clamp(0.92rem, 5.2vw, 1.06rem);
+    }
+
+    .roundtable-head .otome-panel__kicker {
+        max-width: 118px;
+        font-size: 0.56rem;
+    }
+
+    .roundtable-head .otome-panel__actions {
+        gap: 5px;
+    }
+
+    .roundtable-head .otome-chip {
+        min-height: 30px;
+        padding-inline: 7px;
+        font-size: 0.68rem;
+    }
+}
+
 @media (max-width: 420px) {
     #bartending-challenge-panel.ui-overlay { padding: 8px; }
     .bartending-shell .otome-panel__head {
@@ -2078,5 +2274,313 @@
 
     #side-scroller-adventure.is-side-combat-extreme-wide .side-combat-play-count {
         left: calc(50% + 352px);
+    }
+}
+
+@media (max-width: 820px) {
+    #memory-node-panel.ui-overlay {
+        padding: 10px;
+    }
+
+    .memory-node-shell {
+        width: 100%;
+        height: min(94vh, 920px);
+    }
+
+    .memory-node-head .otome-panel__actions {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .memory-node-head #memory-node-stats {
+        display: none;
+    }
+
+    .memory-node-body {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .memory-command-panel {
+        border-right: 0;
+        border-bottom: 1px solid var(--panel-line);
+        padding: 12px;
+        gap: 10px;
+        max-height: 238px;
+        overflow-y: auto;
+    }
+
+    .memory-node-card {
+        min-height: 110px;
+    }
+
+    .memory-graph-stage {
+        min-height: 0;
+    }
+
+    .memory-result-panel,
+    .memory-settings-popover,
+    .memory-archive-popover {
+        left: 12px;
+        right: 12px;
+        top: auto;
+        bottom: 12px;
+        width: auto;
+        max-height: min(52vh, 360px);
+    }
+
+    .memory-archive-popover {
+        max-height: min(66vh, 520px);
+        padding: 12px;
+    }
+
+    .memory-archive-filter {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 5px;
+    }
+
+    .memory-archive-filter button {
+        min-height: 34px;
+        padding: 5px 4px;
+        font-size: 0.68rem;
+    }
+
+    .memory-archive-item {
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+        padding: 9px;
+    }
+
+    .memory-archive-text {
+        font-size: 0.78rem;
+    }
+
+    .memory-archive-meta span {
+        font-size: 0.6rem;
+        padding: 3px 6px;
+    }
+
+    .memory-archive-delete {
+        min-width: 54px;
+        min-height: 38px;
+    }
+
+    .memory-result-item {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .memory-result-item .btn {
+        width: 100%;
+    }
+}
+
+@media (max-width: 600px) and (orientation: portrait) {
+    .memory-node-shell {
+        height: calc(100dvh - 16px);
+        max-height: none;
+    }
+
+    .memory-node-head .otome-panel__sub,
+    .memory-node-head .otome-panel__kicker {
+        display: none;
+    }
+
+    .memory-command-panel {
+        max-height: 178px;
+        overflow: visible;
+        padding: 10px 12px;
+    }
+
+    .memory-search-console {
+        position: absolute;
+        left: 14px;
+        bottom: 14px;
+        z-index: 5;
+        width: auto;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        box-shadow: none;
+        pointer-events: none;
+    }
+
+    .memory-search-console .otome-field-label {
+        display: none;
+    }
+
+    .memory-search-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 0;
+        pointer-events: auto;
+    }
+
+    .memory-search-toggle {
+        display: grid;
+        place-items: center;
+        flex: 0 0 58px;
+        width: 58px;
+        height: 58px;
+        border-radius: var(--r-pill);
+        border: 2px solid rgba(199,92,128,0.34);
+        color: var(--c-rose-deep);
+        background:
+            linear-gradient(180deg, rgba(255,255,255,0.96), rgba(255,244,248,0.9)),
+            rgba(255,255,255,0.86);
+        box-shadow: 0 10px 22px rgba(199,92,128,0.18);
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .memory-search-toggle img,
+    .memory-search-btn-icon {
+        width: 25px;
+        height: 25px;
+    }
+
+    .memory-search-row input,
+    .memory-search-row .btn {
+        opacity: 0;
+        transform: translateX(-8px);
+        pointer-events: none;
+        transition:
+            opacity var(--t-fast) var(--ease-out),
+            transform var(--t-fast) var(--ease-out);
+    }
+
+    .memory-search-console.is-compact-open .memory-search-row input,
+    .memory-search-console.is-compact-open .memory-search-row .btn {
+        opacity: 1;
+        transform: translateX(0);
+        pointer-events: auto;
+    }
+
+    .memory-search-row input {
+        width: min(220px, calc(100vw - 142px));
+        min-height: 46px;
+        border-radius: var(--r-pill);
+        padding: 8px 15px;
+        font-size: 16px;
+        box-shadow: 0 10px 24px rgba(199,92,128,0.12);
+    }
+
+    .memory-search-row .btn {
+        display: grid;
+        place-items: center;
+        width: 46px;
+        min-width: 46px;
+        height: 46px;
+        min-height: 46px;
+        padding: 0;
+        border-radius: var(--r-pill);
+        box-shadow: 0 10px 22px rgba(199,92,128,0.18);
+    }
+
+    #memory-search-btn .memory-search-btn-icon {
+        display: block;
+    }
+
+    .memory-search-btn-text {
+        display: none;
+    }
+
+    .memory-node-card {
+        min-height: 150px;
+        flex: 1 1 auto;
+    }
+
+    .memory-node-detail {
+        min-height: 86px;
+    }
+
+    .memory-node-head .otome-panel__actions {
+        gap: 6px;
+    }
+
+    #memory-archive-btn,
+    #memory-settings-btn {
+        min-height: 34px;
+        padding: 6px 12px;
+        font-size: 0.78rem;
+    }
+
+    .memory-archive-popover {
+        left: 8px;
+        right: 8px;
+        bottom: 92px;
+        max-height: min(60dvh, 500px);
+        border-radius: 18px 18px var(--r-md) var(--r-md);
+    }
+
+    .memory-result-panel,
+    .memory-settings-popover {
+        left: 12px;
+        right: 12px;
+        bottom: 92px;
+        max-height: min(48dvh, 340px);
+        border-radius: 18px;
+    }
+
+    .memory-archive-toolbar {
+        gap: 8px;
+    }
+
+    .memory-archive-search-field {
+        gap: 4px;
+        font-size: 0.68rem;
+    }
+
+    .memory-archive-search-field input {
+        min-height: 38px;
+        padding: 7px 10px;
+        border-radius: 10px;
+    }
+
+    #memory-setting-retention,
+    #memory-setting-keywords {
+        min-height: 38px;
+        padding: 7px 10px;
+        border-radius: 10px;
+        font-size: 16px;
+    }
+
+    #memory-setting-keywords {
+        min-height: 76px;
+        max-height: min(22dvh, 132px);
+    }
+
+    .memory-archive-filter {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .memory-archive-item {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .memory-archive-delete {
+        width: 100%;
+    }
+
+    #memory-settings-save {
+        width: 100%;
+    }
+
+    #memory-search-input,
+    #memory-archive-search,
+    #memory-setting-retention,
+    #memory-setting-keywords {
+        font-size: 16px;
+    }
+
+    .memory-graph-hint {
+        left: auto;
+        right: 12px;
+        width: min(300px, calc(100vw - 100px));
+        bottom: 10px;
+        text-align: right;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 }

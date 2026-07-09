@@ -11,6 +11,13 @@
     <link rel="stylesheet" href="css/effects.css?v=20260619-otome">
     <link rel="stylesheet" href="css/panels.css?v=20260624-sprite-enemy">
     <link rel="stylesheet" href="css/responsive.css?v=20260624-sprite-enemy">
+    <link rel="stylesheet" href="css/mobile_common.css?v=20260626-mobile">
+    <!-- 移动端横屏专用布局（独立层，仅 html.ml-active 生效）。详见 UI_MOBILE.md -->
+    <link rel="stylesheet" href="css/mobile_landscape.css?v=20260625-ml">
+    <!-- 移动端横屏检测（独立 IIFE，仅切换根 class 与写视口变量） -->
+    <script defer src="js/mobile_viewport_fix.js?v=20260626-mobile"></script>
+    <script defer src="js/mobile_landscape.js?v=20260625-ml"></script>
+    <script defer src="js/mobile_refresh.js?v=20260626-mobile"></script>
     <script type="importmap">
     {
         "imports": {
@@ -169,17 +176,17 @@
                         <div id="bar-guest-preview" class="bar-guest-preview"><span>PMX</span></div>
                         <div>
                             <div class="otome-section-label">新角色配置</div>
-                            <p class="bar-guest-copy">上传 PMX 模型、贴图与人格设定，即可邀请入场。点击 [保存自定义角色] 可长期留场。</p>
+                            <p class="bar-guest-copy">选择包含 "PMX 模型+贴图" 的完整文件夹，并上传人格设定，即可邀请入场。点击 [保存自定义角色] 可长期留场。</p>
                         </div>
                     </div>
-                    <input type="file" id="bar-guest-pmx-file" accept=".pmx,image/*,.spa,.sph,.toon,.bmp" multiple hidden>
+                    <input type="file" id="bar-guest-pmx-file" accept=".pmx,image/*,.spa,.sph,.toon,.bmp" multiple webkitdirectory directory hidden>
                     <input type="file" id="bar-guest-prompt-file" accept=".txt,.md,text/plain" hidden>
                     <label class="otome-field-label" for="bar-guest-name">角色名称</label>
                     <input id="bar-guest-name" type="text" maxlength="24" placeholder="输入角色名称">
                     <div class="bar-guest-file-grid">
                         <button id="bar-guest-pmx-pick" class="bar-guest-file-card" type="button">
                             <span class="dance-file-card__kicker">PMX MODEL</span>
-                            <span class="dance-file-card__title">导入 PMX 与贴图</span>
+                            <span class="dance-file-card__title">导入模型文件夹 (PMX+贴图)</span>
                             <span id="bar-guest-pmx-name" class="dance-file-card__meta">未选择 PMX</span>
                         </button>
                         <button id="bar-guest-prompt-pick" class="bar-guest-file-card" type="button">
@@ -389,7 +396,7 @@
                             <div id="roundtable-message-list" class="roundtable-message-list" aria-live="polite"></div>
                             <div class="roundtable-input-console">
                                 <div id="roundtable-mention-picker" class="roundtable-mini-picker roundtable-mini-picker--mentions hidden" aria-label="选择要 @ 的成员"></div>
-                                <textarea id="roundtable-input" maxlength="240" placeholder="对圆桌说点什么，或 @某个角色..."></textarea>
+                                <textarea id="roundtable-input" maxlength="240" placeholder="直接对话，或 @某个角色..."></textarea>
                                 <button id="roundtable-send" class="btn btn--primary" type="button">发送</button>
                             </div>
                         </main>
@@ -423,6 +430,8 @@
         </div>
     </div>
 
+    <button id="mobile-refresh-btn" class="touch-btn mobile-refresh-btn" type="button" aria-label="重新载入本游戏">刷新</button>
+
     <div id="hud">
         <div id="crosshair">+</div>
         <div id="game-status">
@@ -439,6 +448,9 @@
         </div>
         <div id="dream-painting-prompt" class="kbd-prompt hidden" data-prompt-key="Digit1" translate="yes" role="button" tabindex="0">
             按 <kbd translate="no">1</kbd> 替换图片
+        </div>
+        <div id="memory-node-prompt" class="kbd-prompt hidden" data-prompt-key="Digit1" translate="yes" role="button" tabindex="0">
+            按 <kbd translate="no">1</kbd> 查看记忆节点
         </div>
         <div id="achievement-toast-host"></div>
         <div id="dream-object-controls" class="hidden">
@@ -885,6 +897,76 @@
                                 </div>
                             </div>
                         </section>
+
+                        <section class="advanced-settings-group">
+                            <h3>长期记忆</h3>
+                            <div class="advanced-setting-row">
+                                <div class="advanced-setting-copy">
+                                    <label for="advanced-ltm-access-enabled">访问强化 <span class="advanced-setting-var">(ACCESS_REINFORCEMENT)</span></label>
+                                    <small class="advanced-risk-note">被对话检索反复召回的长期记忆会提高保留价值</small>
+                                </div>
+                                <div class="advanced-setting-control">
+                                    <em id="advanced-ltm-access-enabled-value">ON</em>
+                                    <label class="advanced-ios-switch" for="advanced-ltm-access-enabled" aria-label="访问强化">
+                                        <input id="advanced-ltm-access-enabled" data-advanced-setting="ltmAccessReinforcementEnabled" type="checkbox" value="1" checked>
+                                        <span class="advanced-ios-switch__track" aria-hidden="true"></span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="advanced-setting-row">
+                                <div class="advanced-setting-copy">
+                                    <label for="advanced-ltm-access-max-importance">访问强化重要性上限 <span class="advanced-setting-var">(ACCESS_MAX_IMPORTANCE)</span></label>
+                                    <small class="advanced-risk-note">限制普通召回把低价值记忆无限抬高</small>
+                                </div>
+                                <div class="advanced-setting-control">
+                                    <em id="advanced-ltm-access-max-importance-value">8.0</em>
+                                    <input id="advanced-ltm-access-max-importance" data-advanced-setting="ltmAccessMaxImportance" type="number" min="1" max="10" step="0.1" value="8">
+                                </div>
+                            </div>
+                            <div class="advanced-setting-row">
+                                <div class="advanced-setting-copy">
+                                    <label for="advanced-ltm-duplicate-enabled">重复内容强化 <span class="advanced-setting-var">(DUPLICATE_REINFORCEMENT)</span></label>
+                                    <small class="advanced-risk-note">新记忆与旧记忆高度相似时强化旧记忆，减少重复碎片</small>
+                                </div>
+                                <div class="advanced-setting-control">
+                                    <em id="advanced-ltm-duplicate-enabled-value">ON</em>
+                                    <label class="advanced-ios-switch" for="advanced-ltm-duplicate-enabled" aria-label="重复内容强化">
+                                        <input id="advanced-ltm-duplicate-enabled" data-advanced-setting="ltmDuplicateReinforcementEnabled" type="checkbox" value="1" checked>
+                                        <span class="advanced-ios-switch__track" aria-hidden="true"></span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="advanced-setting-row">
+                                <div class="advanced-setting-copy">
+                                    <label for="advanced-ltm-duplicate-threshold">重复判断相似度阈值 <span class="advanced-setting-var">(DUPLICATE_SIMILARITY)</span></label>
+                                    <small class="advanced-risk-note">越高越严格；过低可能把不同事件合并</small>
+                                </div>
+                                <div class="advanced-setting-control">
+                                    <em id="advanced-ltm-duplicate-threshold-value">62%</em>
+                                    <input id="advanced-ltm-duplicate-threshold" data-advanced-setting="ltmDuplicateSimilarityThreshold" type="range" min="0.35" max="0.9" step="0.01" value="0.62">
+                                </div>
+                            </div>
+                            <div class="advanced-setting-row">
+                                <div class="advanced-setting-copy">
+                                    <label for="advanced-ltm-duplicate-boost">重复强化重要性增益 <span class="advanced-setting-var">(DUPLICATE_IMPORTANCE_BOOST)</span></label>
+                                    <small class="advanced-risk-note">重复出现的偏好、关系和事件会获得更高保留价值</small>
+                                </div>
+                                <div class="advanced-setting-control">
+                                    <em id="advanced-ltm-duplicate-boost-value">+0.25</em>
+                                    <input id="advanced-ltm-duplicate-boost" data-advanced-setting="ltmDuplicateImportanceBoost" type="number" min="0" max="1" step="0.05" value="0.25">
+                                </div>
+                            </div>
+                            <div class="advanced-setting-row">
+                                <div class="advanced-setting-copy">
+                                    <label for="advanced-ltm-maintenance-interval">自动维护最小间隔 <span class="advanced-setting-var">(MAINTENANCE_INTERVAL_HOURS)</span></label>
+                                    <small class="advanced-risk-note">页面加载、保存记忆、导入存档或打开记忆节点时按间隔触发轻量清理</small>
+                                </div>
+                                <div class="advanced-setting-control">
+                                    <em id="advanced-ltm-maintenance-interval-value">24 h</em>
+                                    <input id="advanced-ltm-maintenance-interval" data-advanced-setting="ltmMaintenanceIntervalHours" type="number" min="1" max="168" step="1" value="24">
+                                </div>
+                            </div>
+                        </section>
                     </div>
                 </section>
 
@@ -945,6 +1027,103 @@
                 <div id="bar-history-list" class="hidden"></div>
                 <div id="date-history-list" class="hidden"></div>
                 <div id="roundtable-history-list" class="hidden"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="memory-node-panel" class="ui-overlay hidden">
+        <div class="otome-panel otome-panel--xl memory-node-shell">
+            <div class="otome-panel__head memory-node-head">
+                <div class="otome-panel__icon"><img src="src/_ui/icon_history.svg" alt=""></div>
+                <div class="otome-panel__titles">
+                    <span class="otome-panel__kicker">LONG TERM MEMORY</span>
+                    <h2 class="otome-panel__title">记忆节点</h2>
+                    <p class="otome-panel__sub">查看分析员与各角色沉淀的长期记忆知识图谱。</p>
+                </div>
+                <div class="otome-panel__actions">
+                    <span id="memory-node-stats" class="otome-chip">0 条记忆 · 0 条关系</span>
+                    <button id="memory-archive-btn" class="btn btn--ghost" type="button">记忆档案</button>
+                    <button id="memory-settings-btn" class="btn btn--ghost" type="button">设置</button>
+                    <button id="memory-node-close" class="otome-panel__close" aria-label="关闭记忆节点">
+                        <img src="src/_ui/icon_close.svg" alt="">
+                    </button>
+                </div>
+            </div>
+            <div class="otome-panel__body otome-panel__body--flush memory-node-body">
+                <aside class="memory-command-panel">
+                    <div class="memory-search-console">
+                        <label class="otome-field-label" for="memory-search-input">实体搜索</label>
+                        <div class="memory-search-row">
+                            <button id="memory-search-toggle" class="memory-search-toggle" type="button" aria-label="打开实体搜索" aria-expanded="false">
+                                <img src="src/_ui/icon_search.svg" alt="">
+                            </button>
+                            <input id="memory-search-input" type="text" maxlength="48" placeholder="输入头实体、关系或尾实体">
+                            <button id="memory-search-btn" class="btn btn--primary" type="button" aria-label="执行实体搜索">
+                                <span class="memory-search-btn-text">搜索</span>
+                                <img class="memory-search-btn-icon" src="src/_ui/icon_check.svg" alt="">
+                            </button>
+                        </div>
+                    </div>
+                    <section class="memory-node-card">
+                        <div class="otome-section-label">节点详情</div>
+                        <div id="memory-node-detail" class="memory-node-detail">
+                            <span class="memory-empty-line">点击图谱节点查看详情。</span>
+                        </div>
+                    </section>
+                </aside>
+                <main class="memory-graph-stage">
+                    <canvas id="memory-graph-canvas" aria-label="长期记忆知识图谱"></canvas>
+                    <div class="memory-graph-hint">滚轮缩放 · 拖动画布 · 点击节点查看</div>
+                </main>
+                <aside id="memory-search-results" class="memory-result-panel hidden" aria-live="polite">
+                    <div class="memory-result-head">
+                        <strong id="memory-result-title">搜索结果</strong>
+                        <button id="memory-result-close" class="memory-mini-close" type="button" aria-label="关闭搜索结果">×</button>
+                    </div>
+                    <div id="memory-result-list" class="memory-result-list"></div>
+                </aside>
+                <aside id="memory-archive-popover" class="memory-archive-popover hidden" aria-live="polite">
+                    <div class="memory-result-head">
+                        <strong>记忆档案</strong>
+                        <button id="memory-archive-close" class="memory-mini-close" type="button" aria-label="关闭记忆档案">×</button>
+                    </div>
+                    <div class="memory-archive-toolbar">
+                        <label class="memory-archive-search-field" for="memory-archive-search">
+                            <span>档案搜索</span>
+                            <input id="memory-archive-search" type="text" maxlength="80" placeholder="搜索文本、角色、来源或 scope">
+                        </label>
+                        <div id="memory-archive-filter" class="memory-archive-filter" role="tablist" aria-label="记忆档案筛选">
+                            <button class="is-active" type="button" data-memory-filter="orphan" aria-pressed="true">未入图谱</button>
+                            <button type="button" data-memory-filter="all" aria-pressed="false">全部</button>
+                            <button type="button" data-memory-filter="private" aria-pressed="false">私有</button>
+                            <button type="button" data-memory-filter="public" aria-pressed="false">公共</button>
+                        </div>
+                    </div>
+                    <div id="memory-archive-list" class="memory-archive-list"></div>
+                </aside>
+                <aside id="memory-settings-popover" class="memory-settings-popover hidden">
+                    <div class="memory-result-head">
+                        <strong>长期记忆设置</strong>
+                        <button id="memory-settings-close" class="memory-mini-close" type="button" aria-label="关闭长期记忆设置">×</button>
+                    </div>
+                    <label class="memory-toggle-row">
+                        <input id="memory-setting-enabled" type="checkbox">
+                        <span>开启长期记忆收集</span>
+                    </label>
+                    <label class="memory-setting-field">
+                        <span>存储天数</span>
+                        <input id="memory-setting-retention" type="number" min="1" max="3650" step="1" value="60">
+                    </label>
+                    <label class="memory-setting-field">
+                        <span>不录入关键词</span>
+                        <textarea id="memory-setting-keywords" maxlength="800" placeholder="每行一个关键词，命中后不写入长期记忆"></textarea>
+                    </label>
+                    <label class="memory-toggle-row">
+                        <input id="memory-setting-intimate" type="checkbox">
+                        <span>允许录入亲密模式内容</span>
+                    </label>
+                    <button id="memory-settings-save" class="btn btn--primary" type="button">保存设置</button>
+                </aside>
             </div>
         </div>
     </div>

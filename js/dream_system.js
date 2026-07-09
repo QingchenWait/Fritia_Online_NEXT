@@ -37,6 +37,7 @@ const MOVE_STEP = 0.25;
 const WALL_MOVE_STEP = 0.18;
 const ROTATE_STEP = THREE.MathUtils.degToRad(15);
 const MAX_LOOK_DISTANCE = 5;
+const OBJECT_CONTROL_CLICK_SUPPRESS_MS = 420;
 const FALLBACK_FURNITURE_LINES = [
     '分析员打造的家具太棒啦。',
     '这个小角落，因为你变得好温柔。',
@@ -137,6 +138,7 @@ let characterBubbleFrame = null;
 let characterBubbleTimer = null;
 let lookDragPointerId = null;
 let lastLookDrag = { x: 0, y: 0 };
+let suppressObjectControlClickUntil = 0;
 const projectedControlPosition = new THREE.Vector3();
 const projectedBubblePosition = new THREE.Vector3();
 const projectedBubbleNdc = new THREE.Vector3();
@@ -1012,8 +1014,25 @@ function applyDreamFurnitureTemplate(template) {
     setStatus(`已填入模板：${template.title}`, 'ok');
 }
 
+function releasePointerCaptureSafe(el, pointerId) {
+    if (!el || pointerId === null || pointerId === undefined) return;
+    try {
+        if (!el.hasPointerCapture || el.hasPointerCapture(pointerId)) {
+            el.releasePointerCapture?.(pointerId);
+        }
+    } catch (err) {
+        // Some mobile WebViews drop pointer capture before pointerup.
+    }
+}
+
 function bindObjectLookDrag() {
     if (!els.objectControls) return;
+    els.objectControls.addEventListener('click', (event) => {
+        if (performance.now() > suppressObjectControlClickUntil) return;
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation?.();
+    }, true);
     els.objectControls.addEventListener('pointerdown', (event) => {
         if (event.target.closest('.dream-object-btn')) return;
         event.preventDefault();
@@ -1047,11 +1066,17 @@ function bindMoveHold(id, intent) {
     const btn = document.getElementById(id);
     if (!btn) return;
     let isPressed = false;
+    let activePointerId = null;
+    let activePointerType = '';
     const start = (event) => {
         if (btn.disabled) return;
         if (event.pointerType === 'mouse' && event.button !== 0) return;
         event.preventDefault();
+        event.stopPropagation();
         isPressed = true;
+        activePointerId = event.pointerId;
+        activePointerType = event.pointerType || '';
+        btn.setPointerCapture?.(event.pointerId);
         clearTimeout(moveHoldDelayTimer);
         clearInterval(moveHoldTimer);
         btn.dataset.longPress = '';
@@ -1064,7 +1089,20 @@ function bindMoveHold(id, intent) {
     };
     const stop = (event) => {
         event?.preventDefault?.();
+        event?.stopPropagation?.();
+        if (activePointerId !== null && event?.pointerId === activePointerId) {
+            releasePointerCaptureSafe(btn, activePointerId);
+        }
+        const shouldSuppressClick = activePointerType !== 'mouse';
+        activePointerId = null;
+        activePointerType = '';
         if (!isPressed) return;
+        if (shouldSuppressClick) {
+            suppressObjectControlClickUntil = Math.max(
+                suppressObjectControlClickUntil,
+                performance.now() + OBJECT_CONTROL_CLICK_SUPPRESS_MS
+            );
+        }
         isPressed = false;
         clearTimeout(moveHoldDelayTimer);
         moveHoldDelayTimer = null;
@@ -1078,6 +1116,12 @@ function bindMoveHold(id, intent) {
     };
     const cancel = (event) => {
         event?.preventDefault?.();
+        event?.stopPropagation?.();
+        if (activePointerId !== null && event?.pointerId === activePointerId) {
+            releasePointerCaptureSafe(btn, activePointerId);
+        }
+        activePointerId = null;
+        activePointerType = '';
         if (!isPressed) return;
         isPressed = false;
         clearTimeout(moveHoldDelayTimer);
@@ -1096,11 +1140,17 @@ function bindRotateHold(id, amount) {
     const btn = document.getElementById(id);
     if (!btn) return;
     let isPressed = false;
+    let activePointerId = null;
+    let activePointerType = '';
     const start = (event) => {
         if (btn.disabled) return;
         if (event.pointerType === 'mouse' && event.button !== 0) return;
         event.preventDefault();
+        event.stopPropagation();
         isPressed = true;
+        activePointerId = event.pointerId;
+        activePointerType = event.pointerType || '';
+        btn.setPointerCapture?.(event.pointerId);
         clearTimeout(rotateHoldDelayTimer);
         clearInterval(rotateHoldTimer);
         btn.dataset.longPress = '';
@@ -1112,7 +1162,20 @@ function bindRotateHold(id, amount) {
     };
     const stop = (event) => {
         event?.preventDefault?.();
+        event?.stopPropagation?.();
+        if (activePointerId !== null && event?.pointerId === activePointerId) {
+            releasePointerCaptureSafe(btn, activePointerId);
+        }
+        const shouldSuppressClick = activePointerType !== 'mouse';
+        activePointerId = null;
+        activePointerType = '';
         if (!isPressed) return;
+        if (shouldSuppressClick) {
+            suppressObjectControlClickUntil = Math.max(
+                suppressObjectControlClickUntil,
+                performance.now() + OBJECT_CONTROL_CLICK_SUPPRESS_MS
+            );
+        }
         isPressed = false;
         clearTimeout(rotateHoldDelayTimer);
         rotateHoldDelayTimer = null;
@@ -1126,6 +1189,12 @@ function bindRotateHold(id, amount) {
     };
     const cancel = (event) => {
         event?.preventDefault?.();
+        event?.stopPropagation?.();
+        if (activePointerId !== null && event?.pointerId === activePointerId) {
+            releasePointerCaptureSafe(btn, activePointerId);
+        }
+        activePointerId = null;
+        activePointerType = '';
         if (!isPressed) return;
         isPressed = false;
         clearTimeout(rotateHoldDelayTimer);
@@ -1444,7 +1513,25 @@ export function requestDreamPaintingTextureUpload(furnitureId = '') {
         pendingDreamPaintingTextureTimer = null;
     }, 60000);
     showDreamScreenToast('选择图片后会替换画框中的内容。', 'ok');
-    document.getElementById('painting-upload')?.click();
+    const fileInput = document.getElementById('painting-upload');
+    if (!fileInput) return true;
+    if (controlsModule?.state?.isLocked) {
+        fileInput.dataset.resumeControlAfterPaintingUpload = '1';
+    } else {
+        delete fileInput.dataset.resumeControlAfterPaintingUpload;
+    }
+    controlsModule?.releaseControlMode?.({ resumeOnClose: false });
+    const openPicker = () => requestAnimationFrame(() => fileInput.click());
+    if (!document.pointerLockElement) {
+        openPicker();
+        return true;
+    }
+    const onPointerUnlock = () => {
+        if (document.pointerLockElement) return;
+        document.removeEventListener('pointerlockchange', onPointerUnlock);
+        openPicker();
+    };
+    document.addEventListener('pointerlockchange', onPointerUnlock);
     return true;
 }
 

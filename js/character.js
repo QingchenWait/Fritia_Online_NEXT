@@ -232,6 +232,9 @@ export function loadCharacterFromModel(scene, modelPath, waypoints, colliders, o
         const loader = options.loadingManager
             ? new MMDLoader(options.loadingManager)
             : new MMDLoader();
+        if (typeof options.resourcePath === 'string' && typeof loader.setResourcePath === 'function') {
+            loader.setResourcePath(options.resourcePath);
+        }
         loader.load(
             modelPath || MODEL_PATH,
             (mesh) => {

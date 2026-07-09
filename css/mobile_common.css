@@ -1,0 +1,153 @@
+/* =============================================================
+   Mobile common UI
+   - Shared touch-device behavior for both portrait and landscape.
+   - Independent from css/mobile_landscape.css; no ml-active rules here.
+   ============================================================= */
+
+#mobile-refresh-btn {
+    display: none;
+}
+
+#mobile-refresh-btn.mobile-refresh-btn--hidden {
+    display: none !important;
+}
+
+@media (pointer: coarse) {
+    html.mobile-portrait-viewport-fixed,
+    html.mobile-portrait-viewport-fixed body {
+        width: var(--mobile-portrait-layout-w) !important;
+        min-width: var(--mobile-portrait-layout-w) !important;
+        max-width: var(--mobile-portrait-layout-w) !important;
+        height: var(--mobile-portrait-layout-h) !important;
+        min-height: var(--mobile-portrait-layout-h) !important;
+        max-height: var(--mobile-portrait-layout-h) !important;
+        overflow: hidden !important;
+    }
+
+    html.mobile-portrait-viewport-fixed body {
+        position: fixed;
+        inset: 0 auto auto 0;
+    }
+
+    html.mobile-portrait-viewport-fixed #game-canvas,
+    html.mobile-portrait-viewport-fixed #hud,
+    html.mobile-portrait-viewport-fixed #touch-controls,
+    html.mobile-portrait-viewport-fixed #fade-overlay,
+    html.mobile-portrait-viewport-fixed #loading-screen,
+    html.mobile-portrait-viewport-fixed #click-to-play,
+    html.mobile-portrait-viewport-fixed #dream-object-controls,
+    html.mobile-portrait-viewport-fixed .mobile-refresh-confirm {
+        width: var(--mobile-portrait-layout-w) !important;
+        height: var(--mobile-portrait-layout-h) !important;
+        right: auto !important;
+        bottom: auto !important;
+    }
+
+    html.mobile-portrait-viewport-fixed #touch-controls {
+        top: 0 !important;
+        left: 0 !important;
+    }
+
+    html.mobile-portrait-viewport-fixed #top-bar {
+        right: auto !important;
+        left: calc(var(--mobile-portrait-layout-w) - 16px) !important;
+        transform: translateX(-100%);
+    }
+
+    #mobile-refresh-btn {
+        position: fixed;
+        right: max(20px, env(safe-area-inset-right));
+        bottom: max(20px, env(safe-area-inset-bottom));
+        z-index: 21;
+        display: flex;
+        pointer-events: auto;
+        font-size: 0;
+        letter-spacing: 0;
+    }
+
+    #mobile-refresh-btn::before {
+        content: "";
+        width: 30px;
+        height: 30px;
+        background: rgba(255, 255, 255, 0.82);
+        -webkit-mask: url("../src/_logos/dream_reset.svg") center / contain no-repeat;
+        mask: url("../src/_logos/dream_reset.svg") center / contain no-repeat;
+    }
+
+    html.mobile-portrait-viewport-fixed #mobile-refresh-btn {
+        right: auto;
+        left: calc(var(--mobile-portrait-layout-w) - max(20px, env(safe-area-inset-right)));
+        transform: translateX(-100%);
+    }
+
+    html.mobile-portrait-viewport-fixed .mobile-refresh-confirm__panel {
+        width: min(320px, calc(var(--mobile-portrait-layout-w) - 40px));
+    }
+
+    body.side-scroller-active #mobile-refresh-btn,
+    body.room-panorama-active #mobile-refresh-btn,
+    body.dream-revision-pending #mobile-refresh-btn {
+        display: none !important;
+    }
+
+    .mobile-refresh-confirm {
+        position: fixed;
+        inset: 0;
+        z-index: 180;
+        display: grid;
+        place-items: center;
+        padding: 20px;
+        background: rgba(10, 10, 16, 0.42);
+        -webkit-backdrop-filter: blur(8px);
+        backdrop-filter: blur(8px);
+    }
+
+    .mobile-refresh-confirm.hidden {
+        display: none !important;
+    }
+
+    .mobile-refresh-confirm__panel {
+        width: min(320px, calc(100vw - 40px));
+        padding: 16px 16px 14px;
+        border-radius: var(--r-md);
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        background: var(--hud-bg-strong);
+        box-shadow: var(--shadow-hud);
+        text-align: center;
+    }
+
+    .mobile-refresh-confirm__panel strong {
+        display: block;
+        margin-bottom: 14px;
+        color: var(--hud-text);
+        font-size: 0.96rem;
+        line-height: 1.45;
+    }
+
+    .mobile-refresh-confirm__actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+
+    .mobile-refresh-confirm__btn {
+        min-height: 42px;
+        border-radius: var(--r-pill);
+        border: 1px solid var(--hud-line);
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+        touch-action: manipulation;
+    }
+
+    .mobile-refresh-confirm__btn--ghost {
+        color: var(--hud-text);
+        background: rgba(255, 255, 255, 0.08);
+    }
+
+    .mobile-refresh-confirm__btn--primary {
+        color: #fff;
+        background: var(--grad-rose);
+        border-color: transparent;
+    }
+}
