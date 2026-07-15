@@ -98,15 +98,40 @@ export function saveSettings(settings) {
     }
 
     localStorage.setItem('fritia-settings', JSON.stringify(next));
-    document.dispatchEvent(new CustomEvent('fritia-settings-updated', { detail: getSettings() }));
+    const saved = getSettings();
+    document.dispatchEvent(new CustomEvent('fritia-settings-updated', { detail: saved }));
+    return saved;
+}
+
+function syncModelConnectionInputs(settings = getSettings()) {
+    const apiKeyInput = document.getElementById('api-key');
+    const baseUrlInput = document.getElementById('base-url');
+    const modelInput = document.getElementById('model-name');
+    if (apiKeyInput) apiKeyInput.value = settings.apiKey || '';
+    if (baseUrlInput) baseUrlInput.value = settings.baseUrl || DEFAULTS.baseUrl;
+    if (modelInput) {
+        modelInput.value = settings.model || DEFAULTS.model;
+        modelInput.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+}
+
+export function saveModelConnection(connection = {}) {
+    const saved = saveSettings({
+        apiKey: String(connection.apiKey || '').trim(),
+        baseUrl: String(connection.baseUrl || DEFAULTS.baseUrl).trim().replace(/\/+$/, ''),
+        model: String(connection.model || DEFAULTS.model).trim()
+    });
+    syncModelConnectionInputs(saved);
+    return saved;
 }
 
 export function initSettings(options = {}) {
     const controlsModule = options.controlsModule || null;
+    const onQuickApiSetup = typeof options.onQuickApiSetup === 'function'
+        ? options.onQuickApiSetup
+        : null;
     const settings = getSettings();
-    document.getElementById('api-key').value = settings.apiKey;
-    document.getElementById('base-url').value = settings.baseUrl;
-    document.getElementById('model-name').value = settings.model;
+    syncModelConnectionInputs(settings);
     const mouseSlider = document.getElementById('mouse-sensitivity');
     const touchSlider = document.getElementById('touch-sensitivity');
     const localizationSlider = document.getElementById('localization-sensitivity');
@@ -362,7 +387,11 @@ export function initSettings(options = {}) {
         closePanel();
     });
 
+    document.getElementById('settings-deepseek-quick-setup')?.addEventListener('click', () => {
+        onQuickApiSetup?.();
+    });
+
     document.getElementById('settings-site-link')?.addEventListener('click', () => {
-        window.open('https://qingchenwait.github.io/fritia_online_guide/', '_blank', 'noopener,noreferrer');
+        window.open('https://fritia.online', '_blank', 'noopener,noreferrer');
     });
 }
