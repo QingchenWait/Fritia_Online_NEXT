@@ -9,11 +9,11 @@
     <link rel="stylesheet" href="css/base.css?v=20260621-loading-size">
     <link rel="stylesheet" href="css/components.css?v=20260619-otome">
     <link rel="stylesheet" href="css/effects.css?v=20260619-otome">
-    <link rel="stylesheet" href="css/panels.css?v=20260715-onboarding">
-    <link rel="stylesheet" href="css/responsive.css?v=20260715-onboarding">
-    <link rel="stylesheet" href="css/mobile_common.css?v=20260715-onboarding">
+    <link rel="stylesheet" href="css/panels.css?v=20260624-sprite-enemy">
+    <link rel="stylesheet" href="css/responsive.css?v=20260624-sprite-enemy">
+    <link rel="stylesheet" href="css/mobile_common.css?v=20260626-mobile">
     <!-- 移动端横屏专用布局（独立层，仅 html.ml-active 生效）。详见 UI_MOBILE.md -->
-    <link rel="stylesheet" href="css/mobile_landscape.css?v=20260715-onboarding">
+    <link rel="stylesheet" href="css/mobile_landscape.css?v=20260625-ml">
     <!-- 移动端横屏检测（独立 IIFE，仅切换根 class 与写视口变量） -->
     <script defer src="js/mobile_viewport_fix.js?v=20260626-mobile"></script>
     <script defer src="js/mobile_landscape.js?v=20260625-ml"></script>
@@ -595,134 +595,6 @@
         </div>
     </div>
 
-    <div id="onboarding-welcome-panel" class="ui-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="onboarding-welcome-title">
-        <div class="otome-panel otome-panel--sm onboarding-welcome-shell">
-            <div class="otome-panel__body onboarding-welcome-body">
-                <div class="onboarding-welcome-mark" aria-hidden="true">
-                    <img src="src/_ui/icon_terminal.svg" alt="">
-                </div>
-                <div class="onboarding-welcome-copy">
-                    <h2 id="onboarding-welcome-title">欢迎游玩芙提雅 NEXT</h2>
-                    <p>本游戏内容由 AI 大模型驱动。请先按照指引，完成大模型 API 的创建和配置，或手动添加其他模型。</p>
-                </div>
-                <div class="onboarding-dismiss-row">
-                    <span>不再弹出</span>
-                    <label class="advanced-ios-switch" for="onboarding-dismiss-toggle">
-                        <input id="onboarding-dismiss-toggle" type="checkbox" aria-label="以后不再显示欢迎窗口">
-                        <span class="advanced-ios-switch__track" aria-hidden="true"></span>
-                    </label>
-                </div>
-            </div>
-            <div class="otome-panel__foot onboarding-welcome-actions">
-                <button id="onboarding-quick-api" class="btn btn--primary" type="button">快速配置 API</button>
-                <button id="onboarding-close" class="btn btn--ghost" type="button">关闭</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="deepseek-setup-panel" class="ui-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="deepseek-setup-title">
-        <div class="otome-panel otome-panel--md deepseek-setup-shell">
-            <div class="otome-panel__head deepseek-setup-head">
-                <div class="otome-panel__icon"><img src="src/_ui/icon_terminal.svg" alt=""></div>
-                <div class="otome-panel__titles">
-                    <span class="otome-panel__kicker">DEEPSEEK QUICK SETUP</span>
-                    <h2 id="deepseek-setup-title" class="otome-panel__title">快速配置 DeepSeek</h2>
-                    <p class="otome-panel__sub">只需创建并复制一次 API Key，其余配置由游戏完成。</p>
-                </div>
-                <button id="deepseek-setup-close" class="otome-panel__close" type="button" aria-label="关闭 DeepSeek 快速配置">
-                    <img src="src/_ui/icon_close.svg" alt="">
-                </button>
-            </div>
-
-            <div class="otome-panel__body deepseek-setup-body">
-                <ol class="deepseek-progress" aria-label="配置进度">
-                    <li class="is-active" data-deepseek-progress-step="1" aria-current="step">
-                        <span>1</span>
-                        <strong>获取 Key</strong>
-                    </li>
-                    <li data-deepseek-progress-step="2">
-                        <span>2</span>
-                        <strong>导入</strong>
-                    </li>
-                    <li data-deepseek-progress-step="3">
-                        <span>3</span>
-                        <strong>检查</strong>
-                    </li>
-                </ol>
-
-                <div class="deepseek-step-deck">
-                    <section id="deepseek-step-1" class="deepseek-step" aria-labelledby="deepseek-step-1-title">
-                        <div class="deepseek-step-heading">
-                            <span class="otome-section-label">第 1 步</span>
-                            <h3 id="deepseek-step-1-title">在 DeepSeek 官网创建密钥</h3>
-                        </div>
-                        <ol class="deepseek-instructions">
-                            <li><span>1</span><p>没有账号先注册，已有账号直接登录。</p></li>
-                            <li><span>2</span><p>在 [充值] 页面充值 5-10 元，即可满足长时间游玩需求。</p></li>
-                            <li><span>3</span><p>在 [API Keys] 页面点击“创建 API Key”，名称随意填写，创建后复制密钥。</p></li>
-                        </ol>
-                        <p class="deepseek-official-note">账号、登录和充值均在 DeepSeek 官方页面完成。</p>
-                    </section>
-
-                    <section id="deepseek-step-2" class="deepseek-step hidden" aria-labelledby="deepseek-step-2-title">
-                        <div class="deepseek-step-heading">
-                            <span class="otome-section-label">第 2 步</span>
-                            <h3 id="deepseek-step-2-title">导入刚复制的 API Key</h3>
-                            <p>点击下方按钮读取剪贴板。读取失败时，也可以手动粘贴。</p>
-                        </div>
-                        <div id="deepseek-key-summary" class="deepseek-key-summary hidden" aria-live="polite"></div>
-                        <button id="deepseek-manual-entry" class="deepseek-manual-entry" type="button">无法读取？手动粘贴</button>
-                        <div class="deepseek-manual-key hidden" data-deepseek-manual-wrap>
-                            <label class="otome-field-label" for="deepseek-key-input">DeepSeek API Key</label>
-                            <input id="deepseek-key-input" type="password" maxlength="512" autocomplete="new-password" autocapitalize="off" spellcheck="false" placeholder="粘贴以 sk- 开头的密钥">
-                        </div>
-                        <p class="deepseek-privacy-note">密钥只保存在当前浏览器，不会显示完整内容。</p>
-                    </section>
-
-                    <section id="deepseek-step-3" class="deepseek-step hidden" aria-labelledby="deepseek-step-3-title">
-                        <div class="deepseek-step-heading">
-                            <span class="otome-section-label">第 3 步</span>
-                            <h3 id="deepseek-step-3-title">检查连接并保存</h3>
-                        </div>
-                        <div class="deepseek-check-result" data-state="checking">
-                            <div class="deepseek-status-mark" aria-hidden="true">
-                                <img src="src/_ui/icon_check.svg" alt="">
-                            </div>
-                            <div class="deepseek-balance-copy">
-                                <strong>账户余额不足</strong>
-                                <span>请在 DeepSeek 官网完成实名认证并充值，支持支付宝和微信支付。</span>
-                            </div>
-                        </div>
-                        <dl class="deepseek-fixed-config" aria-label="自动配置项">
-                            <div><dt>服务</dt><dd>DeepSeek 官方 API</dd></div>
-                            <div><dt>模型</dt><dd>deepseek-v4-flash</dd></div>
-                        </dl>
-                        <p class="deepseek-cost-note">检查会发送一次极小请求，产生的费用可以忽略不计。</p>
-                    </section>
-                </div>
-                <p id="deepseek-status" class="deepseek-global-status" data-kind="info" data-state="info" aria-live="polite">准备配置 DeepSeek API。</p>
-            </div>
-
-            <div class="otome-panel__foot deepseek-setup-foot">
-                <div class="deepseek-action-group" data-deepseek-actions="1">
-                    <button id="deepseek-open-platform" class="btn btn--primary" type="button">打开 DeepSeek 并创建 Key</button>
-                    <button id="deepseek-to-step-2" class="btn btn--ghost" type="button">我已复制，下一步</button>
-                </div>
-                <div class="deepseek-action-group hidden" data-deepseek-actions="2">
-                    <button id="deepseek-read-clipboard" class="btn btn--primary" type="button">读取刚复制的 Key</button>
-                </div>
-                <div class="deepseek-action-group hidden" data-deepseek-actions="3">
-                    <button id="deepseek-check" class="btn btn--gold" type="button">检查配置</button>
-                    <button id="deepseek-top-up" class="btn btn--gold hidden" type="button">实名认证并充值</button>
-                    <button id="deepseek-retry" class="btn btn--primary hidden" type="button">重试</button>
-                    <button id="deepseek-start-game" class="btn btn--primary hidden" type="button">开始游戏</button>
-                    <button id="deepseek-return-settings" class="btn btn--primary hidden" type="button">返回游戏</button>
-                    <button id="deepseek-reset" class="btn btn--ghost" type="button">重新配置</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <div id="settings-panel" class="ui-overlay hidden" data-active-section="model">
         <div class="otome-panel otome-panel--xl settings-shell">
             <div class="otome-panel__head settings-head">
@@ -785,10 +657,6 @@
                             <strong>主流模型 API 获取</strong>
                             <span>点击按钮进入官网获取 API，并将 API Key、Base URL 与模型名称填入上方文本框。</span>
                         </div>
-                        <button id="settings-deepseek-quick-setup" class="btn btn--primary settings-deepseek-quick-setup" type="button">
-                            <img src="src/_ui/icon_terminal.svg" alt="">
-                            快速配置 DeepSeek
-                        </button>
                         <div class="settings-api-links" aria-label="主流模型 API 获取">
                             <a class="settings-api-link" href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener noreferrer">DeepSeek</a>
                             <a class="settings-api-link" href="https://platform.xiaomimimo.com/console/api-keys" target="_blank" rel="noopener noreferrer">MiMO</a>
@@ -1112,7 +980,7 @@
                         <p class="settings-resources-subtitle">💖 对你的爱，跨越空间 💖</p>
                         <div id="settings-about-text" class="settings-about-text" aria-live="polite">正在读取制作信息...</div>
                         <div class="settings-resource-links" aria-label="更多资源链接">
-                            <a class="settings-resource-link" href="https://www.bilibili.com/video/BV12sNw6aEJm" target="_blank" rel="noopener noreferrer">📹 宣传视频</a>
+                            <a class="settings-resource-link" href="https://space.bilibili.com/385556208/lists/8275529?type=season" target="_blank" rel="noopener noreferrer">📹 宣传视频</a>
                             <a class="settings-resource-link" href="https://github.com/QingchenWait/Fritia_Online_NEXT" target="_blank" rel="noopener noreferrer">🕶️ 源码仓库</a>
                             <a class="settings-resource-link" href="https://qingchenwait.github.io/fritia_online_guide/#resources" target="_blank" rel="noopener noreferrer">🤖 AstrBot 版</a>
                             <a class="settings-resource-link" href="https://ifdian.net/a/cyandust" target="_blank" rel="noopener noreferrer">☕️ 赞助创作</a>
@@ -1463,6 +1331,6 @@
         </div>
     </div>
 
-    <script type="module" src="js/main.js?v=20260715-onboarding"></script>
+    <script type="module" src="js/main.js?v=20260624-combat-score"></script>
 </body>
 </html>

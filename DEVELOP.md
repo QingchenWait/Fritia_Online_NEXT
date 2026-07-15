@@ -1,6 +1,6 @@
 ﻿# Fritia Online NEXT 开发文档
 
-更新时间：2026-07-15
+更新时间：2026-06-22
 
 本文是当前静态 Three.js 项目的开发事实源。项目不依赖后端服务，游戏数据、设置、历史、成就和造梦家具主要存储在浏览器 `localStorage` 中；自定义访客 PMX/人格文档与本地知识库数据存储在 IndexedDB，并通过前端 ZIP 存档机制迁移。
 
@@ -70,7 +70,6 @@ fritia_online_v3/
 │   ├── mobile_viewport_fix.js # 移动端横竖屏 viewport 修正（独立 IIFE）
 │   ├── mobile_refresh.js  # 移动端右下角“刷新”按钮与确认框
 │   ├── mobile_landscape.js # 移动端横屏检测(独立 IIFE，切换 html.ml-active + 写视口变量)
-│   ├── onboarding.js     # 首次欢迎窗与 DeepSeek 官方 API 快速配置向导
 │   ├── main.js
 │   ├── room.js
 │   ├── bar_scene.js
@@ -134,7 +133,6 @@ npm run dev
 - `isDreamDoorOpen`, `dreamDoorAnimating`：造梦空间推拉门状态。
 - `isBarSceneActive`, `barTransitionInProgress`：暖调闲聚地图显示和黑屏转场状态。
 - `dreamCinematic`：造梦家具生成后的特写过场状态；存在时暂停玩家普通操作，`E` 可跳过。
-- `onboardingModule`：首次欢迎与 DeepSeek 快速配置模块；加载完成后决定显示欢迎窗或进入既有 `#click-to-play` 流程。
 - `basePlayerColliders`, `bedroomColliders`, `dreamStaticColliders`：玩家和角色使用的基础碰撞体集合。
 
 主要函数：
@@ -145,7 +143,6 @@ npm run dev
 - `animate()`：主循环。更新游戏时间、控制器、角色、门动画、房间作用域、窗户天空色、交互提示、暖调闲聚准入浮窗投影并渲染场景。
 - 启动预渲染：`#click-to-play` 出现前会调用 `waitForFritiaFirstRender()`，先收集芙提雅 root 上的材质贴图并等待图片 load/decode 完成（最长约 45 秒，loading 文案显示已就绪贴图数量），随后执行纹理初始化、shader compile/compileAsync 和数帧 `renderer.render(scene, camera)`，确认 PMX 与贴图已进入渲染管线后才隐藏 loading，避免 GitHub Pages 慢网下进入操作界面时角色模型或贴图仍未完成首帧渲染。
 - 开局欢迎闸门：加载完成但玩家尚未点击 `#click-to-play` 前，角色只保留眨眼，不切换 waypoint、不随机移动；首次点击后先执行面向玩家镜头的挥手欢迎，挥手结束再恢复正常行动。
-- 新手欢迎接入：资源预加载完成后，未设置“不再弹出”时先显示 `#onboarding-welcome-panel` 并保持控制模式释放；欢迎窗“关闭”和 DeepSeek 配置成功后的“开始游戏”复用既有开场启动函数，再调用 `controlsModule.forceEnterControlMode()`。桌面端 Pointer Lock 必须由这次用户点击直接触发；请求失败时保留原 `#click-to-play` 作为兜底。
 - `updateInteractionPrompt()`：复用 `#painting-prompt` 和 `#interaction-prompt` 显示当前可用交互；造梦家具显示 `按 E 管理 [家具名]`；暖调闲聚准入浮窗显示时改为 `按 E 关闭`。
 - 暖调闲聚舞台：看向 `BarDanceInvisiblePlane` 时显示 `按 E 观看跳舞`，打开 `#dance-panel`；舞蹈流程中 `updateDanceSystem(delta)` 接管 VMD 动作，暂停角色日常 AI，但玩家移动/视角仍由 `controls.js` 正常更新。每完整观看一次跳舞会通过 `recordDanceWatched()` 记录观看次数并增加 `3` 点好感，选择“再来一次”并再次跳完整段也会另计一次。
 - 暖调闲聚调酒：看向 `BarBartendingChallengeInvisibleBox` 时显示 `按 E 请琴诺帮忙调酒`，打开 `#bartending-challenge-panel` 并释放控制模式；Escape 或关闭按钮退出并派发 `fritia-overlay-closed`。
@@ -589,8 +586,6 @@ overlay 管理列表：
 - `dream-terminal-panel`
 - `dream-furniture-editor-panel`
 - `dream-placement-editor-panel`
-- `onboarding-welcome-panel`
-- `deepseek-setup-panel`
 
 ## 角色系统：`js/character.js`
 
@@ -675,8 +670,7 @@ localStorage key：`fritia-settings`
 
 - `getSettings()`：读取设置，包含 `apiKey`、`baseUrl`、`model`、`mouseSensitivity`、`touchSensitivity`、`localizationSensitivity`、`deepseekIntimateMode`、`deepseekIntimateModeStartedAt`、`deepseekIntimateModeDisabledAt`。
 - `saveSettings(settings)`：保存设置，并派发 `fritia-settings-updated`。
-- `saveModelConnection({ apiKey, baseUrl, model })`：规范化并保存大模型连接，同时同步 `#api-key`、`#base-url`、`#model-name`；保存后仍派发 `fritia-settings-updated`。
-- `initSettings({ controlsModule, onQuickApiSetup })`：绑定设置面板 DOM 和按钮，在打开/关闭设置页时处理控制模式恢复，并通过回调打开 DeepSeek 快速配置。
+- `initSettings({ controlsModule })`：绑定设置面板 DOM 和按钮，并在打开/关闭设置页时处理控制模式恢复。
 
 默认值：
 
@@ -709,47 +703,10 @@ localStorage key：`fritia-settings`
 - 高级设置页的数字输入框在窄屏移动端保持 16px computed font-size 以避免 Safari 自动放大；若输入完成后页面仍处于放大状态，会在 blur/change 后通过临时 viewport meta 调整无刷新复位。
 - `data-settings-section="resources"` / `data-settings-view="resources"`：更多资源与制作信息。
 - 设置标题栏副标题会随分组切换；底栏作者文案为 `青尘工作室 | BiliBili @CyanDust_青尘`，宽屏显示 `#settings-site-link` 访问官网，窄屏隐藏。
-- 大模型设置页提供 `#settings-deepseek-quick-setup`，打开 DeepSeek 官方快速配置向导；原有官方 API 入口仍只打开外部控制台，不保存额外凭据。
+- 大模型设置页提供 DeepSeek、MiMO、Qwen 千问、Kimi 的官方 API 入口按钮，仅打开外部控制台，不保存任何额外凭据。
 - 自定义事件：`fritia-settings-updated`，保存设置后派发，detail 为 `getSettings()` 规范化后的设置对象；`controls.js` 用它同步灵敏度缓存。
 - 窄屏先显示分组列表，点击分组后进入详情；详情内 `data-settings-back` 返回分组列表。
 - 打开设置页时释放控制模式；关闭时派发 `fritia-overlay-closed`。
-
-## 新手引导与 DeepSeek 快速配置：`js/onboarding.js`
-
-职责：
-
-- 管理无标题栏首次欢迎窗 `#onboarding-welcome-panel` 和三步向导 `#deepseek-setup-panel`。
-- 欢迎文案固定为“欢迎游玩芙提雅 NEXT”“本游戏内容由 AI 大模型驱动。请先按照指引，完成大模型 API 的创建和配置，或手动添加其他模型。”；“不再弹出”开关默认关闭，用户主动开启后才写入持久偏好。
-- 从欢迎窗或 `#settings-deepseek-quick-setup` 打开同一套向导；向导显示期间始终保持非操作模式，关闭向导后直接返回游戏并恢复操作，不把中途输入写入设置。
-- DeepSeek 注册、登录、实名认证、创建 Key 和充值都在外开的官方页面完成。项目不嵌入官方页面、不收集账号密码、不调用 DeepSeek 私有接口，也不能自动代替用户创建 Key。
-
-导出：
-
-- `initOnboarding({ controlsModule, startGameplay, saveModelConnection, getSettings, autoShow })`：绑定欢迎窗/向导并接入控制与设置系统；只有显式传入 `autoShow:true` 才在初始化时显示，主流程不启用该项，等资源预加载完成后再决定是否显示。
-- 返回 `welcomeShown/shouldShowWelcome/openWelcome/closeWelcome/openQuickSetup/openDeepSeekSetup/closeDeepSeekSetup/destroy`，供 `main.js` 控制启动闸门和设置页入口。
-
-固定连接：
-
-- API Key 页面：`https://platform.deepseek.com/api_keys`。
-- 充值页面：`https://platform.deepseek.com/top_up`。
-- `baseUrl`：`https://api.deepseek.com`。
-- `model`：`deepseek-v4-flash`。
-- 用户只需在官方页面创建名为“芙提雅 NEXT”的 Key 并复制；向导自动填写 Base URL 与模型，不要求新手理解 OpenAI 兼容接口字段。
-
-三步流程：
-
-1. “获取 Key”打开官方 API Key 页面。页面回到前台后仅高亮下一步，不尝试跨域读取官方账号或页面状态。
-2. “导入”必须由用户点击按钮调用 `navigator.clipboard.readText()`；剪贴板不可用、权限被拒绝或读到的文本无效时显示 `type="password"` 的手动粘贴输入框。界面只显示脱敏尾号，不打印或回显完整 Key。
-3. “检查”对 `https://api.deepseek.com/chat/completions` 发起 30 秒可中止的最小非流式请求，固定携带 `stream:false`、`max_tokens:8`、`thinking:{type:"disabled"}`，并要求模型只回复 `OK`。只有 HTTP 2xx 且 `choices[0].message` 有效时才调用 `saveModelConnection()`。
-
-错误与关闭规则：
-
-- `401` 提示重新复制 Key；`402` 切换到实名认证/充值提示并提供官方充值入口；`403` 提示 Key 没有调用权限；`429` 提示稍后重试；`500/503` 提示 DeepSeek 服务异常或繁忙，其他非 2xx 状态显示 HTTP 状态码。
-- 超时、离线/CORS 和非法响应分别显示简短中文错误；所有失败都保留旧 `fritia-settings`，允许在当前步骤重试。
-- 验证通过但 localStorage 保存失败时明确提示浏览器存储权限问题，仍不得显示为配置成功。
-- 关闭向导时 abort 正在进行的验证，并清除模块内存及密码输入框中的未验证 Key；完整 Key 不写入 URL、日志或其他 localStorage key。
-- 从欢迎窗配置成功后显示“开始游戏”，从设置页配置成功后显示“返回游戏”；两者都用该次点击关闭向导、进入既有开场并恢复操作模式，三个现有设置输入框已经同步。
-- 浮层切换时先显示目标浮层再隐藏来源，避免中间态误恢复操作。真正关闭浮层时派发 `fritia-overlay-closed`；保存大模型连接时由设置系统派发 `fritia-settings-updated`。
 
 ## 高级设置：`js/advanced_settings.js`
 
@@ -1248,9 +1205,6 @@ DOM ID：
 
 设置：
 
-- `#onboarding-welcome-panel`
-- `#deepseek-setup-panel`
-- `#settings-deepseek-quick-setup`
 - `#settings-panel`
 - `#settings-subtitle`
 - `#api-key`
@@ -1496,7 +1450,6 @@ DOM ID：
 ## localStorage Key
 
 - `fritia-settings`：API 设置、操作灵敏度、亲密模式开关与 `deepseekIntimateModeStartedAt/deepseekIntimateModeDisabledAt` 切换时间。
-- `fritia_onboarding_welcome_dismissed`：设备本地的新手欢迎窗“不再弹出”偏好；只在开关开启时写入，关闭开关时移除，默认不存在。该 key 不进入 ZIP/JSON 导出导入。
 - `fritia_advanced_settings`：高级设置页运行参数，包含游戏时间速度、造梦组件/冷却、圆桌密语限制和知识库 BM25 默认参数。
 - `fritia_game_state`：游戏时间、数据金、好感、统计、礼物；`stats` 包含入场券/成就用的 `sleepModeCount`、`danceWatchCount`、`bartendingChallengeWins`。
 - `fritia_chat_history`：日常对话历史；亲密模式有效时生成的 assistant 回复可带 `deepseekIntimateMode: true`。
@@ -1550,7 +1503,6 @@ DOM ID：
   - 来源：各 overlay 关闭。
   - detail：`{ id }`。
   - 用途：恢复控制模式和清理互动状态。
-  - 新手欢迎窗关闭时 detail 为 `{ id: "onboarding-welcome-panel" }`；DeepSeek 配置向导关闭时为 `{ id: "deepseek-setup-panel" }`。
   - 调酒挑战关闭时 detail 为 `{ id: "bartending-challenge-panel" }`。
   - 圆桌密语关闭时 detail 为 `{ id: "roundtable-whispers-panel" }`；离开酒吧强制关闭时不派发该事件，并由 `controlsModule.cancelOverlayResume()` 清理恢复标记。
   - 2D 横板冰雪小游戏关闭时 detail 为 `{ id: "side-scroller-adventure" }`。
@@ -1691,19 +1643,6 @@ Escape：
 6. 打开任意 overlay 时触发成就，成就卡片应显示在所有窗口和高斯模糊背景之上。
 7. 触屏设备先竖屏进入游戏，再横屏切回竖屏时，页面宽度应恢复为竖屏真实宽度，UI 不应整体缩小；横屏状态仍应正常。
 8. 主界面右下角应出现圆形“刷新”按钮；点击后弹出“是否要重新载入本游戏？”确认框，选“是”应刷新页面，选“否”应关闭弹窗。
-
-新手引导与 DeepSeek 快速配置：
-
-1. 清除 `fritia_onboarding_welcome_dismissed` 后刷新，加载完成应先显示无标题栏欢迎窗；刷新或再次启动仍显示。开启“不再弹出”后刷新不再显示；关闭开关应移除偏好。
-2. 欢迎窗点击“关闭”应执行既有开场欢迎、进入操作模式；桌面 Pointer Lock 请求失败时显示原 `#click-to-play`，移动端触控入口保持可用。
-3. 从欢迎窗或系统设置的 `#settings-deepseek-quick-setup` 打开向导时，游戏必须持续保持非操作模式；关闭向导后应直接返回游戏并恢复操作模式，不再恢复欢迎窗或设置页。
-4. “打开 DeepSeek 并创建 Key”应在系统浏览器/新标签打开 `https://platform.deepseek.com/api_keys`，且仍停留在向导第 1 步；只有点击“我已复制，下一步”才进入第 2 步。注册、登录、实名认证和创建 Key 都在官方页面完成，游戏内不得嵌入页面或要求输入 DeepSeek 账号密码。
-5. 允许剪贴板时，“读取刚复制的 Key”应进入检查步骤并只显示脱敏尾号；拒绝权限、非安全上下文或剪贴板为空时，应显示至少 16px 字号的密码输入框并可正常手动粘贴。
-6. 检查前确认固定使用 `https://api.deepseek.com` / `deepseek-v4-flash`；验证成功后才写入 `fritia-settings`，设置页三个字段立即同步，刷新及 ZIP/JSON 导入导出行为保持兼容。
-7. 分别验证 401、402、403、429、500、503、其他 HTTP 错误、离线/CORS、30 秒超时、非法响应和 localStorage 保存失败；402 应提供 `https://platform.deepseek.com/top_up` 入口，其余错误可重试，任何失败都不得覆盖原配置。
-8. 验证中关闭向导应中止请求并清空未验证 Key；完整 Key 不应出现在 URL、控制台日志、错误文案或 `fritia_onboarding_welcome_dismissed` 中。
-9. 从欢迎窗验证成功后点击“开始游戏”，或从设置页验证成功后点击“返回游戏”，都应关闭向导、可靠进入操作模式，并触发与原入口一致的挥手/语音/成就/AI 解锁。
-10. 在 1440×900 桌面、390×844 移动竖屏、915×412 `?ml=1` 横屏各走一次完整流程，确认正文可滚、底部操作始终可见、按钮无重叠且输入不会触发 iOS 自动缩放。
 
 共享墙和门：
 

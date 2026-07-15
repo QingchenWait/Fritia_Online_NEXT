@@ -91,8 +91,6 @@ export function initControls(camera, domElement, colliders) {
 
     const overlayIds = [
         'dialogue-ui',
-        'onboarding-welcome-panel',
-        'deepseek-setup-panel',
         'settings-panel',
         'history-panel',
         'memory-node-panel',
@@ -337,7 +335,6 @@ export function initControls(camera, domElement, colliders) {
 
     document.addEventListener('click', (e) => {
         if (isRoomPanoramaModeActive()) return;
-        if (isOverlayOpen()) return;
         if (!state.isLocked && !state.useTouchControls && !resumeAfterOverlay && !resumeInProgress) {
             const inOverlay = overlayIds.some(id => {
                 const el = document.getElementById(id);
