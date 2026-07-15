@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::{COLORREF, HINSTANCE, HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows::Win32::Graphics::Gdi::{
-    AlphaBlend, BeginPaint, CreateCompatibleDC, CreateDIBSection, CreateSolidBrush,
+    AlphaBlend, BeginPaint, BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, CreateDIBSection, CreateSolidBrush,
     DeleteDC, DeleteObject, EndPaint, FillRect, InvalidateRect, SelectObject, StretchDIBits,
     AC_SRC_OVER, BITMAPINFO, BI_RGB, BLENDFUNCTION, DIB_RGB_COLORS, HBITMAP, HBRUSH, HDC,
     PAINTSTRUCT, RGBQUAD, SRCCOPY,
@@ -415,7 +415,7 @@ unsafe fn destroy_splash_bitmap(splash: &SplashBitmap) {
     let _ = DeleteDC(splash.mem_dc);
 }
 
-unsafe fn draw_splash(hdc: HDC, rect: RECT, alpha: u8) {
+unsafe fn draw_splash_frame(hdc: HDC, rect: RECT, alpha: u8) {
     let white = CreateSolidBrush(color(255, 255, 255));
     let _ = FillRect(hdc, &rect, white);
     let _ = DeleteObject(white.into());
@@ -453,6 +453,31 @@ unsafe fn draw_splash(hdc: HDC, rect: RECT, alpha: u8) {
         let bits = SPLASH_BMP.as_ptr().add(offset) as *const c_void;
         StretchDIBits(hdc, 0, 0, rect.right - rect.left, rect.bottom - rect.top, 0, 0, width, height, Some(bits), &bmi, DIB_RGB_COLORS, SRCCOPY);
     }
+}
+
+unsafe fn draw_splash(hdc: HDC, rect: RECT, alpha: u8) {
+    let w = (rect.right - rect.left).max(1);
+    let h = (rect.bottom - rect.top).max(1);
+    let buffer_dc = CreateCompatibleDC(Some(hdc));
+    if buffer_dc.is_invalid() {
+        draw_splash_frame(hdc, rect, alpha);
+        return;
+    }
+
+    let buffer_bitmap = CreateCompatibleBitmap(hdc, w, h);
+    if buffer_bitmap.is_invalid() {
+        let _ = DeleteDC(buffer_dc);
+        draw_splash_frame(hdc, rect, alpha);
+        return;
+    }
+
+    let old_bitmap = SelectObject(buffer_dc, buffer_bitmap.into());
+    let buffer_rect = RECT { left: 0, top: 0, right: w, bottom: h };
+    draw_splash_frame(buffer_dc, buffer_rect, alpha);
+    let _ = BitBlt(hdc, 0, 0, w, h, Some(buffer_dc), 0, 0, SRCCOPY);
+    let _ = SelectObject(buffer_dc, old_bitmap);
+    let _ = DeleteObject(buffer_bitmap.into());
+    let _ = DeleteDC(buffer_dc);
 }
 
 fn runtime_icon_path() -> Option<PathBuf> {
