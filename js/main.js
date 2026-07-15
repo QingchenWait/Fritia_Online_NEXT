@@ -1046,7 +1046,9 @@ function isTypingInEditableElement() {
     const active = document.activeElement;
     if (!active) return false;
     const tag = String(active.tagName || '').toUpperCase();
-    return active.isContentEditable || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+    if (active.isContentEditable) return true;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return !active.readOnly;
+    return tag === 'SELECT';
 }
 
 function updateGameHud(force = false, salary = 0) {
