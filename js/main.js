@@ -5,7 +5,8 @@ import { initControls } from './controls.js';
 import { loadCharacter, updateCharacter, getCharacterPosition, startInteraction, endInteraction, startWaving, swapModel, applySleepingPose, applyIdlePose, updateBlink, setSittingEnabled, setCharacterNavigationScope, refreshCharacterNavigationData, forceCharacterIntoRoom, moveCharacterToWaypoint } from './character.js';
 import { initDialogue, showDialogue, hideDialogue, isDialogueVisible, getConversationHistory, importConversationHistory, setDialogueSceneContext } from './dialogue.js';
 import { initDateDialogue, openDatePanel, closeDatePanel, isDatePanelVisible, getDateConversationHistory, importDateConversationHistory, getDateLocations } from './date_dialogue.js';
-import { initSettings } from './settings.js';
+import { initSettings, saveModelConnection } from './settings.js';
+import { initOnboarding } from './onboarding.js?v=20260715-onboarding';
 import { getAdvancedSettings, saveAdvancedSettings } from './advanced_settings.js';
 import { addAffinity, exportGameState, formatGameDateTime, getAffinity, getBarAdmissionProgress, getGameTimeInfo, getMoney, importGameState, initGameState, recordHeadPat, recordModelUsed, recordSleepModeEntered, updateGameTime } from './game_state.js';
 import { closeGiftCollection, closeGiftTerminal, initGiftSystem, isGiftOverlayVisible, openGiftCollection, openGiftTerminal, renderGiftCollection } from './gift_system.js?v=20260618-gift-stream';
@@ -138,6 +139,7 @@ import {
 
 let scene, camera, renderer;
 let controlsModule, charData;
+let onboardingModule = null;
 let isInteracting = false;
 let roomGroup;
 let paintingMesh;
@@ -479,6 +481,28 @@ async function waitForFritiaFirstRender() {
     }
 }
 
+function startInitialGameplay() {
+    if (startupInteractionStarted) return;
+    const clickToPlay = document.getElementById('click-to-play');
+    clickToPlay?.removeEventListener('click', onFirstClick);
+    clickToPlay?.classList.add('hidden');
+    startupInteractionStarted = true;
+    flushStartupAchievementToasts();
+    playStartupVoice();
+    setTimeout(() => {
+        if (charData) {
+            startWaving(charData, { getLookTarget: () => camera.position });
+            startupWelcomeStarted = true;
+        } else {
+            startupWelcomePending = false;
+        }
+    }, 300);
+}
+
+function onFirstClick() {
+    startInitialGameplay();
+}
+
 async function init() {
     const canvas = document.getElementById('game-canvas');
     startLoadingResourceMonitor();
@@ -603,7 +627,15 @@ async function init() {
     await initDialogue();
     await initDateDialogue();
     await ensurePreloadedKnowledgeBases();
-    initSettings({ controlsModule });
+    initSettings({
+        controlsModule,
+        onQuickApiSetup: () => onboardingModule?.openQuickSetup?.('settings')
+    });
+    onboardingModule = initOnboarding({
+        controlsModule,
+        startGameplay: startInitialGameplay,
+        saveModelConnection
+    });
     initGiftSystem();
     initAchievements();
     initBartendingChallenge();
@@ -732,24 +764,11 @@ async function init() {
     animate();
 
     const clickToPlay = document.getElementById('click-to-play');
-    const startInitialGameplay = () => {
-        if (startupInteractionStarted) return;
-        clickToPlay.removeEventListener('click', onFirstClick);
-        startupInteractionStarted = true;
-        flushStartupAchievementToasts();
-        playStartupVoice();
-        setTimeout(() => {
-            if (charData) {
-                startWaving(charData, { getLookTarget: () => camera.position });
-                startupWelcomeStarted = true;
-            } else {
-                startupWelcomePending = false;
-            }
-        }, 300);
-    };
-    const onFirstClick = () => startInitialGameplay();
     clickToPlay.addEventListener('click', onFirstClick);
-    if (controlsModule?.state?.isLocked || document.pointerLockElement === renderer.domElement) {
+    if (onboardingModule?.shouldShowWelcome?.()) {
+        clickToPlay.classList.add('hidden');
+        onboardingModule.openWelcome();
+    } else if (controlsModule?.state?.isLocked || document.pointerLockElement === renderer.domElement) {
         clickToPlay.classList.add('hidden');
         startInitialGameplay();
     } else {
@@ -977,7 +996,9 @@ function isPanelVisible(id) {
 }
 
 function isUtilityOverlayVisible() {
-    return isPanelVisible('settings-panel')
+    return isPanelVisible('onboarding-welcome-panel')
+        || isPanelVisible('deepseek-setup-panel')
+        || isPanelVisible('settings-panel')
         || isPanelVisible('history-panel')
         || isPanelVisible('achievements-panel')
         || isPanelVisible('model-selector')

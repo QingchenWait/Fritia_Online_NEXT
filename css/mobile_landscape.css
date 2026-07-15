@@ -105,6 +105,168 @@ html.ml-active .otome-panel textarea { line-height: 1.4; }
 html.ml-active #model-selector .otome-panel { width: min(560px, 92vw); }
 html.ml-active #model-selector #model-list { gap: 7px; }
 
+/* ---- #onboarding-welcome-panel / #deepseek-setup-panel 新手配置 ---- */
+html.ml-active #onboarding-welcome-panel .onboarding-welcome-shell {
+    width: min(440px, 92vw);
+}
+html.ml-active #onboarding-welcome-panel .onboarding-welcome-body {
+    padding: 18px 24px 14px;
+    gap: 11px;
+}
+html.ml-active #onboarding-welcome-panel .onboarding-welcome-mark {
+    width: 50px;
+    height: 50px;
+}
+html.ml-active #onboarding-welcome-panel .onboarding-welcome-mark img {
+    width: 28px;
+    height: 28px;
+}
+html.ml-active #onboarding-welcome-panel .onboarding-welcome-copy {
+    gap: 4px;
+}
+html.ml-active #onboarding-welcome-panel .onboarding-welcome-copy h2 {
+    font-size: 1.12rem;
+}
+html.ml-active #onboarding-welcome-panel .onboarding-welcome-copy p {
+    font-size: 0.78rem;
+}
+html.ml-active #onboarding-welcome-panel .onboarding-dismiss-row {
+    min-height: 42px;
+    padding: 6px 2px;
+    font-size: 0.8rem;
+}
+html.ml-active #onboarding-welcome-panel .onboarding-welcome-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+html.ml-active #onboarding-welcome-panel .onboarding-welcome-actions .btn {
+    width: 100%;
+    min-width: 0;
+    padding-inline: 10px;
+    font-size: 0.8rem;
+}
+
+html.ml-active #deepseek-setup-panel .deepseek-setup-shell {
+    width: min(820px, 95vw);
+    height: var(--ml-panel-h);
+    max-height: var(--ml-panel-h);
+}
+html.ml-active #deepseek-setup-panel .deepseek-progress {
+    padding: 6px 18px;
+}
+html.ml-active #deepseek-setup-panel .deepseek-progress li {
+    font-size: 0.7rem;
+}
+html.ml-active #deepseek-setup-panel .deepseek-progress li > span {
+    width: 26px;
+    height: 26px;
+    font-size: 0.68rem;
+}
+html.ml-active #deepseek-setup-panel .deepseek-step-deck {
+    padding: 10px 18px;
+}
+html.ml-active #deepseek-setup-panel .deepseek-step {
+    justify-content: flex-start;
+    gap: 9px;
+}
+html.ml-active #deepseek-setup-panel .deepseek-step-heading {
+    gap: 3px;
+}
+html.ml-active #deepseek-setup-panel .deepseek-step-heading h3 {
+    font-size: 0.96rem;
+}
+html.ml-active #deepseek-setup-panel .deepseek-step-heading p,
+html.ml-active #deepseek-setup-panel .deepseek-official-note,
+html.ml-active #deepseek-setup-panel .deepseek-privacy-note,
+html.ml-active #deepseek-setup-panel .deepseek-cost-note {
+    font-size: 0.68rem;
+    line-height: 1.35;
+}
+html.ml-active #deepseek-setup-panel .deepseek-instructions li {
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: 8px;
+    padding: 6px 2px;
+}
+html.ml-active #deepseek-setup-panel .deepseek-instructions li > span {
+    width: 25px;
+    height: 25px;
+    font-size: 0.68rem;
+}
+html.ml-active #deepseek-setup-panel .deepseek-instructions p {
+    font-size: 0.74rem;
+}
+html.ml-active #deepseek-setup-panel .deepseek-key-summary {
+    min-height: 38px;
+    padding: 7px 10px;
+    font-size: 0.74rem;
+}
+html.ml-active #deepseek-setup-panel #deepseek-key-input {
+    min-height: 38px;
+    height: 38px;
+    padding-block: 5px;
+    font-size: 16px;
+}
+html.ml-active #deepseek-setup-panel .deepseek-check-result {
+    gap: 6px;
+    padding: 0;
+}
+html.ml-active #deepseek-setup-panel .deepseek-status-mark {
+    width: 42px;
+    height: 42px;
+}
+html.ml-active #deepseek-setup-panel .deepseek-status-mark img {
+    width: 22px;
+    height: 22px;
+}
+html.ml-active #deepseek-setup-panel .deepseek-balance-copy span,
+html.ml-active #deepseek-setup-panel .deepseek-balance-copy strong {
+    font-size: 0.68rem;
+}
+html.ml-active #deepseek-setup-panel .deepseek-fixed-config > div {
+    padding: 6px 10px;
+}
+html.ml-active #deepseek-setup-panel .deepseek-fixed-config dt {
+    font-size: 0.62rem;
+}
+html.ml-active #deepseek-setup-panel .deepseek-fixed-config dd {
+    font-size: 0.7rem;
+}
+html.ml-active #deepseek-setup-panel .deepseek-global-status {
+    min-height: 34px;
+    padding: 6px 18px;
+    font-size: 0.72rem;
+}
+html.ml-active #deepseek-setup-panel .deepseek-setup-foot {
+    min-height: 0;
+}
+html.ml-active #deepseek-setup-panel .deepseek-action-group {
+    flex-wrap: nowrap;
+    gap: 7px;
+}
+html.ml-active #deepseek-setup-panel .deepseek-action-group .btn,
+html.ml-active #deepseek-setup-panel #deepseek-open-platform {
+    min-width: 0;
+    padding-inline: 13px;
+    font-size: 0.74rem;
+}
+html.ml-active.ml-short #onboarding-welcome-panel .onboarding-welcome-body {
+    padding-top: 12px;
+    padding-bottom: 10px;
+    gap: 8px;
+}
+html.ml-active.ml-short #onboarding-welcome-panel .onboarding-welcome-mark {
+    width: 42px;
+    height: 42px;
+}
+html.ml-active.ml-short #onboarding-welcome-panel .onboarding-welcome-copy h2 {
+    font-size: 1rem;
+}
+html.ml-active.ml-short #deepseek-setup-panel .deepseek-step-deck {
+    padding-top: 7px;
+    padding-bottom: 7px;
+}
+
 /* ---- #settings-panel 系统设置 ---- */
 html.ml-active #settings-panel .otome-panel { width: min(1120px, 95vw); }
 html.ml-active #settings-panel .settings-body { grid-template-columns: 112px minmax(0, 1fr); }
@@ -193,8 +355,21 @@ html.ml-active #settings-panel .settings-view[data-settings-view="model"] .setti
 }
 html.ml-active #settings-panel .settings-view[data-settings-view="model"] .settings-api-card {
     grid-template-columns: minmax(170px, 0.9fr) minmax(0, 1.4fr);
+    grid-template-rows: auto auto;
     align-items: center;
     gap: 8px 10px;
+}
+html.ml-active #settings-panel .settings-view[data-settings-view="model"] .settings-api-card > div:first-child {
+    grid-column: 1;
+    grid-row: 1 / 3;
+}
+html.ml-active #settings-panel .settings-view[data-settings-view="model"] .settings-deepseek-quick-setup {
+    grid-column: 2;
+    grid-row: 1;
+    width: 100%;
+    min-height: 28px;
+    padding: 4px 10px;
+    font-size: 0.7rem;
 }
 html.ml-active #settings-panel .settings-view[data-settings-view="model"] .settings-api-card strong {
     font-size: 0.82rem;
@@ -204,6 +379,8 @@ html.ml-active #settings-panel .settings-view[data-settings-view="model"] .setti
     line-height: 1.32;
 }
 html.ml-active #settings-panel .settings-view[data-settings-view="model"] .settings-api-links {
+    grid-column: 2;
+    grid-row: 2;
     justify-content: flex-start;
     gap: 6px;
 }
