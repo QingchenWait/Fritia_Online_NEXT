@@ -35,6 +35,8 @@
     html.mobile-portrait-viewport-fixed #fade-overlay,
     html.mobile-portrait-viewport-fixed #loading-screen,
     html.mobile-portrait-viewport-fixed #click-to-play,
+    html.mobile-portrait-viewport-fixed #onboarding-welcome-panel,
+    html.mobile-portrait-viewport-fixed #deepseek-setup-panel,
     html.mobile-portrait-viewport-fixed #dream-object-controls,
     html.mobile-portrait-viewport-fixed .mobile-refresh-confirm {
         width: var(--mobile-portrait-layout-w) !important;

@@ -1411,6 +1411,79 @@
     .otome-panel__body { padding: var(--sp-4); }
     .otome-panel__foot { padding: var(--sp-3) var(--sp-4); }
 
+    .onboarding-welcome-shell,
+    .deepseek-setup-shell {
+        width: 100%;
+        max-width: 100%;
+        max-height: calc(100dvh - 24px);
+    }
+    .onboarding-welcome-body {
+        padding: 28px 22px 22px;
+        gap: 17px;
+    }
+    .onboarding-welcome-copy h2 {
+        font-size: 1.24rem;
+    }
+    .onboarding-welcome-actions {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+    }
+    .onboarding-welcome-actions .btn {
+        min-height: 44px;
+        padding-inline: 8px;
+        font-size: 0.84rem;
+    }
+    .deepseek-setup-shell {
+        height: calc(100dvh - 24px);
+    }
+    .deepseek-setup-head .otome-panel__title {
+        font-size: 1.2rem;
+    }
+    .deepseek-progress {
+        padding: 11px 10px;
+    }
+    .deepseek-progress li {
+        gap: 5px;
+        font-size: 0.7rem;
+    }
+    .deepseek-progress li:not(:last-child)::after {
+        display: none;
+    }
+    .deepseek-progress li > span {
+        width: 28px;
+        height: 28px;
+    }
+    .deepseek-step-deck {
+        padding: 18px 16px;
+    }
+    .deepseek-step {
+        justify-content: flex-start;
+        gap: 14px;
+    }
+    .deepseek-step-heading h3 {
+        font-size: 1.02rem;
+    }
+    .deepseek-instructions li {
+        padding: 10px 2px;
+    }
+    .deepseek-setup-foot {
+        min-height: 0;
+    }
+    .deepseek-action-group {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 8px;
+    }
+    .deepseek-action-group .btn,
+    #deepseek-open-platform {
+        width: 100%;
+        min-width: 0;
+        padding-inline: 12px;
+    }
+    .settings-deepseek-quick-setup {
+        width: 100%;
+    }
+
     .settings-shell {
         height: 94vh;
         max-height: 94vh;

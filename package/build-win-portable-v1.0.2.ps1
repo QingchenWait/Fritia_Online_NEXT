@@ -167,7 +167,10 @@ function Patch-Loader($LoaderRoot) {
   $main = [regex]::Replace($main, 'const APP_VERSION: &str = ".*?";', "const APP_VERSION: &str = `"$Version`";", 1)
   $main = [regex]::Replace($main, 'const APP_EXE: &str = ".*?";', "const APP_EXE: &str = $(ConvertTo-RustString ($ProductName + '.exe'));", 1)
   $main = [regex]::Replace($main, 'const TITLE: &str = ".*?";', "const TITLE: &str = $(ConvertTo-RustString $Title);", 1)
-  $main = [regex]::Replace($main, 'wide_nul\("FritiaOnlineNext(?:Embedded|Portable)Loader.*?"\)', 'wide_nul("FritiaOnlineNextPortableLoader102")', 1)
+  $classSuffix = ($Version -replace '[^0-9A-Za-z]', '')
+  if ([string]::IsNullOrWhiteSpace($classSuffix)) { $classSuffix = 'portable' }
+  $className = 'FritiaOnlineNextPortableLoader' + $classSuffix
+  $main = [regex]::Replace($main, 'wide_nul\("FritiaOnlineNext(?:Embedded|Portable)Loader.*?"\)', 'wide_nul("' + $className + '")', 1)
   Write-Utf8NoBom $mainPath $main
 
   $cargo = [System.IO.File]::ReadAllText($cargoPath, [System.Text.Encoding]::UTF8)
@@ -277,7 +280,7 @@ $pkgJson = @{
     productName = $ProductName
     asar = $true
     files = @('electron-main.js','app/**/*','package.json','build/**/*')
-    win = @{ target = @(@{ target = 'dir'; arch = @('x64') }); artifactName = 'Fritia Online NEXT Ver. 1.0.2 Portable.${ext}'; icon = 'build/favicon.ico' }
+    win = @{ target = @(@{ target = 'dir'; arch = @('x64') }); artifactName = "Fritia Online NEXT Ver. $Version Portable.`${ext}"; icon = 'build/favicon.ico' }
     directories = @{ output = $BuildName }
     electronDist = './node_modules/electron/dist'
   }
